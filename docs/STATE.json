@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-3",
-  "current_task": "Phase 3 功能、真实公开书籍 demo 与 160 项测试完成；检查文档并提交",
-  "task_status": "in_progress",
+  "current_task": "Phase 3 书名识别、合法来源、安全获取与真实 demo 已完成并验证",
+  "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "2f06b0107af9470f6a8758b8a1620ac8ab8f7cbe",
+  "last_verified_commit": "9bdf53ca5aef40b710142ba332849390592f6422",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -21,33 +21,24 @@
     "创建并验证 Phase 2 功能提交 2f06b01；完整测试 78 passed，项目校验和编译通过",
     "实现 BookIdentity、Source Registry、官方 CSV/RDF 来源与用户 URL/文件入口",
     "实现限量 HTTPS、MIME/容器验证、公网 IP 固定、逐获取阶段检查点及 Pipeline 元数据桥接",
-    "Phase 3 全量离线测试 157 passed；真实目录返回国富论两个候选，拒绝静默选择",
-    "真实国富论 gutenberg:3300 获取并解析 67 个文本段；源文件 2468951 字节，重复获取全部产物和检查点不变"
+    "Phase 3 全量离线测试 160 passed；真实目录返回国富论两个候选，拒绝静默选择",
+    "真实国富论 gutenberg:3300 获取并解析 67 个文本段；源文件 2468951 字节，重复获取全部产物和检查点不变",
+    "创建并验证 Phase 3 功能提交 9bdf53c；160 项测试、文档校验和提交检查通过，完成交接快照"
   ],
-  "in_progress": [
-    {
-      "task": "文档一致性校验、Git 功能提交与最终交接快照",
-      "owner": "primary-agent",
-      "files": [
-        "docs/",
-        "README.md",
-        "CONTEXT.md"
-      ]
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
-    "完成文档与 Git 差异检查，创建 Phase 3 功能提交",
-    "验证功能提交并按 D-006 固定 STATE/HANDOFF 交接快照",
-    "等待用户确定下一阶段范围，不继续开发 UI 或真实音频能力"
+    "按 AGENTS 阅读文档并核对 Git、测试与 docs/PHASE3_DEMO.md 的真实证据",
+    "等待用户确认下一阶段范围，可评估更多有明确许可的来源或真实 AI/TTS",
+    "保留版本歧义、来源证据、下载安全和已有 Pipeline 恢复；不自动开发 UI"
   ],
   "tests": [
     {
       "name": "full-suite",
       "command": ".venv/bin/python -m pytest -q",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "160 passed，10 subtests passed，5 个既有 PyMuPDF 弃用警告；离线运行",
-      "checked_at": "2026-09-13T23:26:37Z"
+      "checked_at": "2026-09-13T23:28:15Z"
     },
     {
       "name": "live-acquisition-demo",
@@ -67,19 +58,19 @@
     },
     {
       "name": "git-whitespace",
-      "command": "git diff --check",
+      "command": "git show --format=oneline --check HEAD",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "当前差异无空白错误",
-      "checked_at": "2026-09-13T23:24:01Z"
+      "scope": "commit",
+      "summary": "功能提交差异无空白错误；验证前工作区干净",
+      "checked_at": "2026-09-13T23:28:15Z"
     },
     {
       "name": "project-integrity",
       "command": "python3 scripts/validate_project.py",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "必需文件、STATE 契约/语义、UTC、本地链接与 Git 校验通过",
-      "checked_at": "2026-09-13T23:26:37Z"
+      "checked_at": "2026-09-13T23:28:15Z"
     }
   ],
   "known_failures": [],
@@ -234,5 +225,5 @@
       "purpose": "真实国富论获取解析的命令、版权依据与哈希证据"
     }
   ],
-  "updated_at": "2026-09-13T23:26:37Z"
+  "updated_at": "2026-09-13T23:28:15Z"
 }

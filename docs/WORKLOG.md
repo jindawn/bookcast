@@ -79,3 +79,10 @@
 - 文档、领域词汇和 D-011/D-012 已同步；功能提交与最终交接快照待创建。
 
 - 2026-09-13T23:26:37Z：补充 NaN/Infinity/越界超时回归，最终全量 160 passed、10 subtests passed；compileall、文档校验、git diff --check 通过。
+
+## 2026-09-13T23:28:15Z — Phase 3 功能提交验证与最终交接
+
+- 创建功能提交 `9bdf53ca5aef40b710142ba332849390592f6422`（feat: add legal book source resolver and safe acquisition），包含 21 个文件；没有提交书籍、目录缓存或生成产物。
+- 在该提交上运行全量测试：160 passed、10 subtests passed；项目校验和 git show --check 通过。
+- STATE 标记 phase-3 completed，清空 in_progress，last_verified_commit 固定为已验证功能提交；HANDOFF/ROADMAP 同步。
+- 本次未推送远程，未增加 UI、未调用真实 AI/TTS；最终快照按 D-006 单独提交。

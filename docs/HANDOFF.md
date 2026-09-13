@@ -1,6 +1,6 @@
 # 给下一位 AI Agent 的交接
 
-快照更新：2026-09-13T23:24:01Z。Phase 3 实现、离线测试与真实 demo 已通过，正在创建功能提交和最终快照；状态见 [STATE.json](STATE.json)。
+快照更新：2026-09-13T23:28:15Z。Phase 3 已完成，功能提交已验证，交接快照已同步；状态见 [STATE.json](STATE.json)。
 
 ## 当前目标
 
@@ -52,7 +52,7 @@ python3 scripts/validate_project.py
 
 ## 未解决问题与技术债
 
-- 当前无未解决代码测试失败；尚待本阶段 Git 提交与最终快照。首次测试失败来自自制 EPUB 缺少目录资源，已修正。
+- 当前无未解决代码测试失败或 blocker。功能提交为 9bdf53ca5aef40b710142ba332849390592f6422，本次提交尚未推送。首次测试失败来自自制 EPUB 缺少目录资源，已修正。
 - Gutenberg 是目录条目匹配，不能据此保证特定印刷版；ISBN、版次、原出版年份没有可靠元数据时为空。
 - 专门开放许可库和其他出版社目录尚未接入；用户 URL 的权限由用户声明，程序只校验传输与格式。
 - Gutenberg 首批仅 TXT，版权来源范围为美国；其他地区条件仍需核对。67 个解析段包含前后附文，未做目录层级/内容质量验收。
@@ -62,7 +62,7 @@ python3 scripts/validate_project.py
 
 ## 下一步建议
 
-1. 按 AGENTS 核对代码、Git 和 STATE；如交接快照尚未提交，先完成本阶段提交，不扩展功能。
+1. 按 AGENTS 核对代码、Git 和 STATE；当前无进行中任务，下一阶段范围等待用户确认。
 2. 用户确认范围后，可选择增加有明确许可依据的 Source Adapter，或推进真实 LLM/TTS 与内容质量验收。
 3. 后续仍须保留身份歧义、来源证据、已有 AI 恢复和安全下载边界；当前没有开始下一阶段或 UI。
 
@@ -77,4 +77,5 @@ python3 scripts/validate_project.py
 ## 最近 Git commit
 
 - 接手时 HEAD 为 b6f0aa9（Phase 2 交接）；其功能提交为 2f06b0107af9470f6a8758b8a1620ac8ab8f7cbe。
-- Phase 3 功能提交待本次创建并验证，随后记录完整哈希。最终快照自身通过 git log -1 查询，遵守 D-006。
+- Phase 3 功能提交：`9bdf53ca5aef40b710142ba332849390592f6422`（feat: add legal book source resolver and safe acquisition），已在该提交上运行 160 项测试、文档校验和提交差异检查，全部通过。
+- 最终快照自身通过 `git log -1 --oneline` 查询，遵守 D-006。

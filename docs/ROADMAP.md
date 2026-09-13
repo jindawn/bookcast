@@ -55,7 +55,7 @@ Phase 1 接受用户自己的 EPUB、PDF、TXT，按 Parser → NormalizedBook �
 
 ## Phase 3：书名识别与合法 Source Resolver
 
-**状态：实现与离线测试通过；真实演示和提交证据见 STATE.json、HANDOFF.md 与 PHASE3_DEMO.md。**
+**状态：已完成并验证（功能提交 9bdf53c）；真实演示和交接证据见 STATE.json、HANDOFF.md 与 PHASE3_DEMO.md。**
 
 1. BookIdentity 包含书名、作者、语言、ISBN、版次、出版年份，未知值为 null；目录发行日期单列。
 2. BookSourceProvider/SourceRegistry 支持官方 Gutenberg CSV/RDF 和用户来源，允许后续工厂扩展。用户 URL 的使用权仅记为用户声明。
