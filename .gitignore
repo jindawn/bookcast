@@ -18,6 +18,7 @@ Thumbs.db
 
 # User inputs, private books, generated media and local task storage
 /data/
+/books/
 /imports/
 /exports/
 /output/
@@ -56,3 +57,4 @@ node_modules/
 dist/
 build/
 coverage/
+*.egg-info/

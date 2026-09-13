@@ -17,22 +17,22 @@
 
 此阶段不包含应用入口、下载器、书籍解析、内容生成或音频导出。
 
-## Phase 1：最小本地导入与任务骨架
+## Phase 1：本地电子书 → Mock AI 播客 CLI MVP
 
-**状态：下一阶段，尚未开始。**
+**状态：功能实现与验证完成；Git 功能提交待工具权限恢复。当前代码、测试和交接记录见 README、STATE.json 与 HANDOFF.md。**
 
-先明确最小运行栈及本地数据保存方式，在 [DECISIONS.md](DECISIONS.md) 中记录必要的技术选择，再建立“用户 TXT → 结构化书稿 → 可查询任务状态”的最小流程。运行语言、框架、数据库及入口形式目前均未确定。
+Phase 1 接受用户自己的 EPUB、PDF、TXT，按 Parser → NormalizedBook → Chapter Analysis → Podcast Script → TTS → Audio Merge → Output 运行。使用 Mock LLM/TTS 时无需 API key；没有互联网找书、真实 AI/TTS、OCR 和 M4B。
 
 验收目标：
 
-1. 提供可重复执行的本地入口，README 说明依赖、安装、运行与测试命令。
-2. 接受用户明确指定的 TXT 文件与必要的书籍信息，不依赖书目搜索、下载或 AI 服务。
-3. 生成可检查的 ParsedBook，保留文本顺序和可用的章节、原文位置线索；对空文件、无效编码和读入失败给出明确结果。
-4. 记录与查询任务状态，能够区分未完成、成功和失败，并提供失败原因。此阶段的“成功”只表示导入与解析成功，不表示已生成音频。
-5. 使用自编或授权明确的极小文本样例验证成功路径与关键失败路径，并在文档中记录实际结果。
-6. 更新 STATE.json、HANDOFF.md 和 WORKLOG.md，提交可独立接手的最小阶段成果。
+1. `bookcast generate path` 支持 EPUB、PDF、TXT；保存 source、metadata、chapters、analysis、scripts、audio、manifest 和 podcast.mp3。
+2. Pydantic 模型统一 NormalizedBook、分析、脚本、步骤和 manifest；Parser 保留章节顺序和来源位置线索，报告扫描 PDF 或图片 EPUB 警告。
+3. 通过 LLMProvider/TTSProvider 契约提供 Mock 实现；无 API key 可完成摘要、双人脚本、测试音调和 MP3 合并。
+4. 每一步以原子文件写入、指纹和 SHA-256 记录；`--resume` 跳过仍有效的完成步骤，损坏产物会重建；`status` 提供进度和完整性。
+5. 28 项 pytest 覆盖 EPUB、PDF、TXT、Mock Provider、流水线状态、幂等、失败恢复、损坏产物恢复和 CLI；以自制小样本验证。
+6. 更新 README、STATE.json、HANDOFF.md 和 WORKLOG.md，提交可独立接手的 MVP。
 
-默认下一项原子任务：检查 Phase 0 交接，选定并记录 Phase 1 的最小运行栈与输入、输出约定；完成后再开始业务实现。
+Phase 2 前的后续工作：真实 Provider 的配置边界、更多格式样本和跨平台 FFmpeg 验证；不要在本阶段扩展互联网来源发现。
 
 ## Phase 2：EPUB 与 PDF 解析
 

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.25,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bookcast"
+version = "0.1.0"
+description = "Local ebooks to resumable mock podcasts"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "typer>=0.15,<1",
+  "pydantic>=2.10,<3",
+  "ebooklib>=0.19,<1",
+  "beautifulsoup4>=4.12,<5",
+  "PyMuPDF>=1.25,<2",
+]
+
+[project.scripts]
+bookcast = "bookcast.cli:app"
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bookcast"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
