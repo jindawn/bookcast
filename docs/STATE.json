@@ -2,49 +2,49 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-0",
-  "current_task": "建立可供不同 Coding Agent 接手的项目骨架",
-  "task_status": "in_progress",
+  "current_task": "Phase 0 项目初始化与跨 Agent 接力机制已完成",
+  "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": null,
+  "last_verified_commit": "60a55951301bed56aa00aa9d8e55a30746bc2fc3",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
     "实现版本化 STATE 契约和离线校验器，20 项回归测试通过",
     "完成文档交叉审阅并修正状态契约与生成任务定义的两处歧义",
-    "抽查本地书籍、生成音频和凭证的 Git 忽略规则"
+    "抽查本地书籍、生成音频和凭证的 Git 忽略规则",
+    "创建并验证首个基础提交，完成 Phase 0 交接快照"
   ],
-  "in_progress": [
-    {
-      "task": "创建并验证基础提交，写入最终交接快照",
-      "owner": "primary-agent",
-      "files": [
-        "docs/STATE.json",
-        "docs/HANDOFF.md",
-        "docs/WORKLOG.md",
-        "docs/ROADMAP.md"
-      ]
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
-    "完成 Phase 0 文档、验证并创建基础提交",
-    "Phase 1：记录技术选型并实现本地 TXT 导入到结构化书稿的最小骨架"
+    "Phase 1：按 AGENTS.md 接手并检查实际代码，记录最小运行栈、输入输出格式及任务持久化选择",
+    "实现用户 TXT 导入到 ParsedBook 和可查询任务状态的最小本地流程，不接入 AI 或下载器",
+    "使用自制小型 TXT 验证成功路径、空文件、无效编码及读入失败，更新运行说明与交接并提交",
+    "首次公开发布前确定开源许可证并补充贡献说明"
   ],
   "tests": [
     {
       "name": "project-integrity",
       "command": "python3 scripts/validate_project.py",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "必需文件、STATE 契约与语义、UTC 时间、本地链接和 Git 检查通过",
-      "checked_at": "2026-09-13T02:18:17Z"
+      "checked_at": "2026-09-13T02:19:26Z"
     },
     {
       "name": "validator-regression",
       "command": "python3 -m unittest discover -s tests -v",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "20 项测试全部通过",
-      "checked_at": "2026-09-13T02:18:17Z"
+      "checked_at": "2026-09-13T02:19:26Z"
+    },
+    {
+      "name": "git-whitespace",
+      "command": "git diff --check",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "基础提交创建前 git diff --cached --check 通过；提交后差异检查通过，工作区干净",
+      "checked_at": "2026-09-13T02:19:26Z"
     }
   ],
   "known_failures": [],
@@ -107,5 +107,5 @@
       "purpose": "交接校验器回归测试"
     }
   ],
-  "updated_at": "2026-09-13T02:18:17Z"
+  "updated_at": "2026-09-13T02:19:26Z"
 }
