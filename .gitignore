@@ -1,0 +1,58 @@
+# OS / editor local files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Credentials and local configuration (sanitized examples may be committed)
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+.claude/settings.local.json
+
+# User inputs, private books, generated media and local task storage
+/data/
+/imports/
+/exports/
+/output/
+/artifacts/
+/tmp/
+/logs/
+*.epub
+*.pdf
+*.mobi
+*.azw
+*.azw3
+*.mp3
+*.m4b
+*.m4a
+*.wav
+*.flac
+*.ogg
+*.sqlite
+*.sqlite3
+*.db
+*.log
+
+# Python validation tools / future local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Common build output; application stack is still undecided
+node_modules/
+dist/
+build/
+coverage/

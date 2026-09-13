@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "project": "BookCast",
+  "current_phase": "phase-0",
+  "current_task": "建立可供不同 Coding Agent 接手的项目骨架",
+  "task_status": "in_progress",
+  "branch": "main",
+  "last_verified_commit": null,
+  "completed_tasks": [
+    "检查空目录并初始化 main 分支 Git 仓库",
+    "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
+    "实现版本化 STATE 契约和离线校验器，20 项回归测试通过",
+    "完成文档交叉审阅并修正状态契约与生成任务定义的两处歧义",
+    "抽查本地书籍、生成音频和凭证的 Git 忽略规则"
+  ],
+  "in_progress": [
+    {
+      "task": "创建并验证基础提交，写入最终交接快照",
+      "owner": "primary-agent",
+      "files": [
+        "docs/STATE.json",
+        "docs/HANDOFF.md",
+        "docs/WORKLOG.md",
+        "docs/ROADMAP.md"
+      ]
+    }
+  ],
+  "next_actions": [
+    "完成 Phase 0 文档、验证并创建基础提交",
+    "Phase 1：记录技术选型并实现本地 TXT 导入到结构化书稿的最小骨架"
+  ],
+  "tests": [
+    {
+      "name": "project-integrity",
+      "command": "python3 scripts/validate_project.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "必需文件、STATE 契约与语义、UTC 时间、本地链接和 Git 检查通过",
+      "checked_at": "2026-09-13T02:18:17Z"
+    },
+    {
+      "name": "validator-regression",
+      "command": "python3 -m unittest discover -s tests -v",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "20 项测试全部通过",
+      "checked_at": "2026-09-13T02:18:17Z"
+    }
+  ],
+  "known_failures": [],
+  "blockers": [],
+  "important_files": [
+    {
+      "path": "AGENTS.md",
+      "purpose": "所有 Coding Agent 的统一入口"
+    },
+    {
+      "path": "CLAUDE.md",
+      "purpose": "Claude Code 入口转发"
+    },
+    {
+      "path": "README.md",
+      "purpose": "项目现状、运行与测试入口"
+    },
+    {
+      "path": "CONTEXT.md",
+      "purpose": "领域术语"
+    },
+    {
+      "path": "docs/PRODUCT.md",
+      "purpose": "产品目标与范围"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "purpose": "实际结构与目标架构"
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "purpose": "阶段与验收标准"
+    },
+    {
+      "path": "docs/DECISIONS.md",
+      "purpose": "已确定决策与待选型事项"
+    },
+    {
+      "path": "docs/HANDOFF.md",
+      "purpose": "最新人工交接快照"
+    },
+    {
+      "path": "docs/WORKLOG.md",
+      "purpose": "追加式事实记录"
+    },
+    {
+      "path": "docs/STATE.json",
+      "purpose": "机器可读工作状态"
+    },
+    {
+      "path": "docs/STATE.schema.json",
+      "purpose": "版本化状态契约"
+    },
+    {
+      "path": "scripts/validate_project.py",
+      "purpose": "离线骨架与状态校验"
+    },
+    {
+      "path": "tests/test_validate_project.py",
+      "purpose": "交接校验器回归测试"
+    }
+  ],
+  "updated_at": "2026-09-13T02:18:17Z"
+}
