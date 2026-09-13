@@ -1,71 +1,82 @@
 # 给下一位 AI Agent 的交接
 
-快照更新：2026-09-13T02:19:26Z。本快照对应 **Phase 0 已完成、Phase 1 尚未开始**；机器状态见 [STATE.json](STATE.json)。
+快照更新：2026-09-13T02:48:17Z。本快照对应 **Phase 1 功能已提交并验证，完成交接快照**；机器状态见 [STATE.json](STATE.json)。
 
 ## 当前目标
 
-Phase 0 的目标已完成：建立 BookCast 项目骨架和跨 Coding Agent 接力机制。下一项工作是 Phase 1 的技术选型与本地 TXT 导入最小闭环；本次没有启动 Phase 1。
+Phase 1 功能目标已完成并创建功能提交：实现用户本地 EPUB/PDF/TXT → NormalizedBook → Mock 摘要 → Mock 双人脚本 → 测试音调 WAV → FFmpeg MP3 的可运行 CLI，并支持章节级幂等和恢复。代码已验证并推送到远程 GitHub。准备进入 Phase 2。
 
 ## 刚刚完成了什么
 
-- 从空目录初始化 `main` 分支 Git 仓库，创建并验证了首个基础提交。
-- 建立全部要求的项目文档：AGENTS、CLAUDE、README，以及产品、架构、路线图、决策、交接、日志和 STATE。
-- 补充领域术语表、版本化 JSON Schema、离线校验脚本和 20 项回归测试。
-- 完成文档交叉审阅，明确“规划不等于已实现”，修正状态契约更新和生成任务定义的两处歧义。
-- 配置并抽查忽略规则，避免本地书籍、音频和凭证意外进入 Git；未配置或操作远程仓库。
+- 采用 Python 3.12+、Typer、Pydantic、EbookLib、BeautifulSoup、PyMuPDF、FFmpeg，并用 `uv.lock` 固定依赖。
+- 实现 `bookcast generate` 和 `bookcast status`；默认 Mock Provider 不需要 API key 或网络。
+- 实现 TXT（UTF-8/UTF-16 BOM）、EPUB（spine 顺序和 HTML 清理）、PDF（按页文本提取）解析，保留章节来源位置并报告图片/OCR 警告。
+- 以 Pydantic 模型表示 NormalizedBook、ChapterAnalysis、PodcastScript、Manifest 和 StepRecord。
+- 每个步骤使用输入/Provider 指纹、SHA-256、原子写入和 manifest checkpoint；中断、失败或损坏产物可用 `--resume` 恢复。
+- Mock TTS 生成主持人/嘉宾不同频率的 24 kHz PCM16 WAV，FFmpeg 合并为 96 kbps MP3；导出 JSON 明确这是测试音调。
+- 添加 30 项 pytest 测试（含 10 个参数化子场景）和自制示例 `examples/example.txt`。
 
 ## 修改的关键文件
 
-- [AGENTS.md](../AGENTS.md)、[CLAUDE.md](../CLAUDE.md)、[README.md](../README.md)：统一入口和操作方法。
-- [PRODUCT.md](PRODUCT.md)、[CONTEXT.md](../CONTEXT.md)、[ARCHITECTURE.md](ARCHITECTURE.md)、[ROADMAP.md](ROADMAP.md)、[DECISIONS.md](DECISIONS.md)：范围、术语、现状、阶段与已确定约束。
-- [STATE.json](STATE.json)、[STATE.schema.json](STATE.schema.json)、本文件、[WORKLOG.md](WORKLOG.md)：机器状态、契约和可追溯交接。
-- [.gitignore](../.gitignore)、[validate_project.py](../scripts/validate_project.py)、[test_validate_project.py](../tests/test_validate_project.py)：数据忽略和接力机制校验。
+- [pyproject.toml](../pyproject.toml)、[uv.lock](../uv.lock)：Python 包元数据、依赖和 CLI 入口。
+- [src/bookcast/cli.py](../src/bookcast/cli.py)、[pipeline.py](../src/bookcast/pipeline.py)：命令和可恢复编排。
+- [models.py](../src/bookcast/models.py)、[parsers.py](../src/bookcast/parsers.py)：数据模型与三种本地格式解析。
+- [providers.py](../src/bookcast/providers.py)、[audio.py](../src/bookcast/audio.py)、[storage.py](../src/bookcast/storage.py)：Provider 契约、Mock 音频、FFmpeg 合并、原子存储和锁。
+- [tests/test_phase1.py](../tests/test_phase1.py)：解析、Provider、流水线状态、幂等、恢复、完整性和 CLI 测试。
+- [README.md](../README.md)、[ARCHITECTURE.md](ARCHITECTURE.md)、[ROADMAP.md](ROADMAP.md)、[DECISIONS.md](DECISIONS.md)、[STATE.json](STATE.json)、本文件和 [WORKLOG.md](WORKLOG.md)：文档与状态。
 
 ## 当前代码状态
 
-实际代码只有交接校验工具及其测试，没有应用入口、下载器、解析器、AI/TTS 或 MP3/M4B 导出。应用语言、框架、数据库和供应商仍未选型；Python 仅用于当前离线校验。目标架构是书目/版本 → 来源/导入 → 解析 → 内容生成 → TTS → 导出，由可恢复任务串联，详见 ARCHITECTURE。
+可以运行：
 
-`STATE.current_phase` 保留 `phase-0`，`task_status` 为 `completed`，`in_progress`、`known_failures`、`blockers` 均为空。当前工作区是否干净请实际执行 `git status --short --branch` 检查。
+```sh
+uv sync --extra dev
+uv run bookcast generate examples/example.txt
+uv run bookcast status <book_id> --json
+```
+
+产物目录为 `output/{book_id}/`，包含 `source/`、`metadata.json`、`chapters/`、`analysis/`、`scripts/`、`audio/`、`manifest.json` 和 `podcast.mp3`。`bookcast generate` 不带 `--resume` 时允许已完成任务快速复用有效检查点；失败任务需加 `--resume`。Provider 配置变更会拒绝覆盖旧任务。
+
+尚未实现互联网找书、真实 LLM/TTS、OCR、M4B、GUI、CI 或开源许可证。PDF 扫描页和 EPUB 图片页只报告警告或部分覆盖，不伪装成完整文本。
 
 ## 已运行的测试及结果
 
-验证环境：macOS，Python 3.14.3，Git 2.50.1。以下检查在基础提交 `60a55951301bed56aa00aa9d8e55a30746bc2fc3` 上通过；STATE 的 `tests.scope=commit` 指该提交。之后的交接快照只更新文档及状态，提交前后运行对应的文档/状态校验。
+验证环境：macOS，Python 3.12.14，FFmpeg 可用。以下命令在当前工作区通过：
 
 | 检查 | 结果 |
 | --- | --- |
-| `python3 scripts/validate_project.py` | 通过：必需文件、状态契约与语义、真实 UTC 时间、本地链接和 Git 引用 |
-| `python3 -m unittest discover -s tests -v` | 20 项全部通过 |
-| `git diff --check` | 通过；基础提交前也运行 `git diff --cached --check` |
-| 忽略规则抽查 | 6 个私有输入/产物路径被忽略，3 个项目/示例路径保持可跟踪 |
-| 跨文档审阅 | 产品目标、架构现状、阶段、运行测试方法及下一步一致 |
+| `UV_CACHE_DIR=/tmp/bookcast-uv-cache uv run pytest -q` | 30 passed，5 个 PyMuPDF 兼容性弃用警告 |
+| `python3.12 -m compileall -q src tests` | 通过 |
+| `python3 scripts/validate_project.py` | 通过 |
+| `git diff --check` | 通过 |
+| CLI TXT 端到端 + `status --json` | 通过，生成 MP3，完整性为 `ok` |
 
-业务测试不适用：尚无业务代码。可按 README 的命令离线复验，不需要 API key 或下载书籍。
+自动化测试不需要网络；依赖安装曾因沙箱 DNS 失败，获准后完成并生成 `uv.lock`。真实服务、长书籍和多平台 FFmpeg 尚未测试。
 
 ## 未解决问题与技术债
 
-- 无已观测失败、无阻塞 Phase 0 的问题。
-- 应用技术选型和全部业务功能待后续实现，不属于本阶段失败项。
-- 开源许可证与贡献说明尚未确定，需在首次公开发布前完成；目前未附带开源许可证。
-- 尚未建立 CI 或跨平台/多 Python 版本测试；最低版本目标为 Python 3.10，当前实测版本见上文。
-- 校验器仅覆盖当前 Schema 子集和常见 Markdown 本地链接，不验证锚点，也不能自动证明文档语义一致。扩展契约时同步脚本与测试，阶段结束仍需人工审阅。
+- 无代码失败，无阻塞项；Phase 1 功能提交已完成并推送到远程 GitHub。
+- Mock TTS 是测试音调，不是自然语音；真实 Provider 需要在后续阶段实现且不能绕过接口。
+- TXT 分章依赖常见中文/英文标题模式；无标题文本会作为单章，复杂排版需要 Phase 2 策略。
+- PDF 按页生成章节，扫描件需要 OCR；EPUB 的目录层级和复杂资源仍需增强。
+- 尚未建立 CI、跨平台音频验证、M4B 封装和许可证/贡献说明。
 
 ## 下一步建议
 
-1. 按 [AGENTS.md](../AGENTS.md) 阅读入口文档，检查 Git 与实际代码，运行上述校验。
-2. 将 STATE 更新为 Phase 1 进行中，并声明原子任务、负责人和文件范围。
-3. 先在 DECISIONS 记录最小运行栈、书稿输入输出约定及任务状态持久化方式，再实现本地 TXT → ParsedBook → 可查询任务状态。
-4. 用自制小样本覆盖成功、空文件、编码错误与读取失败；更新 README、STATE、HANDOFF、WORKLOG 后小步提交。验收要求见 ROADMAP Phase 1。
+1. 先按 [AGENTS.md](../AGENTS.md) 阅读所有入口文档，运行完整测试并核对实际 Git。
+2. Phase 2 评估 EPUB/PDF 深度解析、目录层级、OCR 支持范围和授权样本，先在 DECISIONS 记录取舍。
+3. 增加真实 Provider 前，定义配置、隐私提示、超时/重试和成本边界；保持 Mock 测试可用。
+4. 完成后同步 README、STATE、HANDOFF、WORKLOG 并小步提交；不要扩展互联网找书到 Phase 2。
 
 ## 不要重复做的事情
 
-- 不要重新初始化 Git、重新搭建 Phase 0，或维护与 AGENTS 冲突的另一套 Agent 规范。
-- 不要把目标模块当作现有实现；不要从下载器、AI、TTS 或完整 UI 开始扩张范围。
-- 不要未经记录推翻本地优先、合法来源、版本区分、整书覆盖可追溯及分阶段恢复原则。
-- 不要提交用户书籍、凭证或音频，也不要覆盖其他 Agent 的未提交修改。
-- 不要为了将快照自身哈希写进文件而反复 amend；遵守 DECISIONS D-006。
+- 不要重新初始化 Git、重建 Phase 0 文档或维护与 AGENTS 冲突的规则。
+- 不要把 Mock 音调称为真实语音，也不要声称已实现联网找书、OCR、M4B 或真实 AI。
+- 不要删除输出目录、用户书籍或凭证；不要提交 `output/`、私有输入和音频。
+- 不要绕过 LLMProvider/TTSProvider 直接绑定厂商，也不要移除 manifest、指纹、哈希和原子写入。
+- 不要在没有记录决策的情况下推翻本地优先、合法来源、版本区分和可恢复处理原则。
 
 ## 最近 Git commit
 
-已验证基础提交：`60a55951301bed56aa00aa9d8e55a30746bc2fc3` — `chore: initialize BookCast agent-ready project skeleton`。
-
-本文件与 STATE 随后的交接快照提交标题为 `docs: finalize Phase 0 verification and handoff`。其实际哈希用 `git log -1 --format='%H %s'` 获取；快照不能包含自身哈希，因此 `last_verified_commit` 保留上述已验证基础提交，不代表业务进度未完成。
+- `9e6e5aaa0db1a61320be9c28815caaf7c4b3f5cc`（`feat: add local ebook mock podcast pipeline`）：Phase 1 完整功能实现与相关测试/文档。
+- 本交接快照提交通过 `git log -1 --oneline` 查询，遵守 D-006，不把快照自身哈希写入同一次提交。

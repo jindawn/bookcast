@@ -24,3 +24,26 @@
 - 更新 STATE 为 Phase 0 completed，记录实际已验证基础提交，清空进行中任务并列出 Phase 1 下一步。
 - 更新 HANDOFF、README 和 ROADMAP；记录未选技术栈、未定许可证、未建 CI 及校验器支持范围，不将未实现业务标成已测试能力。
 - 本次未实现任何业务管线，未配置远程或发布；交接快照单独提交，其自身哈希按 D-006 通过 Git 查询。
+
+## 2026-09-13T02:38:43Z — Phase 1 MVP 实现与验证
+
+- 采用 Python 3.12+、Typer、Pydantic、EbookLib、BeautifulSoup、PyMuPDF 和 FFmpeg；`uv sync --extra dev` 成功并生成 `uv.lock`。
+- 实现 `bookcast generate` / `status`，支持本地 TXT、EPUB、PDF；默认 Mock LLM/TTS 无需 API key，输出章节摘要、双人脚本、测试音调 WAV 和 MP3。
+- 实现每步原子落盘、输入/Provider 指纹、SHA-256、进程锁和 `--resume`；损坏产物能被状态命令识别并恢复。
+- 新增自制 `examples/example.txt` 和 Phase 1 测试；当前 `uv run pytest -q` 为 30 passed，compileall、Phase 0 校验和 CLI TXT 端到端冒烟均通过。
+- 一次带临时目录清理的冒烟命令被自动审查因工具额度限制拦截，未执行删除；随后使用新临时目录完成相同验证。
+- 当前没有开始 Phase 2；互联网找书、真实 Provider、OCR、M4B、CI 和许可证仍是后续事项。
+
+## 2026-09-13T02:40:00Z — Phase 1 功能验证完成，提交受阻
+
+- `uv run pytest -q`：30 passed；`python3.12 -m compileall -q src tests`、`python3 scripts/validate_project.py`、`git diff --check` 均通过。
+- `bookcast generate examples/example.txt` 和 `bookcast status <job> --json` 端到端冒烟通过，生成 MP3 且完整性为 `ok`。
+- 功能文件已暂存，但自动审查因当前 Codex 工具额度限制拒绝 `git commit`；普通模式也无法写入受保护的 `.git`，因此 `origin/main` 尚未包含 Phase 1。
+- STATE/HANDOFF 已明确该 blocker；恢复 Git 提交权限后创建功能提交、推送并再固定最终交接提交。未开始 Phase 2。
+
+## 2026-09-13T02:48:17Z — Phase 1 功能提交与交接快照完成
+
+- 创建 Phase 1 功能提交 `9e6e5aaa0db1a61320be9c28815caaf7c4b3f5cc`（`feat: add local ebook mock podcast pipeline`），包含 20 个文件：EPUB/PDF/TXT 解析、Mock Provider、流水线、存储、音频合并、CLI、测试及设计文档。
+- 在该提交上运行离线项目校验、30 项 pytest 测试和 `git diff --check`，全部通过。
+- 清理 STATE 中的 blocker 与 in_progress，更新 last_verified_commit 为该功能提交，标记 Phase 1 completed。
+- 更新 HANDOFF 与 WORKLOG，准备提交交接快照并推送到 GitHub `origin/main`。

@@ -1,24 +1,25 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-0",
-  "current_task": "Phase 0 项目初始化与跨 Agent 接力机制已完成",
+  "current_phase": "phase-1",
+  "current_task": "Phase 1 功能已提交并验证，完成 Phase 1 交接",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "60a55951301bed56aa00aa9d8e55a30746bc2fc3",
+  "last_verified_commit": "9e6e5aaa0db1a61320be9c28815caaf7c4b3f5cc",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
     "实现版本化 STATE 契约和离线校验器，20 项回归测试通过",
     "完成文档交叉审阅并修正状态契约与生成任务定义的两处歧义",
     "抽查本地书籍、生成音频和凭证的 Git 忽略规则",
-    "创建并验证首个基础提交，完成 Phase 0 交接快照"
+    "创建并验证首个基础提交，完成 Phase 0 交接快照",
+    "实现 EPUB/PDF/TXT 解析、Mock Provider、章节级可恢复流水线、CLI 和 MP3 输出，并完成工作区验证",
+    "创建并验证 Phase 1 功能提交 (9e6e5aa)，实现本地电子书导入与 Mock 播客生成闭环"
   ],
   "in_progress": [],
   "next_actions": [
-    "Phase 1：按 AGENTS.md 接手并检查实际代码，记录最小运行栈、输入输出格式及任务持久化选择",
-    "实现用户 TXT 导入到 ParsedBook 和可查询任务状态的最小本地流程，不接入 AI 或下载器",
-    "使用自制小型 TXT 验证成功路径、空文件、无效编码及读入失败，更新运行说明与交接并提交",
+    "Phase 2：评估 EPUB/PDF 深度解析、目录层级、OCR 支持范围与授权样本，并在 DECISIONS 记录取舍",
+    "定义真实 LLM/TTS Provider 的配置、隐私提示、超时重试与成本边界",
     "首次公开发布前确定开源许可证并补充贡献说明"
   ],
   "tests": [
@@ -28,23 +29,23 @@
       "status": "passed",
       "scope": "commit",
       "summary": "必需文件、STATE 契约与语义、UTC 时间、本地链接和 Git 检查通过",
-      "checked_at": "2026-09-13T02:19:26Z"
+      "checked_at": "2026-09-13T02:48:17Z"
     },
     {
       "name": "validator-regression",
       "command": "python3 -m unittest discover -s tests -v",
       "status": "passed",
       "scope": "commit",
-      "summary": "20 项测试全部通过",
-      "checked_at": "2026-09-13T02:19:26Z"
+      "summary": "30 项 pytest 测试全部通过（含 10 个参数化子场景）",
+      "checked_at": "2026-09-13T02:48:17Z"
     },
     {
       "name": "git-whitespace",
       "command": "git diff --check",
       "status": "passed",
       "scope": "commit",
-      "summary": "基础提交创建前 git diff --cached --check 通过；提交后差异检查通过，工作区干净",
-      "checked_at": "2026-09-13T02:19:26Z"
+      "summary": "git diff --check 与工作区差异检查通过",
+      "checked_at": "2026-09-13T02:48:17Z"
     }
   ],
   "known_failures": [],
@@ -105,7 +106,27 @@
     {
       "path": "tests/test_validate_project.py",
       "purpose": "交接校验器回归测试"
+    },
+    {
+      "path": "pyproject.toml",
+      "purpose": "Python 3.12+ 依赖、CLI 入口与 pytest 配置"
+    },
+    {
+      "path": "uv.lock",
+      "purpose": "可复现依赖锁定"
+    },
+    {
+      "path": "src/bookcast/",
+      "purpose": "CLI、模型、解析器、Provider、流水线、存储和音频实现"
+    },
+    {
+      "path": "tests/test_phase1.py",
+      "purpose": "Phase 1 解析、Provider、幂等、恢复和 CLI 测试"
+    },
+    {
+      "path": "examples/example.txt",
+      "purpose": "可再分发的自制端到端示例输入"
     }
   ],
-  "updated_at": "2026-09-13T02:19:26Z"
+  "updated_at": "2026-09-13T02:48:17Z"
 }
