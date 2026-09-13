@@ -58,3 +58,11 @@
 - 未连接真实 AI 服务，未实现真实语音、找书、OCR、M4B，未开始后续阶段；功能提交与最终快照待创建。
 
 - 2026-09-13T13:07:04Z：文档状态校验通过；三级 Mock CLI 冒烟生成 MP3，doctor ready，status integrity=ok，resume 不修改 manifest。
+
+## 2026-09-13T13:08:53Z — Phase 2 功能提交验证与最终交接
+
+- 创建功能提交 `2f06b0107af9470f6a8758b8a1620ac8ab8f7cbe`（feat: add provider registry and resumable failover），共 23 个文件。
+- 在该提交上运行完整测试：78 passed、10 subtests passed；项目校验、compileall、git show --check 全部通过。
+- 普通 Git 写操作被文件系统沙箱阻止，使用获准的 Git 写权限后完成提交；没有遗留权限 blocker。
+- STATE 标记 phase-2 completed、清空 in_progress，last_verified_commit 固定为已验证功能提交；HANDOFF/ROADMAP 同步。
+- 本次未推送到远程、未调用真实 AI 服务、未开始后续阶段。最终交接快照按 D-006 单独提交。

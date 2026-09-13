@@ -1,10 +1,10 @@
 # 给下一位 AI Agent 的交接
 
-当前快照：Phase 2 功能与测试完成，正在创建功能提交及最终交接快照。机器状态见 [STATE.json](STATE.json)。
+快照更新：2026-09-13T13:08:53Z。Phase 2 功能已提交并验证，最终交接完成。机器状态见 [STATE.json](STATE.json)。
 
 ## 当前目标
 
-让 BookCast 的 LLM/TTS 可替换，模型故障或额度耗尽时从最小未完成任务恢复；本阶段不增加找书、真实语音、OCR 或 M4B。Phase 2 授权实现范围已完成，提交证据将在最终快照固定。
+让 BookCast 的 LLM/TTS 可替换，模型故障或额度耗尽时从最小未完成任务恢复；本阶段不增加找书、真实语音、OCR 或 M4B。Phase 2 授权范围已完成，功能提交为 `2f06b0107af9470f6a8758b8a1620ac8ab8f7cbe`；本次提交保存在本地，尚未推送。
 
 ## 刚刚完成了什么
 
@@ -42,7 +42,7 @@ Provider 配置改变后必须 --resume，保留已完成章节及原调用归�
 
 ## 已运行测试与结果
 
-环境为 macOS、Python 3.12、FFmpeg 可用。`.venv/bin/python -m pytest -q`：78 passed、10 subtests passed；5 个既有 PyMuPDF SWIG 弃用警告。compileall 与 git diff --check 通过；python3 scripts/validate_project.py 通过。三级 Mock 配置的 config/doctor/generate/resume/status 冒烟通过：doctor ready、MP3 生成、integrity=ok，6 次 AI 调用且 resume 后 manifest 字节不变。
+环境为 macOS、Python 3.12、FFmpeg 可用。在功能提交 `2f06b0107af9470f6a8758b8a1620ac8ab8f7cbe` 上运行完整测试、编译、项目校验与提交空白检查，全部通过。`.venv/bin/python -m pytest -q`：78 passed、10 subtests passed；5 个既有 PyMuPDF SWIG 弃用警告。compileall 与 git diff --check 通过；python3 scripts/validate_project.py 通过。三级 Mock 配置的 config/doctor/generate/resume/status 冒烟通过：doctor ready、MP3 生成、integrity=ok，6 次 AI 调用且 resume 后 manifest 字节不变。
 
 新增测试验证：A 正常、A 第七章额度/限流/超时/临时故障、B/三级链接管、TTS 切换、链耗尽后换配置恢复、强制进程退出、调用完成窗口恢复、旧任务迁移、永久错误与损坏输出不切换、HTTP 协议及无 Secret 错误记录。前六章哈希和修改时间保持不变。全部自动化测试离线运行。
 
@@ -57,7 +57,7 @@ Provider 配置改变后必须 --resume，保留已完成章节及原调用归�
 
 ## 下一步建议
 
-1. 按 AGENTS 阅读文档并核对实际 Git；未完成的提交/交接操作见 STATE.next_actions。
+1. 按 AGENTS 阅读文档并核对实际 Git；当前无进行中任务或 blocker，下一步见 STATE.next_actions。
 2. 用户确认后续范围后，再考虑用授权小样本验收真实兼容 LLM；不要将协议 Mock 测试当作内容质量验收。
 3. 单独规划真实 TTS、长章节、成本边界或深度解析；当前未开始 Phase 3。
 
@@ -71,4 +71,5 @@ Provider 配置改变后必须 --resume，保留已完成章节及原调用归�
 ## 最近 Git commit
 
 - 当前已有 Phase 1 功能提交：9e6e5aaa0db1a61320be9c28815caaf7c4b3f5cc；交接提交 4bc8123。
-- Phase 2 功能提交尚待本次创建；创建并验证后将在最终快照记录完整哈希。快照自身提交用 git log -1 查询。
+- Phase 2 功能提交：`2f06b0107af9470f6a8758b8a1620ac8ab8f7cbe`（feat: add provider registry and resumable failover），已验证。
+- 最终交接快照只更新文档；其自身提交用 `git log -1 --oneline` 查询，遵守 D-006。

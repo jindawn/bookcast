@@ -36,7 +36,7 @@ Phase 1 接受用户自己的 EPUB、PDF、TXT，按 Parser → NormalizedBook �
 
 ## Phase 2：Provider 抽象、模型故障与额度切换
 
-**状态：功能及完整测试已通过，提交与交接状态见 STATE.json 和 HANDOFF.md。**
+**状态：已完成并验证（功能提交 2f06b01）；交接快照见 STATE.json 和 HANDOFF.md。**
 
 1. LLMProvider 统一 generate、generate_structured、health_check、capabilities；TTSProvider 同样独立于厂商。Pipeline 不 import 具体适配器或 SDK。
 2. Registry 支持 Mock、OpenAI-compatible 和 local LLM；内置 Mock TTS，允许工厂注册扩展而不改 Pipeline。

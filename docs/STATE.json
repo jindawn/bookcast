@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-2",
-  "current_task": "Phase 2 功能与 78 项测试通过；整理交接并创建功能提交",
-  "task_status": "in_progress",
+  "current_task": "Phase 2 Provider 抽象、故障切换与最小任务恢复已完成并验证，建立最终交接快照",
+  "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "9e6e5aaa0db1a61320be9c28815caaf7c4b3f5cc",
+  "last_verified_commit": "2f06b0107af9470f6a8758b8a1620ac8ab8f7cbe",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -17,55 +17,47 @@
     "创建并验证 Phase 1 功能提交 (9e6e5aa)，实现本地电子书导入与 Mock 播客生成闭环",
     "实现统一 Provider API、可扩展 Registry、兼容 HTTP/local LLM、Mock 与 TOML 配置",
     "实现受控 failover、manifest v2 调用审计、最小任务恢复及 v1 原样备份迁移",
-    "完整测试 78 passed，验证第七章接管、强制退出恢复及永久错误停止"
+    "完整测试 78 passed，验证第七章接管、强制退出恢复及永久错误停止",
+    "创建并验证 Phase 2 功能提交 2f06b01；完整测试 78 passed，项目校验和编译通过"
   ],
-  "in_progress": [
-    {
-      "task": "文档一致性检查、功能提交与最终交接快照",
-      "owner": "primary-agent",
-      "files": [
-        "docs/",
-        "README.md"
-      ]
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
-    "完成文档校验并创建 Phase 2 功能提交",
-    "验证功能提交，按 D-006 更新最终 STATE/HANDOFF 快照",
-    "等待用户确定后续阶段范围，不自动开始 Phase 3"
+    "按 AGENTS 阅读入口文档并核对实际代码、Git 与测试证据",
+    "等待用户确认后续阶段范围；可优先用授权小样本验证兼容 LLM 的真实服务",
+    "后续单独规划真实 TTS、内容质量、长章节或深度解析；本次不开始 Phase 3"
   ],
   "tests": [
     {
       "name": "full-suite",
       "command": ".venv/bin/python -m pytest -q",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "78 passed，10 subtests passed；5 个既有 PyMuPDF SWIG 弃用警告；无需网络",
-      "checked_at": "2026-09-13T13:06:34Z"
+      "checked_at": "2026-09-13T13:08:53Z"
     },
     {
       "name": "compile",
       "command": ".venv/bin/python -m compileall -q src tests",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "所有应用与测试文件编译通过",
-      "checked_at": "2026-09-13T13:06:34Z"
+      "checked_at": "2026-09-13T13:08:53Z"
     },
     {
       "name": "project-integrity",
       "command": "python3 scripts/validate_project.py",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "必需文件、STATE 契约/语义、UTC、本地链接和 Git 全部通过",
-      "checked_at": "2026-09-13T13:07:04Z"
+      "checked_at": "2026-09-13T13:08:53Z"
     },
     {
       "name": "git-whitespace",
-      "command": "git diff --check",
+      "command": "git show --format=oneline --check HEAD",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "无空白错误",
-      "checked_at": "2026-09-13T13:06:34Z"
+      "scope": "commit",
+      "summary": "Phase 2 功能提交无空白错误；工作区在验证前干净",
+      "checked_at": "2026-09-13T13:08:53Z"
     },
     {
       "name": "cli-smoke",
@@ -192,5 +184,5 @@
       "purpose": "配置、恢复、审计与扩展说明"
     }
   ],
-  "updated_at": "2026-09-13T13:07:04Z"
+  "updated_at": "2026-09-13T13:08:53Z"
 }
