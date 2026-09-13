@@ -1,8 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 2）
+## 当前实际实现（Phase 3）
 
-当前支持 EPUB、PDF、TXT 解析、离线 Mock 播客输出，以及兼容远程/本地 LLM 的统一接入、逐章故障切换与恢复。内置 TTS 只有测试音调；没有互联网找书、真实语音、OCR 或 M4B。兼容端点已做离线协议测试，未做真实服务验收。
+当前支持书名候选解析、官方公开来源安全获取、用户 URL/本地文件导入，以及 EPUB/PDF/TXT → 可恢复 Mock 播客输出。公开来源首批为 Gutenberg CSV/RDF 与官方镜像 TXT；专门开放许可库和其他官方目录待扩展。内置 TTS 只有测试音调，真实语音、OCR、M4B 和 UI 未实现。LLM 兼容端点仅做过离线协议测试。
 
 ```text
 AGENTS.md / CLAUDE.md      Agent 统一入口
@@ -15,6 +15,8 @@ docs/
   ROADMAP.md               阶段与验收条件
   DECISIONS.md             已确定决策与待选项
   PROVIDERS.md             Provider 配置、错误策略、审计和扩展指南
+  SOURCES.md               书名、来源、安全下载和获取恢复说明
+  PHASE3_DEMO.md           真实公开书籍 demo 的命令与证据
   HANDOFF.md               最新交接快照
   WORKLOG.md               追加式事实记录
   STATE.json              当前开发状态
@@ -22,9 +24,14 @@ docs/
 scripts/
   validate_project.py     标准库离线校验
 src/bookcast/
-  cli.py                  Typer generate/status/config providers/doctor 入口
+  cli.py                  Typer acquire/generate/status/config providers/doctor 入口
   models.py               Pydantic 任务与书稿模型
   parsers.py              TXT/EPUB/PDF 本地解析
+  source_api.py           BookIdentity、BookSourceProvider 与获取记录契约
+  sources.py              Gutenberg/用户来源适配器、Source Registry
+  source_http.py          有界 HTTPS、固定公网 IP、TLS 与重定向校验
+  source_validation.py    MIME 对应关系、文件签名和 EPUB 容器安全检查
+  acquisition.py          候选选择、下载/导入和解析检查点
   provider_api.py         与厂商无关的接口、能力、状态和错误契约
   provider_config.py      严格 TOML 配置及安全端点校验
   provider_registry.py    类型工厂注册、组合与注入
@@ -39,6 +46,8 @@ tests/
   test_validate_project.py 交接校验器回归测试
   test_phase1.py          Phase 1 解析、Provider、恢复和 CLI 测试
   test_providers.py       Phase 2 协议、故障注入、强制退出恢复及配置测试
+  test_sources.py         书籍身份、来源资格、获取恢复与安全容器测试
+  test_source_http.py     下载限额、MIME、重定向、公网 IP 与 TLS 测试
 examples/
   example.txt             可再分发的自制示例书
   providers.toml          无凭证的三层 Mock 优先级配置
@@ -52,8 +61,8 @@ examples/
 
 | 边界 | 输入与输出 | 必须保留的语义 |
 | --- | --- | --- |
-| 书目识别 | 书名 → Work / Edition 候选 → 用户确认 | 后续阶段；当前不联网找书 |
-| 来源与导入 | 用户 EPUB/PDF/TXT → SourceAsset | 已实现本地拷贝、摘要和格式检查 |
+| 书目识别 | 书名 → BookIdentity / EditionCandidate → 明确选择 | 已实现官方 CSV 目录搜索，多个候选不自动选择；未知印刷版次不猜填 |
+| 来源与导入 | SourceOffer → SourceAsset | 已实现官方 RDF 书籍版权判定、镜像 TXT、用户 URL/文件、安全下载和摘要 |
 | 整书解析 | SourceAsset → NormalizedBook | 已实现 TXT/EPUB/PDF；章节顺序、文本、源位置、警告 |
 | 内容生成 | Chapter → ChapterAnalysis → PodcastScript | Mock 与可选兼容 LLM；Pydantic 和章节身份校验 |
 | 语音合成 | 脚本 → WAV 片段 | 已实现 Mock 测试音调；真实 TTS 待后续 Provider |
@@ -63,6 +72,10 @@ examples/
 正常流程为“书名识别 → 版本确认 → 合法来源/用户导入 → 解析 → 内容生成 → TTS → 导出”；直接导入用户文件也是独立入口，不强迫先联网搜书。扫描型 PDF 的 OCR 需求必须显式检测与报告，具体实现排期见 ROADMAP。
 
 Provider 的依赖方向为 CLI → Registry → 具体适配器，Pipeline → 中立接口/ProviderChain。业务代码不导入适配器或厂商 SDK。LLM 契约为 generate、generate_structured、health_check、capabilities；TTS 契约含 synthesize、health_check、capabilities。配置和错误策略详见 [PROVIDERS.md](PROVIDERS.md)。
+
+Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry / BookSourceProvider → EditionCandidate / SourceOffer → Acquirer → 既有 Parser。身份解析用本地缓存的官方目录，不调用 LLM。acquire 默认仅解析；--generate 将源文件与 BookMetadata seed 注入既有 Pipeline，metadata.acquisition 保留身份、来源依据和下载哈希。更换 Source Adapter 不修改业务 Pipeline。
+
+获取任务保存独立 acquisition.json v1（pending/downloading/downloaded/parsing/parsed/failed），默认位于 imports。下载成功即保存凭据与哈希，解析失败可复用源文件；完成解析记录各 JSON 哈希。网络层和容器层都检查边界，不执行、浏览或解压运行下载内容。详细数值限制及网络例外选项见 [SOURCES.md](SOURCES.md)。
 
 运行 manifest 升至 v2，steps 保留原有步骤状态；ai_calls 独立持久化 pending/running/completed/failed_retryable/failed_permanent，以及真实 provider/model、提示版本、输入输出哈希、UTC 时间。调用成功前原子落盘产物，失败只切换配置允许的四类临时/额度故障。认证、输入、结构与业务错误立即停止。各章节的 analysis、script、tts 独立恢复，已完成步骤不会因切换 Provider 失效。旧 v1 manifest 原样备份后验证并迁移；无法补齐的历史调用不伪造。
 
@@ -89,4 +102,4 @@ Provider 的依赖方向为 CLI → Registry → 具体适配器，Pipeline → 
 
 ## 下一步架构工作
 
-Phase 2 范围止于 Provider、配置、故障切换和恢复。后续阶段范围由用户确认；可优先用获授权的小样本验证真实兼容服务，再单独规划真实 TTS、内容质量和深度解析。不得把兼容协议测试视为某个厂商的上线验收。
+Phase 3 范围止于书名、合法来源、安全获取和解析接入。后续范围由用户确认；候选方向包括新增有明确许可的 Source Adapter、真实 AI/TTS 验收及深度解析。不得把某本公开书籍的演示视为全目录、所有版次或所有格式已验收。

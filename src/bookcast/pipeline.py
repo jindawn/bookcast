@@ -37,7 +37,7 @@ class Pipeline:
         self.tts = tts if isinstance(tts, ProviderChain) else ProviderChain([tts])
         self.output_dir = output_dir.resolve()
 
-    def generate(self, source: Path, *, resume: bool = False) -> Path:
+    def generate(self, source: Path, *, resume: bool = False, metadata_seed: BookMetadata | None = None) -> Path:
         source = source.resolve()
         if not source.is_file():
             raise BookCastError(f"输入文件不存在：{source}")
@@ -45,6 +45,8 @@ class Pipeline:
         if source_format not in {"epub", "pdf", "txt"}:
             raise BookCastError("仅支持本地 EPUB、PDF 和 TXT 文件。")
         digest = sha256_file(source)
+        if metadata_seed and (metadata_seed.source_sha256 != digest or metadata_seed.source_format != source_format):
+            raise BookCastError("获取元数据与源文件不一致。")
         book_id = fingerprint({"source_sha256": digest, "format": source_format})[:24]
         root = artifact_path(self.output_dir, book_id)
         if resume and not (root / "manifest.json").is_file():
@@ -82,7 +84,7 @@ class Pipeline:
                 write_json(manifest_path, manifest.model_dump())
             runner = _Runner(root, manifest, self.llm, self.tts)
             try:
-                runner.run(source)
+                runner.run(source, metadata_seed=metadata_seed)
             except (Exception, KeyboardInterrupt, SystemExit) as exc:
                 manifest.status = "failed"
                 manifest.error = str(exc) or "任务已中断"
@@ -174,7 +176,7 @@ class _Runner:
                                   observe=self.observe)
         return list(artifacts)
 
-    def run(self, source: Path) -> None:
+    def run(self, source: Path, metadata_seed: BookMetadata | None = None) -> None:
         manifest = self.manifest
         source_relative = f"source/input.{manifest.source_format}"
 
@@ -191,6 +193,10 @@ class _Runner:
             metadata = BookMetadata(book_id=manifest.book_id, title=Path(manifest.source_name).stem,
                                     source_name=manifest.source_name, source_sha256=manifest.source_sha256,
                                     source_format=manifest.source_format)
+            if metadata_seed:
+                metadata = metadata_seed.model_copy(deep=True)
+                metadata.book_id = manifest.book_id
+                metadata.chapter_ids, metadata.warnings, metadata.coverage = [], [], "complete"
             book = parse_book(self.path(source_relative), metadata)
             outputs = []
             for chapter in book.chapters:
@@ -200,7 +206,10 @@ class _Runner:
             write_json(self.path("metadata.json"), book.metadata.model_dump())
             return ["metadata.json", *outputs]
 
-        self.step("parse", {"source": sha256_file(self.path(source_relative)), "format": manifest.source_format}, parse)
+        parse_inputs = {"source": sha256_file(self.path(source_relative)), "format": manifest.source_format}
+        if metadata_seed:
+            parse_inputs["metadata_seed"] = metadata_seed.model_dump()
+        self.step("parse", parse_inputs, parse)
         metadata = BookMetadata.model_validate_json(self.path("metadata.json").read_text(encoding="utf-8"))
         manifest.warnings = metadata.warnings
         legacy_config = manifest.legacy_config or {}

@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-2",
-  "current_task": "Phase 2 Provider 抽象、故障切换与最小任务恢复已完成并验证，建立最终交接快照",
-  "task_status": "completed",
+  "current_phase": "phase-3",
+  "current_task": "Phase 3 功能、真实公开书籍 demo 与 160 项测试完成；检查文档并提交",
+  "task_status": "in_progress",
   "branch": "main",
   "last_verified_commit": "2f06b0107af9470f6a8758b8a1620ac8ab8f7cbe",
   "completed_tasks": [
@@ -18,54 +18,68 @@
     "实现统一 Provider API、可扩展 Registry、兼容 HTTP/local LLM、Mock 与 TOML 配置",
     "实现受控 failover、manifest v2 调用审计、最小任务恢复及 v1 原样备份迁移",
     "完整测试 78 passed，验证第七章接管、强制退出恢复及永久错误停止",
-    "创建并验证 Phase 2 功能提交 2f06b01；完整测试 78 passed，项目校验和编译通过"
+    "创建并验证 Phase 2 功能提交 2f06b01；完整测试 78 passed，项目校验和编译通过",
+    "实现 BookIdentity、Source Registry、官方 CSV/RDF 来源与用户 URL/文件入口",
+    "实现限量 HTTPS、MIME/容器验证、公网 IP 固定、逐获取阶段检查点及 Pipeline 元数据桥接",
+    "Phase 3 全量离线测试 157 passed；真实目录返回国富论两个候选，拒绝静默选择",
+    "真实国富论 gutenberg:3300 获取并解析 67 个文本段；源文件 2468951 字节，重复获取全部产物和检查点不变"
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "task": "文档一致性校验、Git 功能提交与最终交接快照",
+      "owner": "primary-agent",
+      "files": [
+        "docs/",
+        "README.md",
+        "CONTEXT.md"
+      ]
+    }
+  ],
   "next_actions": [
-    "按 AGENTS 阅读入口文档并核对实际代码、Git 与测试证据",
-    "等待用户确认后续阶段范围；可优先用授权小样本验证兼容 LLM 的真实服务",
-    "后续单独规划真实 TTS、内容质量、长章节或深度解析；本次不开始 Phase 3"
+    "完成文档与 Git 差异检查，创建 Phase 3 功能提交",
+    "验证功能提交并按 D-006 固定 STATE/HANDOFF 交接快照",
+    "等待用户确定下一阶段范围，不继续开发 UI 或真实音频能力"
   ],
   "tests": [
     {
       "name": "full-suite",
       "command": ".venv/bin/python -m pytest -q",
       "status": "passed",
-      "scope": "commit",
-      "summary": "78 passed，10 subtests passed；5 个既有 PyMuPDF SWIG 弃用警告；无需网络",
-      "checked_at": "2026-09-13T13:08:53Z"
+      "scope": "working_tree",
+      "summary": "160 passed，10 subtests passed，5 个既有 PyMuPDF 弃用警告；离线运行",
+      "checked_at": "2026-09-13T23:26:37Z"
+    },
+    {
+      "name": "live-acquisition-demo",
+      "command": "bookcast acquire \"The Wealth of Nations\" --edition gutenberg:3300 --output-dir imports/phase3-demo --resolve gutenberg.pglaf.org=69.55.231.8 --download-timeout 600",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "官方目录返回 3300/38194 两个候选；选择 3300，RDF 确认为美国公有领域，2468951 字节 TXT 解析 67 段；重复运行产物及检查点字节/mtime 不变，详见 docs/PHASE3_DEMO.md",
+      "checked_at": "2026-09-13T23:24:01Z"
     },
     {
       "name": "compile",
       "command": ".venv/bin/python -m compileall -q src tests",
       "status": "passed",
-      "scope": "commit",
-      "summary": "所有应用与测试文件编译通过",
-      "checked_at": "2026-09-13T13:08:53Z"
+      "scope": "working_tree",
+      "summary": "全部代码和测试编译通过",
+      "checked_at": "2026-09-13T23:24:01Z"
+    },
+    {
+      "name": "git-whitespace",
+      "command": "git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "当前差异无空白错误",
+      "checked_at": "2026-09-13T23:24:01Z"
     },
     {
       "name": "project-integrity",
       "command": "python3 scripts/validate_project.py",
       "status": "passed",
-      "scope": "commit",
-      "summary": "必需文件、STATE 契约/语义、UTC、本地链接和 Git 全部通过",
-      "checked_at": "2026-09-13T13:08:53Z"
-    },
-    {
-      "name": "git-whitespace",
-      "command": "git show --format=oneline --check HEAD",
-      "status": "passed",
-      "scope": "commit",
-      "summary": "Phase 2 功能提交无空白错误；工作区在验证前干净",
-      "checked_at": "2026-09-13T13:08:53Z"
-    },
-    {
-      "name": "cli-smoke",
-      "command": "bookcast config providers / doctor / generate --provider auto / generate --resume / status --json",
-      "status": "passed",
       "scope": "working_tree",
-      "summary": "examples/providers.toml 三级 Mock；doctor ready，生成 MP3、6 次 AI 调用、integrity=ok，resume 后 manifest 字节不变",
-      "checked_at": "2026-09-13T13:07:04Z"
+      "summary": "必需文件、STATE 契约/语义、UTC、本地链接与 Git 校验通过",
+      "checked_at": "2026-09-13T23:26:37Z"
     }
   ],
   "known_failures": [],
@@ -182,7 +196,43 @@
     {
       "path": "docs/PROVIDERS.md",
       "purpose": "配置、恢复、审计与扩展说明"
+    },
+    {
+      "path": "src/bookcast/source_api.py",
+      "purpose": "BookIdentity、来源接口与 acquisition v1 契约"
+    },
+    {
+      "path": "src/bookcast/sources.py",
+      "purpose": "官方目录/用户来源适配器与 Source Registry"
+    },
+    {
+      "path": "src/bookcast/source_http.py",
+      "purpose": "限量 HTTPS、固定公网 IP 和 TLS/重定向防护"
+    },
+    {
+      "path": "src/bookcast/source_validation.py",
+      "purpose": "文件签名、文本编码、EPUB 容器安全检查"
+    },
+    {
+      "path": "src/bookcast/acquisition.py",
+      "purpose": "明确选择版本、获取和解析检查点"
+    },
+    {
+      "path": "tests/test_source_http.py",
+      "purpose": "下载限制和网络地址安全测试"
+    },
+    {
+      "path": "tests/test_sources.py",
+      "purpose": "候选、版权、导入、恢复、桥接和容器安全测试"
+    },
+    {
+      "path": "docs/SOURCES.md",
+      "purpose": "来源获取使用方式与支持边界"
+    },
+    {
+      "path": "docs/PHASE3_DEMO.md",
+      "purpose": "真实国富论获取解析的命令、版权依据与哈希证据"
     }
   ],
-  "updated_at": "2026-09-13T13:08:53Z"
+  "updated_at": "2026-09-13T23:26:37Z"
 }

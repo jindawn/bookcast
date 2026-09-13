@@ -2,7 +2,7 @@
 
 BookCast 是一个以开源为目标的本地工具：从书名或用户提供的 EPUB、PDF、TXT 出发，确认正确书籍版本，获取合法来源，解析整本书，再用 AI 生成高质量中文音频、精读内容或双人播客，最终导出 MP3 / M4B。
 
-**当前阶段：Phase 2 Provider 抽象与故障切换。** BookCast 已支持本地 EPUB、PDF、TXT → 章节分析 → 双人脚本 → WAV → MP3。默认 Mock 全流程无需密钥或网络；可选择 OpenAI-compatible 或本地兼容 LLM 服务，按优先级切换并恢复最小未完成任务。内置 TTS 仍是测试音调；互联网找书、真实语音、OCR 和 M4B 未实现。验证与提交证据见 [HANDOFF.md](docs/HANDOFF.md) 和 [STATE.json](docs/STATE.json)。
+**当前阶段：Phase 3 书名识别与合法 Source Resolver。** 新增 `bookcast acquire`，从官方目录识别书籍候选、明确版本、核验来源后安全获取并解析，也接受用户 URL/本地文件。可选 `--generate` 接入原有可恢复的 AI/音频流水线。默认 Mock 无需密钥；内置 TTS 仍是测试音调，真实语音、OCR、M4B 与 UI 未实现。验证与提交证据见 [HANDOFF.md](docs/HANDOFF.md) 和 [STATE.json](docs/STATE.json)。
 
 ## 开始接手
 
@@ -16,6 +16,7 @@ BookCast 是一个以开源为目标的本地工具：从书名或用户提供�
 | [ROADMAP.md](docs/ROADMAP.md) | 分阶段范围及验收条件 |
 | [DECISIONS.md](docs/DECISIONS.md) | 已确定原则、原因和待选型事项 |
 | [PROVIDERS.md](docs/PROVIDERS.md) | Provider 配置、故障分类、调用审计与扩展方式 |
+| [SOURCES.md](docs/SOURCES.md) | 书籍身份、合法来源、安全下载与获取检查点 |
 | [HANDOFF.md](docs/HANDOFF.md) | 给下一位 Agent 的最新交接快照 |
 | [WORKLOG.md](docs/WORKLOG.md) | 追加式开发事实记录 |
 | [STATE.json](docs/STATE.json) / [STATE.schema.json](docs/STATE.schema.json) | 机器可读工作状态及版本化契约 |
@@ -30,6 +31,8 @@ git --version
 uv sync --extra dev
 uv run bookcast config providers
 uv run bookcast doctor
+uv run bookcast acquire "The Wealth of Nations" --list
+uv run bookcast acquire "The Wealth of Nations" --edition gutenberg:3300
 uv run bookcast generate examples/example.txt --provider auto
 uv run bookcast generate examples/example.txt --provider auto --resume
 uv run bookcast status <book_id> --json
@@ -42,7 +45,21 @@ git diff --check
 
 `python3 scripts/validate_project.py` 仍用于 Phase 0 文档/状态入口校验。`uv run pytest -q` 运行解析、Provider、流水线、幂等、恢复和 CLI 测试；当前不需要访问网络。
 
-Mock TTS 生成的是主持人/嘉宾可区分的测试音调，并在导出元数据中标注“非人声”；它用于验证音频管线，不是自然语言朗读。PDF 当前按页形成章节，扫描页会产生 OCR 警告；EPUB 按 spine 顺序提取 HTML 正文。不会联网找书，也不绕过 DRM 或访问控制。
+Mock TTS 生成的是主持人/嘉宾可区分的测试音调，并在导出元数据中标注“非人声”；它用于验证音频管线，不是自然语言朗读。PDF 当前按页形成章节，扫描页会产生 OCR 警告；EPUB 按 spine 顺序提取 HTML 正文。联网获取只走明确的公开来源，不绕过 DRM 或访问控制。
+
+## 从书名或用户来源开始
+
+`acquire` 默认只获取并解析，产物保存在 `imports/{acquisition_id}/`；加 `--generate` 才生成音频。多个候选时必须使用 `--edition <候选ID>` 选择，可用 `--author` 和 `--language` 筛选。ISBN、印刷版次和出版年份未知时保留 null，不把目录发行日期冒充出版年份。
+
+首个公开来源使用 Project Gutenberg 官方镜像的 CSV/RDF，接受明确声明为美国公有领域的书籍并记录地区范围，目前下载 UTF-8 TXT。首次目录约 21 MB，之后缓存；慢网络可设置 `--download-timeout 600`，更新目录用 `--refresh-catalog`。专门的开放许可库和出版社目录适配器尚未实现。
+
+```sh
+uv run bookcast acquire "我的书" --file ./books/my-book.epub
+uv run bookcast acquire "授权资料" --url https://publisher.example/book.pdf --format pdf --rights-confirmed
+uv run bookcast acquire "The Wealth of Nations" --edition gutenberg:3300 --generate
+```
+
+示例 URL 需换成有权使用的真实直接链接。用户来源保留用户声明，不伪装成独立核验的授权。下载限制大小、MIME、公开网络地址和文件结构；全部源文件、书稿及缓存默认被 Git 忽略。获取失败后重复命令即可恢复；音频阶段失败时加 `--resume`。详细限制、Fake-IP 网络的安全处理和真实演示见 [SOURCES.md](docs/SOURCES.md) / [PHASE3_DEMO.md](docs/PHASE3_DEMO.md)。
 
 ## Provider 配置与恢复
 

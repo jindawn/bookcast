@@ -33,6 +33,7 @@ class BookMetadata(Model):
     chapter_ids: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     coverage: Literal["complete", "partial"] = "complete"
+    acquisition: dict | None = None
 
 
 class NormalizedBook(Model):

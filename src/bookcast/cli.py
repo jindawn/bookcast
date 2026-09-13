@@ -20,6 +20,91 @@ app.add_typer(config_app, name="config")
 
 
 @app.command()
+def acquire(
+    title: Annotated[str, typer.Argument(help="书名；支持不完整标题词组")],
+    edition: Annotated[str | None, typer.Option(help="候选 ID，例如 gutenberg:3300")] = None,
+    author: Annotated[str | None, typer.Option(help="作者筛选；用户来源时作为用户提供的元数据")] = None,
+    language: Annotated[str | None, typer.Option(help="语言筛选，例如 en")] = None,
+    list_only: Annotated[bool, typer.Option("--list", help="只显示身份候选，不获取书籍")] = False,
+    source_provider: Annotated[str, typer.Option(help="目录来源注册名")] = "gutenberg",
+    url: Annotated[str | None, typer.Option(help="用户有权获取的直接 HTTPS 文件 URL")] = None,
+    file: Annotated[Path | None, typer.Option(help="用户自己的本地 EPUB/PDF/TXT")] = None,
+    file_format: Annotated[str | None, typer.Option("--format", help="txt / epub / pdf；URL 必须指定")] = None,
+    rights_confirmed: Annotated[bool, typer.Option(help="确认有权从用户 URL 获取并处理该文件")] = False,
+    max_size_mb: Annotated[int, typer.Option(min=1, max=100, help="书籍文件大小上限 MiB")] = 32,
+    download_timeout: Annotated[float, typer.Option(min=1, max=900, help="每个下载的总时限秒数；首次目录较大时可调高")] = 120,
+    refresh_catalog: Annotated[bool, typer.Option(help="重新获取官方机器可读目录")] = False,
+    resolve: Annotated[list[str] | None, typer.Option(help="可重复：主机名=已核验公网IP；保留原域名 TLS 校验")] = None,
+    output_dir: Annotated[Path, typer.Option(help="获取产物与目录缓存根目录")] = Path("imports"),
+    generate_audio: Annotated[bool, typer.Option("--generate", help="解析后接入原有 AI/音频流水线")] = False,
+    pipeline_output_dir: Annotated[Path, typer.Option(help="音频流水线产物根目录")] = Path("output"),
+    provider: Annotated[str, typer.Option(help="生成阶段 LLM 配置名或 auto")] = "auto",
+    tts_provider: Annotated[str, typer.Option(help="生成阶段 TTS 配置名或 auto")] = "auto",
+    config: Annotated[Path | None, typer.Option(help="生成阶段 Provider 配置")] = None,
+    resume: Annotated[bool, typer.Option(help="继续未完成的音频生成任务；获取步骤自动复用检查点")] = False,
+) -> None:
+    """书名 → 明确版本 → 合法来源 → 安全获取 → 本地解析，默认不调用 AI。"""
+    from .acquisition import Acquirer, choose_edition
+    from .models import BookMetadata
+    from .sources import source_registry
+    from .source_http import SafeHTTP
+    from .storage import artifact_path
+
+    try:
+        registry = source_registry()
+        overrides = {}
+        for value in resolve or []:
+            if value.count("=") != 1:
+                raise BookCastError("--resolve 格式应为主机名=公网IP。")
+            host, address = value.split("=", 1)
+            if host in overrides:
+                raise BookCastError("--resolve 不允许重复主机。")
+            overrides[host] = address
+        http = SafeHTTP(address_overrides=overrides, total_timeout=download_timeout)
+        if url or file:
+            fmt = file_format or (file.suffix.lower().lstrip(".") if file else None)
+            if fmt not in {"txt", "epub", "pdf"}:
+                raise BookCastError("用户 URL 需指定 --format txt/epub/pdf；本地文件需为支持的格式。")
+            source = registry.create("user", url=url, local_path=file, fmt=fmt, rights_confirmed=rights_confirmed)
+        else:
+            if source_provider == "user":
+                raise BookCastError("user 来源需要 --url 或 --file。")
+            source = registry.create(source_provider, cache_dir=artifact_path(output_dir.resolve(), ".catalog/gutenberg"),
+                                     refresh=refresh_catalog, http=http)
+        candidates = source.search(title, author=author, language=language)
+        if list_only:
+            typer.echo(candidates.model_dump_json(indent=2))
+            return
+        if not edition and (len(candidates.candidates) != 1 or not candidates.complete):
+            typer.echo(candidates.model_dump_json(indent=2))
+        selected = choose_edition(candidates, edition)
+        offers = source.sources(selected)
+        if file_format:
+            offers = [offer for offer in offers if offer.format == file_format]
+        if len(offers) != 1:
+            raise BookCastError("该版本没有唯一的受支持来源格式；首个 Gutenberg 适配器只获取 UTF-8 TXT。")
+        offer = offers[0]
+        root = Acquirer(output_dir, http).acquire(selected, offer, max_bytes=max_size_mb * 1024 * 1024)
+        metadata = BookMetadata.model_validate_json((root / "metadata.json").read_text(encoding="utf-8"))
+        result = {"status": "parsed", "candidate": selected.model_dump(), "source": offer.model_dump(),
+                  "directory": str(root), "file": str(root / "source" / f"input.{offer.format}"),
+                  "chapters": len(metadata.chapter_ids), "coverage": metadata.coverage,
+                  "warnings": [*candidates.warnings, *metadata.warnings]}
+        if offer.jurisdiction == "US":
+            result["warnings"].append("来源版权声明仅指美国公有领域；其他地区需核对当地适用条件。")
+        if generate_audio:
+            settings, ai_registry = load_config(config), default_registry()
+            job = Pipeline(ai_registry.chain(settings, "llm", provider), ai_registry.chain(settings, "tts", tts_provider),
+                           pipeline_output_dir).generate(Path(result["file"]), resume=resume, metadata_seed=metadata)
+            result["pipeline_job"], result["podcast"] = str(job), str(job / "podcast.mp3")
+        typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    except (BookCastError, OSError, ValueError) as exc:
+        message = str(exc) if isinstance(exc, BookCastError) else "获取配置、文件或元数据无效。"
+        typer.echo(f"错误：{message}", err=True)
+        raise typer.Exit(1) from None
+
+
+@app.command()
 def generate(
     source: Annotated[Path, typer.Argument(help="用户提供的本地 EPUB / PDF / TXT")],
     resume: Annotated[bool, typer.Option(help="复用有效检查点，继续未完成的任务")] = False,

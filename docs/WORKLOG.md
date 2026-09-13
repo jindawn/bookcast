@@ -66,3 +66,16 @@
 - 普通 Git 写操作被文件系统沙箱阻止，使用获准的 Git 写权限后完成提交；没有遗留权限 blocker。
 - STATE 标记 phase-2 completed、清空 in_progress，last_verified_commit 固定为已验证功能提交；HANDOFF/ROADMAP 同步。
 - 本次未推送到远程、未调用真实 AI 服务、未开始后续阶段。最终交接快照按 D-006 单独提交。
+
+## 2026-09-13T23:24:01Z — Phase 3 Source Resolver、真实公开书籍 demo 与测试
+
+- 按 AGENTS 核对架构/状态/代码/Git，接手时 main=b6f0aa9 且工作区干净；本次仅实现 Phase 3。
+- 实现 BookIdentity、候选选择、Source Registry、官方 CSV/RDF 与用户来源、有界 HTTPS/容器校验、获取检查点和 Pipeline 元数据桥接。无新增依赖或 UI。
+- Gutendex API 实测 403，改用官方允许的机器可读目录与镜像。一次联网审批因 Codex 额度拒绝；用户继续且重置时间经过后，重新获准运行。
+- 本地 DNS 返回 198.18.0.37，默认公网校验拒绝；核验真实 A 记录后以显式 --resolve 固定公网 IP，仍校验证书。首次目录超过 120 秒，按 600 秒有界配置成功取得 21205940 字节目录。
+- 实际国富论查询返回 3300 和 38194 两个候选；选择 3300，核验书籍层美国公有领域声明、下载 2468951 字节 TXT，解析 67 段。源 SHA-256 为 e91d52dca43fd0fd69baf7776b00a5d8e74b69675b6b608ca8a0378aaf3ae58d。
+- 真实重复获取检查通过：获取记录、源文件及解析产物字节/mtime 均不变。证据记录在 docs/PHASE3_DEMO.md；书籍和缓存未纳入 Git。
+- 新增 79 项场景，全量 157 passed、10 subtests passed；5 个既有 PyMuPDF 警告。首次一项 EPUB fixture 缺少目录资源，补齐后通过。compileall 与 git diff --check 通过。
+- 文档、领域词汇和 D-011/D-012 已同步；功能提交与最终交接快照待创建。
+
+- 2026-09-13T23:26:37Z：补充 NaN/Infinity/越界超时回归，最终全量 160 passed、10 subtests passed；compileall、文档校验、git diff --check 通过。
