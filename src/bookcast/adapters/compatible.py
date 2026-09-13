@@ -1,0 +1,126 @@
+"""SDK-free chat/completions adapter for remote and local compatible servers."""
+
+import json
+import os
+from urllib import error, request
+from urllib.parse import urlsplit
+
+from pydantic import ValidationError
+
+from ..provider_api import ErrorKind, ProviderError, ProviderStatus, ProviderCapabilities, T
+from ..provider_config import ProviderSpec, is_loopback
+from ..storage import fingerprint
+
+
+QUOTA_CODES = {"insufficient_quota", "quota_exceeded", "quota_exhausted", "credit_balance_exhausted",
+               "organization_spend_limit_exceeded", "project_spend_limit_exceeded", "organization_usage_limit_exceeded"}
+
+
+def classify_http(status: int, body: bytes) -> ProviderError:
+    try:
+        failure = json.loads(body).get("error", {})
+        code, kind = failure.get("code"), failure.get("type")
+    except (ValueError, AttributeError):
+        code, kind = None, None
+    if status in {401, 403}:
+        return ProviderError(ErrorKind.AUTH)
+    if status in {402, 429} and any(isinstance(value, str) and value in QUOTA_CODES for value in (code, kind)):
+        return ProviderError(ErrorKind.QUOTA)
+    if status == 429:
+        return ProviderError(ErrorKind.RATE_LIMIT)
+    if status in {408, 504}:
+        return ProviderError(ErrorKind.TIMEOUT)
+    if status >= 500:
+        return ProviderError(ErrorKind.UNAVAILABLE)
+    return ProviderError(ErrorKind.INPUT)
+
+
+class NoRedirect(request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ProviderError(ErrorKind.INPUT)
+
+
+class CompatibleBase:
+    def __init__(self, spec: ProviderSpec):
+        self.spec, self.name, self.model = spec, spec.name, spec.model
+        self.last_status = ProviderStatus(provider=self.name, model=self.model)
+
+    @property
+    def cache_key(self) -> str:
+        return fingerprint({"type": self.spec.type, "model": self.model, "endpoint": self.spec.base_url})
+
+    def _request(self, route: str, payload: dict | None = None) -> bytes:
+        try:
+            headers = {"Content-Type": "application/json"}
+            if self.spec.api_key_env:
+                key = os.environ.get(self.spec.api_key_env)
+                if not key:
+                    raise ProviderError(ErrorKind.AUTH)
+                headers["Authorization"] = f"Bearer {key}"
+            url = self.spec.base_url.rstrip("/") + "/" + route
+            data = json.dumps(payload, ensure_ascii=False).encode() if payload is not None else None
+            req = request.Request(url, data=data, headers=headers)
+            with request.build_opener(NoRedirect()).open(req, timeout=self.spec.timeout_seconds) as response:
+                result = response.read(32 * 1024 * 1024 + 1)
+                if len(result) > 32 * 1024 * 1024:
+                    raise ProviderError(ErrorKind.SCHEMA)
+            self.last_status = ProviderStatus(provider=self.name, model=self.model, availability="available")
+            return result
+        except error.HTTPError as exc:
+            failure = classify_http(exc.code, exc.read(64 * 1024))
+        except error.URLError as exc:
+            failure = ProviderError(ErrorKind.TIMEOUT if isinstance(exc.reason, TimeoutError) else ErrorKind.UNAVAILABLE)
+        except TimeoutError:
+            failure = ProviderError(ErrorKind.TIMEOUT)
+        except ProviderError as exc:
+            failure = ProviderError(exc.kind)
+        except (OSError, ValueError):
+            failure = ProviderError(ErrorKind.INPUT)
+        self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
+        raise failure from None
+
+    def health_check(self) -> ProviderStatus:
+        try:
+            response = json.loads(self._request("models"))
+            if self.model not in [item["id"] for item in response["data"]]:
+                raise ProviderError(ErrorKind.INPUT)
+        except ProviderError as exc:
+            self.last_status = ProviderStatus.from_error(self.name, self.model, exc)
+        except (ValueError, KeyError, TypeError):
+            self.last_status = ProviderStatus.from_error(self.name, self.model, ProviderError(ErrorKind.SCHEMA))
+        return self.last_status
+
+
+class CompatibleLLMProvider(CompatibleBase):
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(text=True, structured=True, local=is_loopback(urlsplit(self.spec.base_url).hostname))
+
+    def _chat(self, prompt: str, schema: dict | None = None) -> str:
+        messages = [{"role": "user", "content": prompt}]
+        payload = {"model": self.model, "messages": messages, "stream": False}
+        if schema:
+            messages.insert(0, {"role": "system", "content": "Return only JSON matching this schema: " + json.dumps(schema)})
+            payload["response_format"] = {"type": "json_object"}
+        try:
+            response = json.loads(self._request("chat/completions", payload))
+            text = response["choices"][0]["message"]["content"]
+            if not isinstance(text, str) or not text.strip():
+                raise ValueError("invalid response")
+            return text
+        except ProviderError:
+            raise
+        except (ValueError, KeyError, IndexError, TypeError):
+            failure = ProviderError(ErrorKind.SCHEMA)
+            self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
+            raise failure from None
+
+    def generate(self, prompt: str) -> str:
+        return self._chat(prompt)
+
+    def generate_structured(self, prompt: str, response_model: type[T]) -> T:
+        try:
+            return response_model.model_validate_json(self._chat(prompt, response_model.model_json_schema()))
+        except ValidationError:
+            failure = ProviderError(ErrorKind.SCHEMA)
+            self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
+            raise failure from None

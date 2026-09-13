@@ -67,11 +67,28 @@ class StepRecord(Model):
     artifacts: dict[str, str] = Field(default_factory=dict)
     attempts: int = 1
     error: str | None = None
+    legacy: bool = False
     updated_at: str = Field(default_factory=utc_now)
 
 
+class AIAttempt(Model):
+    id: str
+    task: str
+    kind: Literal["llm", "tts"]
+    status: Literal["pending", "running", "completed", "failed_retryable", "failed_permanent"] = "pending"
+    provider: str
+    model: str
+    prompt_version: str
+    input_hash: str
+    output_hash: str | None = None
+    artifacts: dict[str, str] = Field(default_factory=dict)
+    timestamp: str = Field(default_factory=utc_now)
+    error: str | None = None
+    retryable: bool = False
+
+
 class Manifest(Model):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     pipeline_version: Literal["1"] = "1"
     book_id: str
     source_sha256: str
@@ -80,6 +97,9 @@ class Manifest(Model):
     config: dict[str, str]
     status: Literal["pending", "running", "failed", "completed"] = "pending"
     steps: dict[str, StepRecord] = Field(default_factory=dict)
+    ai_calls: list[AIAttempt] = Field(default_factory=list)
+    provider_status: dict[str, dict] = Field(default_factory=dict)
+    legacy_config: dict[str, str] | None = None
     warnings: list[str] = Field(default_factory=list)
     error: str | None = None
     created_at: str = Field(default_factory=utc_now)

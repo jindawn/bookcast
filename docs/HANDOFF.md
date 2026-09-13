@@ -1,82 +1,74 @@
 # 给下一位 AI Agent 的交接
 
-快照更新：2026-09-13T02:48:17Z。本快照对应 **Phase 1 功能已提交并验证，完成交接快照**；机器状态见 [STATE.json](STATE.json)。
+当前快照：Phase 2 功能与测试完成，正在创建功能提交及最终交接快照。机器状态见 [STATE.json](STATE.json)。
 
 ## 当前目标
 
-Phase 1 功能目标已完成并创建功能提交：实现用户本地 EPUB/PDF/TXT → NormalizedBook → Mock 摘要 → Mock 双人脚本 → 测试音调 WAV → FFmpeg MP3 的可运行 CLI，并支持章节级幂等和恢复。代码已验证并推送到远程 GitHub。准备进入 Phase 2。
+让 BookCast 的 LLM/TTS 可替换，模型故障或额度耗尽时从最小未完成任务恢复；本阶段不增加找书、真实语音、OCR 或 M4B。Phase 2 授权实现范围已完成，提交证据将在最终快照固定。
 
 ## 刚刚完成了什么
 
-- 采用 Python 3.12+、Typer、Pydantic、EbookLib、BeautifulSoup、PyMuPDF、FFmpeg，并用 `uv.lock` 固定依赖。
-- 实现 `bookcast generate` 和 `bookcast status`；默认 Mock Provider 不需要 API key 或网络。
-- 实现 TXT（UTF-8/UTF-16 BOM）、EPUB（spine 顺序和 HTML 清理）、PDF（按页文本提取）解析，保留章节来源位置并报告图片/OCR 警告。
-- 以 Pydantic 模型表示 NormalizedBook、ChapterAnalysis、PodcastScript、Manifest 和 StepRecord。
-- 每个步骤使用输入/Provider 指纹、SHA-256、原子写入和 manifest checkpoint；中断、失败或损坏产物可用 `--resume` 恢复。
-- Mock TTS 生成主持人/嘉宾不同频率的 24 kHz PCM16 WAV，FFmpeg 合并为 96 kbps MP3；导出 JSON 明确这是测试音调。
-- 添加 30 项 pytest 测试（含 10 个参数化子场景）和自制示例 `examples/example.txt`。
+- 统一 LLMProvider/TTSProvider、能力、健康状态和安全错误分类；Pipeline 无具体适配器或厂商 SDK 导入。
+- Registry 支持 Mock、OpenAI-compatible/local LLM 工厂；TOML 指定优先级，密钥仅用环境变量名引用。
+- rate limit、quota、temporary unavailable、timeout 有界切换；认证、输入、schema、业务错误停止，不用模型替换掩盖错误。
+- manifest v2 逐次记录 AI 调用状态、实际 provider/model、prompt_version、输入输出哈希和 UTC 时间；每次调用和产物立即持久化。
+- 已完成章节不会因更换 Provider 重做；强制退出后恢复最小未完成分析/脚本/TTS，覆盖调用完成而步骤尚未完成的窗口。
+- v1 manifest 原样备份为 manifest.v1.json，再验证迁移旧产物，legacy=true；没有旧调用审计时不伪造。
+- CLI 增加 config providers、doctor、generate --provider auto / --tts-provider / --config。
+- 修正旧 ROADMAP 对 Phase 1 提交受阻的过期描述，并将 Phase 2 范围调整为本次用户要求；深度解析移至后续候选。
 
 ## 修改的关键文件
 
-- [pyproject.toml](../pyproject.toml)、[uv.lock](../uv.lock)：Python 包元数据、依赖和 CLI 入口。
-- [src/bookcast/cli.py](../src/bookcast/cli.py)、[pipeline.py](../src/bookcast/pipeline.py)：命令和可恢复编排。
-- [models.py](../src/bookcast/models.py)、[parsers.py](../src/bookcast/parsers.py)：数据模型与三种本地格式解析。
-- [providers.py](../src/bookcast/providers.py)、[audio.py](../src/bookcast/audio.py)、[storage.py](../src/bookcast/storage.py)：Provider 契约、Mock 音频、FFmpeg 合并、原子存储和锁。
-- [tests/test_phase1.py](../tests/test_phase1.py)：解析、Provider、流水线状态、幂等、恢复、完整性和 CLI 测试。
-- [README.md](../README.md)、[ARCHITECTURE.md](ARCHITECTURE.md)、[ROADMAP.md](ROADMAP.md)、[DECISIONS.md](DECISIONS.md)、[STATE.json](STATE.json)、本文件和 [WORKLOG.md](WORKLOG.md)：文档与状态。
+- [provider_api.py](../src/bookcast/provider_api.py)、[provider_registry.py](../src/bookcast/provider_registry.py)、[provider_chain.py](../src/bookcast/provider_chain.py)：中立契约、组合与切换。
+- [provider_config.py](../src/bookcast/provider_config.py)、[compatible.py](../src/bookcast/adapters/compatible.py)、[providers.py](../src/bookcast/providers.py)、[prompts.py](../src/bookcast/prompts.py)：配置、适配器、Mock 与提示版本。
+- [pipeline.py](../src/bookcast/pipeline.py)、[models.py](../src/bookcast/models.py)、[cli.py](../src/bookcast/cli.py)：最小任务持久化、迁移与命令。
+- [test_providers.py](../tests/test_providers.py)、[providers.toml](../examples/providers.toml)、[PROVIDERS.md](PROVIDERS.md)：故障注入测试、配置示例和使用指南。
+- README、ARCHITECTURE、ROADMAP、PRODUCT、DECISIONS（D-009 / D-010）、STATE、HANDOFF、WORKLOG 同步本阶段状态；本地 bookcast.toml 加入 gitignore。
 
-## 当前代码状态
-
-可以运行：
+## 当前代码状态及运行方法
 
 ```sh
 uv sync --extra dev
-uv run bookcast generate examples/example.txt
-uv run bookcast status <book_id> --json
+uv run bookcast config providers --config examples/providers.toml
+uv run bookcast doctor --config examples/providers.toml
+uv run bookcast generate examples/example.txt --provider auto
+uv run bookcast generate examples/example.txt --provider auto --resume
+uv run bookcast status <job> --json
 ```
 
-产物目录为 `output/{book_id}/`，包含 `source/`、`metadata.json`、`chapters/`、`analysis/`、`scripts/`、`audio/`、`manifest.json` 和 `podcast.mp3`。`bookcast generate` 不带 `--resume` 时允许已完成任务快速复用有效检查点；失败任务需加 `--resume`。Provider 配置变更会拒绝覆盖旧任务。
+默认使用 Mock；示例配置的三层 LLM 同样全部 Mock。真实兼容 LLM 为显式选择，外发范围、配置格式和错误规则见 [PROVIDERS.md](PROVIDERS.md)。TTS 仍输出测试音调 WAV，经 FFmpeg 合并 MP3。输出目录保持 output/{book_id}/ 的 Phase 1 布局。
 
-尚未实现互联网找书、真实 LLM/TTS、OCR、M4B、GUI、CI 或开源许可证。PDF 扫描页和 EPUB 图片页只报告警告或部分覆盖，不伪装成完整文本。
+Provider 配置改变后必须 --resume，保留已完成章节及原调用归属；需要整本改用另一个模型时选择新 --output-dir。恢复看 steps 与 ai_calls 两层记录，不应删除已有输出。运行 manifest v2 与仓库 docs/STATE 的 v1 是不同契约。
 
-## 已运行的测试及结果
+## 已运行测试与结果
 
-验证环境：macOS，Python 3.12.14，FFmpeg 可用。以下命令在当前工作区通过：
+环境为 macOS、Python 3.12、FFmpeg 可用。`.venv/bin/python -m pytest -q`：78 passed、10 subtests passed；5 个既有 PyMuPDF SWIG 弃用警告。compileall 与 git diff --check 通过；python3 scripts/validate_project.py 通过。三级 Mock 配置的 config/doctor/generate/resume/status 冒烟通过：doctor ready、MP3 生成、integrity=ok，6 次 AI 调用且 resume 后 manifest 字节不变。
 
-| 检查 | 结果 |
-| --- | --- |
-| `UV_CACHE_DIR=/tmp/bookcast-uv-cache uv run pytest -q` | 30 passed，5 个 PyMuPDF 兼容性弃用警告 |
-| `python3.12 -m compileall -q src tests` | 通过 |
-| `python3 scripts/validate_project.py` | 通过 |
-| `git diff --check` | 通过 |
-| CLI TXT 端到端 + `status --json` | 通过，生成 MP3，完整性为 `ok` |
-
-自动化测试不需要网络；依赖安装曾因沙箱 DNS 失败，获准后完成并生成 `uv.lock`。真实服务、长书籍和多平台 FFmpeg 尚未测试。
+新增测试验证：A 正常、A 第七章额度/限流/超时/临时故障、B/三级链接管、TTS 切换、链耗尽后换配置恢复、强制进程退出、调用完成窗口恢复、旧任务迁移、永久错误与损坏输出不切换、HTTP 协议及无 Secret 错误记录。前六章哈希和修改时间保持不变。全部自动化测试离线运行。
 
 ## 未解决问题与技术债
 
-- 无代码失败，无阻塞项；Phase 1 功能提交已完成并推送到远程 GitHub。
-- Mock TTS 是测试音调，不是自然语音；真实 Provider 需要在后续阶段实现且不能绕过接口。
-- TXT 分章依赖常见中文/英文标题模式；无标题文本会作为单章，复杂排版需要 Phase 2 策略。
-- PDF 按页生成章节，扫描件需要 OCR；EPUB 的目录层级和复杂资源仍需增强。
-- 尚未建立 CI、跨平台音频验证、M4B 封装和许可证/贡献说明。
+- 当前无未解决测试失败或实现阻塞。新增测试首次出现 5 个失败，原因是断言错误地要求时间以 Z 结尾；修正为验证合法 UTC ISO 8601 后通过，应用时间格式未改。
+- 真实远程服务和真实本地模型未联网验收；各服务对 JSON mode、models 列表和错误码的兼容程度可能不同。
+- 内置真实 TTS、内容质量评估、超长章节分段、预算、后台退避和并发未实现。
+- 远端成功但本地结果尚未落盘的中断窗口可能重复请求或计费；本阶段不承诺外部调用恰好一次。
+- 历史 v1 调用没有完整 provenance，迁移仅验证旧产物；新旧产物可以混合，不能伪造旧模型信息。
+- PDF 按页解析，扫描件无 OCR；复杂 EPUB/TXT 分章、M4B、跨平台音频验证、CI 和许可证仍是后续事项。
 
 ## 下一步建议
 
-1. 先按 [AGENTS.md](../AGENTS.md) 阅读所有入口文档，运行完整测试并核对实际 Git。
-2. Phase 2 评估 EPUB/PDF 深度解析、目录层级、OCR 支持范围和授权样本，先在 DECISIONS 记录取舍。
-3. 增加真实 Provider 前，定义配置、隐私提示、超时/重试和成本边界；保持 Mock 测试可用。
-4. 完成后同步 README、STATE、HANDOFF、WORKLOG 并小步提交；不要扩展互联网找书到 Phase 2。
+1. 按 AGENTS 阅读文档并核对实际 Git；未完成的提交/交接操作见 STATE.next_actions。
+2. 用户确认后续范围后，再考虑用授权小样本验收真实兼容 LLM；不要将协议 Mock 测试当作内容质量验收。
+3. 单独规划真实 TTS、长章节、成本边界或深度解析；当前未开始 Phase 3。
 
 ## 不要重复做的事情
 
-- 不要重新初始化 Git、重建 Phase 0 文档或维护与 AGENTS 冲突的规则。
-- 不要把 Mock 音调称为真实语音，也不要声称已实现联网找书、OCR、M4B 或真实 AI。
-- 不要删除输出目录、用户书籍或凭证；不要提交 `output/`、私有输入和音频。
-- 不要绕过 LLMProvider/TTSProvider 直接绑定厂商，也不要移除 manifest、指纹、哈希和原子写入。
-- 不要在没有记录决策的情况下推翻本地优先、合法来源、版本区分和可恢复处理原则。
+- 不重新初始化仓库，不重建 Phase 0/1，不恢复已过期的提交权限 blocker。
+- 不因换 Provider 重做有效章节，不把所有错误都配置为可切换，不绕过接口 import 厂商 SDK。
+- 不把测试音调称为真实人声，不声称已验证付费服务，不提交书籍、输出或凭证。
+- 不追逐 STATE 自引用提交哈希；遵守 D-006。
 
 ## 最近 Git commit
 
-- `9e6e5aaa0db1a61320be9c28815caaf7c4b3f5cc`（`feat: add local ebook mock podcast pipeline`）：Phase 1 完整功能实现与相关测试/文档。
-- 本交接快照提交通过 `git log -1 --oneline` 查询，遵守 D-006，不把快照自身哈希写入同一次提交。
+- 当前已有 Phase 1 功能提交：9e6e5aaa0db1a61320be9c28815caaf7c4b3f5cc；交接提交 4bc8123。
+- Phase 2 功能提交尚待本次创建；创建并验证后将在最终快照记录完整哈希。快照自身提交用 git log -1 查询。

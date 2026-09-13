@@ -2,36 +2,40 @@
 
 from array import array
 import math
+import json
 from pathlib import Path
 import sys
-from typing import Protocol
 import wave
 
 from .models import Chapter, ChapterAnalysis, DialogueTurn, PodcastScript
-
-
-class LLMProvider(Protocol):
-    @property
-    def cache_key(self) -> str:
-        """Stable identity including model, configuration and prompt revision."""
-        ...
-
-    def analyze(self, chapter: Chapter) -> ChapterAnalysis: ...
-
-    def script(self, chapter: Chapter, analysis: ChapterAnalysis) -> PodcastScript: ...
-
-
-class TTSProvider(Protocol):
-    @property
-    def cache_key(self) -> str: ...
-
-    def synthesize(self, script: PodcastScript, destination: Path) -> None:
-        """Write a complete 24 kHz mono PCM16 WAV at destination or raise."""
-        ...
+from .provider_api import (LLMProvider, TTSProvider, ProviderCapabilities, ProviderStatus,
+                           ProviderError, ErrorKind, T)
 
 
 class MockLLMProvider:
+    name = "mock"
+    model = "mock-llm-v1"
     cache_key = "mock-llm:v1"
+
+    def health_check(self) -> ProviderStatus:
+        return ProviderStatus(provider=self.name, model=self.model, availability="available")
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(text=True, structured=True, local=True, mock=True)
+
+    def generate(self, prompt: str) -> str:
+        return f"[Mock] {prompt[:160]}"
+
+    def generate_structured(self, prompt: str, response_model: type[T]) -> T:
+        payload = json.loads(prompt)
+        chapter = Chapter.model_validate(payload["chapter"])
+        if payload["operation"] == "analysis":
+            result = self.analyze(chapter)
+        elif payload["operation"] == "script":
+            result = self.script(chapter, ChapterAnalysis.model_validate(payload["analysis"]))
+        else:
+            raise ProviderError(ErrorKind.INPUT)
+        return response_model.model_validate(result.model_dump())
 
     def analyze(self, chapter: Chapter) -> ChapterAnalysis:
         excerpt = " ".join(chapter.text.split())[:160]
@@ -57,7 +61,15 @@ class MockLLMProvider:
 class MockTTSProvider:
     """Audible speaker-specific test tones, deliberately not synthesized speech."""
 
+    name = "mock"
+    model = "mock-tones-v1"
     cache_key = "mock-tts:tones-v1:24000"
+
+    def health_check(self) -> ProviderStatus:
+        return ProviderStatus(provider=self.name, model=self.model, availability="available")
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(speech=True, local=True, mock=True)
 
     def synthesize(self, script: PodcastScript, destination: Path) -> None:
         rate = 24_000

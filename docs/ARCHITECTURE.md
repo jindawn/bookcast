@@ -1,8 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 1）
+## 当前实际实现（Phase 2）
 
-当前已实现一个本地 CLI MVP，支持 EPUB、PDF、TXT 解析和离线 Mock 播客输出。没有互联网找书、真实 AI/TTS、OCR 或 M4B。目标中的更大能力仍是规划，不得据此声称已有代码。
+当前支持 EPUB、PDF、TXT 解析、离线 Mock 播客输出，以及兼容远程/本地 LLM 的统一接入、逐章故障切换与恢复。内置 TTS 只有测试音调；没有互联网找书、真实语音、OCR 或 M4B。兼容端点已做离线协议测试，未做真实服务验收。
 
 ```text
 AGENTS.md / CLAUDE.md      Agent 统一入口
@@ -14,6 +14,7 @@ docs/
   ARCHITECTURE.md          实际结构与架构规划
   ROADMAP.md               阶段与验收条件
   DECISIONS.md             已确定决策与待选项
+  PROVIDERS.md             Provider 配置、错误策略、审计和扩展指南
   HANDOFF.md               最新交接快照
   WORKLOG.md               追加式事实记录
   STATE.json              当前开发状态
@@ -21,18 +22,26 @@ docs/
 scripts/
   validate_project.py     标准库离线校验
 src/bookcast/
-  cli.py                  Typer generate/status 入口
+  cli.py                  Typer generate/status/config providers/doctor 入口
   models.py               Pydantic 任务与书稿模型
   parsers.py              TXT/EPUB/PDF 本地解析
-  providers.py            Provider 契约与 Mock 实现
+  provider_api.py         与厂商无关的接口、能力、状态和错误契约
+  provider_config.py      严格 TOML 配置及安全端点校验
+  provider_registry.py    类型工厂注册、组合与注入
+  provider_chain.py       有界故障切换及调用状态回调
+  providers.py            Mock 实现（兼容旧接口导入）
+  adapters/compatible.py  兼容远程/本地 LLM HTTP 适配器
+  prompts.py              版本化领域提示词
   pipeline.py             章节级幂等流水线与恢复
   storage.py              原子写入、指纹、锁和 SHA-256
   audio.py                WAV 校验与 FFmpeg MP3 合并
 tests/
   test_validate_project.py 交接校验器回归测试
   test_phase1.py          Phase 1 解析、Provider、恢复和 CLI 测试
+  test_providers.py       Phase 2 协议、故障注入、强制退出恢复及配置测试
 examples/
   example.txt             可再分发的自制示例书
+  providers.toml          无凭证的三层 Mock 优先级配置
 ```
 
 应用运行环境为 Python 3.12+、Typer、Pydantic、EbookLib、BeautifulSoup、PyMuPDF 和 FFmpeg；`uv.lock` 固定依赖解析结果。`scripts/validate_project.py` 仍是标准库工具，应用测试用 pytest。没有数据库，任务状态保存在每个输出目录的 `manifest.json`。
@@ -43,22 +52,26 @@ examples/
 
 | 边界 | 输入与输出 | 必须保留的语义 |
 | --- | --- | --- |
-| 书目识别 | 书名 → Work / Edition 候选 → 用户确认 | Phase 3；本阶段不联网 |
+| 书目识别 | 书名 → Work / Edition 候选 → 用户确认 | 后续阶段；当前不联网找书 |
 | 来源与导入 | 用户 EPUB/PDF/TXT → SourceAsset | 已实现本地拷贝、摘要和格式检查 |
 | 整书解析 | SourceAsset → NormalizedBook | 已实现 TXT/EPUB/PDF；章节顺序、文本、源位置、警告 |
-| 内容生成 | Chapter → ChapterAnalysis → PodcastScript | 已实现 Mock；真实模型待后续 Provider |
+| 内容生成 | Chapter → ChapterAnalysis → PodcastScript | Mock 与可选兼容 LLM；Pydantic 和章节身份校验 |
 | 语音合成 | 脚本 → WAV 片段 | 已实现 Mock 测试音调；真实 TTS 待后续 Provider |
-| 封装导出 | WAV 片段 → MP3 | 已实现 FFmpeg concat；M4B 待 Phase 5 |
+| 封装导出 | WAV 片段 → MP3 | 已实现 FFmpeg concat；M4B 待后续阶段 |
 | 任务编排 | 输入与配置 → manifest.json | 已实现步骤指纹、原子写入、重试、恢复和状态命令 |
 
 正常流程为“书名识别 → 版本确认 → 合法来源/用户导入 → 解析 → 内容生成 → TTS → 导出”；直接导入用户文件也是独立入口，不强迫先联网搜书。扫描型 PDF 的 OCR 需求必须显式检测与报告，具体实现排期见 ROADMAP。
 
+Provider 的依赖方向为 CLI → Registry → 具体适配器，Pipeline → 中立接口/ProviderChain。业务代码不导入适配器或厂商 SDK。LLM 契约为 generate、generate_structured、health_check、capabilities；TTS 契约含 synthesize、health_check、capabilities。配置和错误策略详见 [PROVIDERS.md](PROVIDERS.md)。
+
+运行 manifest 升至 v2，steps 保留原有步骤状态；ai_calls 独立持久化 pending/running/completed/failed_retryable/failed_permanent，以及真实 provider/model、提示版本、输入输出哈希、UTC 时间。调用成功前原子落盘产物，失败只切换配置允许的四类临时/额度故障。认证、输入、结构与业务错误立即停止。各章节的 analysis、script、tts 独立恢复，已完成步骤不会因切换 Provider 失效。旧 v1 manifest 原样备份后验证并迁移；无法补齐的历史调用不伪造。
+
 ## 数据与失败边界（设计约束）
 
 - SourceAsset 是输入资产；ParsedBook 是解析结果；脚本和 AudioArtifact 是派生产物，不能混为一个可覆盖文件。术语定义见 [CONTEXT.md](../CONTEXT.md)。
-- 原文件默认保留，派生结果与原文件分开；任务记录应能追溯输入摘要、配置与阶段结果。大文件存本地文件系统，元数据存储格式尚未确定。
+- 原文件默认保留，派生结果与原文件分开；任务记录追溯输入摘要、配置和阶段结果。大文件存本地文件系统，元数据及检查点使用 JSON。
 - 整书处理必须记录全部可识别章节的覆盖情况。解析失败、缺页或未处理章节要显式出现，不能标记为完整成功。
-- 外部书目查询、下载、AI、TTS 都属于外部适配边界；失败须可观察，已有本地结果尽可能可继续利用。具体缓存、并发、重试策略待实现验证。
+- 外部书目查询、下载、AI、TTS 都属于外部适配边界；已有本地结果尽可能继续利用。当前串行处理、哈希缓存、有限 failover，无后台重试。远程调用完成但本地未落盘的中断窗口可能重复请求，不承诺外部调用恰好一次。
 - “本地优先”指用户数据和任务控制在本地，不承诺所有模型离线可用。发送书稿至外部服务前让用户知情并选择启用，凭证不得提交。
 
 ## 开发状态与运行状态分开
@@ -76,4 +89,4 @@ examples/
 
 ## 下一步架构工作
 
-Phase 2 先检查实际仓库和既有决策，再选择 EPUB/PDF 深度解析、OCR 和测试样本策略；Phase 3 再处理 Work/Edition 识别与合法资源发现。任何真实 LLM/TTS 供应商仍必须实现对应 Provider 契约，不把厂商调用散落到业务编排中。
+Phase 2 范围止于 Provider、配置、故障切换和恢复。后续阶段范围由用户确认；可优先用获授权的小样本验证真实兼容服务，再单独规划真实 TTS、内容质量和深度解析。不得把兼容协议测试视为某个厂商的上线验收。

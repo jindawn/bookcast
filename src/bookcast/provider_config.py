@@ -1,0 +1,86 @@
+"""Strict TOML configuration; only names of environment variables, never keys."""
+
+import ipaddress
+from pathlib import Path
+import tomllib
+from typing import Literal
+from urllib.parse import urlsplit
+
+from pydantic import Field, model_validator
+
+from .errors import BookCastError
+from .models import Model
+from .provider_api import ErrorKind, FAILOVER_ERRORS
+
+
+def is_loopback(host: str | None) -> bool:
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host or "").is_loopback
+    except ValueError:
+        return False
+
+
+class ProviderSpec(Model):
+    name: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
+    kind: Literal["llm", "tts"]
+    type: str = Field(min_length=1)
+    model: str = Field(min_length=1, max_length=128)
+    base_url: str | None = None
+    api_key_env: str | None = Field(default=None, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    timeout_seconds: float = Field(default=30, ge=0.1, le=120, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_endpoint(self):
+        if self.type in {"openai-compatible", "local"} and not self.base_url:
+            raise ValueError("base_url required")
+        if self.base_url:
+            url = urlsplit(self.base_url)
+            if (url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password
+                    or url.query or url.fragment or any(c.isspace() for c in self.base_url)):
+                raise ValueError("unsafe endpoint")
+            _ = url.port
+            if url.scheme == "http" and not is_loopback(url.hostname):
+                raise ValueError("remote endpoint requires HTTPS")
+            if self.type == "local" and not is_loopback(url.hostname):
+                raise ValueError("local endpoint must be loopback")
+        return self
+
+
+class ProvidersConfig(Model):
+    schema_version: Literal[1] = 1
+    providers: list[ProviderSpec] = Field(min_length=1)
+    llm_priority: list[str] = Field(min_length=1)
+    tts_priority: list[str] = Field(min_length=1)
+    failover_on: list[ErrorKind] = Field(default_factory=lambda: sorted(FAILOVER_ERRORS))
+
+    @model_validator(mode="after")
+    def validate_chains(self):
+        by_name = {spec.name: spec for spec in self.providers}
+        if len(by_name) != len(self.providers):
+            raise ValueError("duplicate names")
+        if not set(self.failover_on).issubset(FAILOVER_ERRORS):
+            raise ValueError("permanent errors cannot trigger failover")
+        for kind, chain in (("llm", self.llm_priority), ("tts", self.tts_priority)):
+            if len(chain) != len(set(chain)):
+                raise ValueError("duplicate priority entry")
+            for name in chain:
+                if name not in by_name or by_name[name].kind != kind:
+                    raise ValueError("unknown provider or wrong kind")
+        return self
+
+
+def load_config(path: Path | None = None) -> ProvidersConfig:
+    target = path or Path("bookcast.toml")
+    if path is None and not target.exists():
+        return ProvidersConfig(providers=[
+            ProviderSpec(name="mock", kind="llm", type="mock", model="mock-llm-v1"),
+            ProviderSpec(name="mock-tts", kind="tts", type="mock", model="mock-tones-v1"),
+        ], llm_priority=["mock"], tts_priority=["mock-tts"])
+    try:
+        return ProvidersConfig.model_validate(tomllib.loads(target.read_text(encoding="utf-8")))
+    except (OSError, ValueError) as exc:
+        # Pydantic errors may include field values, including an accidentally
+        # pasted key. Do not expose those values in logs or CLI error messages.
+        raise BookCastError("Provider 配置无效：检查 TOML 字段、优先级、端点和环境变量名；禁止直接存放密钥。") from None

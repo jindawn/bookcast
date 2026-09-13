@@ -19,7 +19,7 @@
 
 ## Phase 1：本地电子书 → Mock AI 播客 CLI MVP
 
-**状态：功能实现与验证完成；Git 功能提交待工具权限恢复。当前代码、测试和交接记录见 README、STATE.json 与 HANDOFF.md。**
+**状态：已完成并提交（功能提交 9e6e5aa，交接提交 4bc8123）。**
 
 Phase 1 接受用户自己的 EPUB、PDF、TXT，按 Parser → NormalizedBook → Chapter Analysis → Podcast Script → TTS → Audio Merge → Output 运行。使用 Mock LLM/TTS 时无需 API key；没有互联网找书、真实 AI/TTS、OCR 和 M4B。
 
@@ -29,20 +29,31 @@ Phase 1 接受用户自己的 EPUB、PDF、TXT，按 Parser → NormalizedBook �
 2. Pydantic 模型统一 NormalizedBook、分析、脚本、步骤和 manifest；Parser 保留章节顺序和来源位置线索，报告扫描 PDF 或图片 EPUB 警告。
 3. 通过 LLMProvider/TTSProvider 契约提供 Mock 实现；无 API key 可完成摘要、双人脚本、测试音调和 MP3 合并。
 4. 每一步以原子文件写入、指纹和 SHA-256 记录；`--resume` 跳过仍有效的完成步骤，损坏产物会重建；`status` 提供进度和完整性。
-5. 28 项 pytest 覆盖 EPUB、PDF、TXT、Mock Provider、流水线状态、幂等、失败恢复、损坏产物恢复和 CLI；以自制小样本验证。
+5. 30 项 pytest 覆盖项目校验、EPUB、PDF、TXT、Mock Provider、流水线状态、幂等、失败恢复、损坏产物恢复和 CLI；以自制小样本验证。
 6. 更新 README、STATE.json、HANDOFF.md 和 WORKLOG.md，提交可独立接手的 MVP。
 
-Phase 2 前的后续工作：真实 Provider 的配置边界、更多格式样本和跨平台 FFmpeg 验证；不要在本阶段扩展互联网来源发现。
+后续工作中 Provider 边界按用户最新要求纳入 Phase 2；更多解析样本和跨平台 FFmpeg 验证单独规划。
 
-## Phase 2：EPUB 与 PDF 解析
+## Phase 2：Provider 抽象、模型故障与额度切换
 
-**状态：规划中。**
+**状态：功能及完整测试已通过，提交与交接状态见 STATE.json 和 HANDOFF.md。**
 
-扩展源文件导入和统一书稿结构，保留目录、章节、正文及原文位置线索。对复杂排版、缺失文本和扫描 PDF 明确呈现支持范围；是否以及如何引入 OCR 在本阶段决策，不默认承诺所有 PDF 都可解析。
+1. LLMProvider 统一 generate、generate_structured、health_check、capabilities；TTSProvider 同样独立于厂商。Pipeline 不 import 具体适配器或 SDK。
+2. Registry 支持 Mock、OpenAI-compatible 和 local LLM；内置 Mock TTS，允许工厂注册扩展而不改 Pipeline。
+3. 按配置优先级切换额度耗尽、限流、临时不可用、超时；认证、输入、schema、业务错误停止。无隐藏重试、隐式 Mock 回退或无限切换。
+4. 每次调用持久化 pending/running/completed/failed_retryable/failed_permanent，记录实际 provider/model、提示版本、输入输出哈希和时间；不保存 Secret。
+5. 最小任务恢复保留已完成章节，兼容 v1 任务；`config providers`、`doctor` 和 `generate --provider auto` 可运行。
+6. 完整测试 78 passed：含第七章切换、三级链、TTS 接管、进程强制退出及调用完成窗口恢复、schema/业务错误不切换、HTTP 协议与配置保护。真实服务尚未联网测试。
 
-验收重点：以授权明确的 EPUB、文本型 PDF 和不可直接解析的样例验证结构、顺序与错误报告，不静默丢失内容。
+本阶段不增加互联网找书、真实语音、OCR、M4B 或内容质量优化。原路线图将深度解析编号为 Phase 2 的规划由本阶段替代，深度解析保留为后续候选。
 
-## Phase 3：书目识别与合法资源发现
+## 后续候选：深度解析与真实服务验收
+
+**状态：规划中，未开始，阶段编号与范围待用户确认。**
+
+用授权小样本验收真实兼容 LLM；独立评估真实 TTS 与成本边界。解析方向可补充 EPUB 目录层级、PDF 复杂排版、扫描页 OCR 策略及跨平台 FFmpeg 样本。协议兼容性测试不等同于中文内容质量验收。
+
+## 后续候选：书目识别与合法资源发现
 
 **状态：规划中。**
 
@@ -50,7 +61,7 @@ Phase 2 前的后续工作：真实 Provider 的配置边界、更多格式样�
 
 验收重点：覆盖同名作品、不同译本、信息不足和无可用资源场景；可用资源应能显示来源及可获得的授权信息，获取失败应可诊断。
 
-## Phase 4：中文内容生成
+## 后续候选：中文内容质量
 
 **状态：规划中。**
 
@@ -58,7 +69,7 @@ Phase 2 前的后续工作：真实 Provider 的配置边界、更多格式样�
 
 验收重点：能够从输出定位相关章节或原文线索，区分原文与生成解释，检出关键内容缺失，并通过小规模人工质量评估。
 
-## Phase 5：语音合成与 MP3 / M4B 输出
+## 后续候选：真实语音与 M4B 输出
 
 **状态：规划中。**
 

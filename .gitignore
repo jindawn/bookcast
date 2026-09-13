@@ -15,6 +15,7 @@ Thumbs.db
 *.pem
 *.key
 .claude/settings.local.json
+/bookcast.toml
 
 # User inputs, private books, generated media and local task storage
 /data/

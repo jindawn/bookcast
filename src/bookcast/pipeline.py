@@ -4,13 +4,13 @@ from collections.abc import Callable
 from pathlib import Path
 import shutil
 
-from pydantic import ValidationError
-
 from .audio import merge_audio, validate_wav
 from .errors import BookCastError
-from .models import BookMetadata, Chapter, ChapterAnalysis, Manifest, PodcastScript, StepRecord, utc_now
+from .models import AIAttempt, BookMetadata, Chapter, ChapterAnalysis, Manifest, PodcastScript, StepRecord, utc_now
 from .parsers import parse_book
-from .providers import LLMProvider, TTSProvider
+from .provider_api import LLMProvider, TTSProvider, ProviderError, ProviderStatus, ErrorKind
+from .provider_chain import ProviderChain
+from .prompts import ANALYSIS_VERSION, SCRIPT_VERSION, TTS_VERSION, analysis_prompt, script_prompt
 from .storage import artifact_path, atomic_target, fingerprint, job_lock, sha256_file, write_json
 
 
@@ -18,10 +18,10 @@ def load_manifest(path: Path) -> Manifest:
     try:
         return Manifest.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise BookCastError(f"无法读取有效任务 manifest：{path}；{exc}") from exc
+        raise BookCastError(f"无法读取有效任务 manifest：{path}") from None
 
 
-def artifacts_valid(root: Path, record: StepRecord) -> bool:
+def artifacts_valid(root: Path, record: StepRecord | AIAttempt) -> bool:
     if not record.artifacts:
         return False
     try:
@@ -32,8 +32,9 @@ def artifacts_valid(root: Path, record: StepRecord) -> bool:
 
 
 class Pipeline:
-    def __init__(self, llm: LLMProvider, tts: TTSProvider, output_dir: Path = Path("output")):
-        self.llm, self.tts = llm, tts
+    def __init__(self, llm: LLMProvider | ProviderChain, tts: TTSProvider | ProviderChain, output_dir: Path = Path("output")):
+        self.llm = llm if isinstance(llm, ProviderChain) else ProviderChain([llm])
+        self.tts = tts if isinstance(tts, ProviderChain) else ProviderChain([tts])
         self.output_dir = output_dir.resolve()
 
     def generate(self, source: Path, *, resume: bool = False) -> Path:
@@ -55,10 +56,24 @@ class Pipeline:
             if manifest_path.exists():
                 manifest = load_manifest(manifest_path)
                 if (manifest.book_id != book_id or manifest.source_sha256 != digest
-                        or manifest.source_format != source_format or manifest.config != config):
-                    raise BookCastError("任务输入或 Provider 配置不匹配；请使用另一个 --output-dir，避免覆盖已有任务。")
+                        or manifest.source_format != source_format):
+                    raise BookCastError("任务输入不匹配，请使用另一个 --output-dir。")
+                if manifest.schema_version == 2 and manifest.config != config and not resume:
+                    raise BookCastError("Provider 配置已改变。使用 --resume 保留已完成章节，或另选 --output-dir 创建新任务。")
                 if not resume and manifest.status != "completed":
                     raise BookCastError(f"任务尚未完成，请使用 --resume 继续：{book_id}")
+                if manifest.schema_version == 1:
+                    backup = artifact_path(root, "manifest.v1.json")
+                    if not backup.exists():
+                        with atomic_target(backup) as temporary:
+                            shutil.copyfile(manifest_path, temporary)
+                    manifest.legacy_config = manifest.config.copy()
+                    manifest.schema_version = 2
+                    manifest.config = config
+                    write_json(manifest_path, manifest.model_dump())
+                elif manifest.config != config:
+                    manifest.config = config
+                    write_json(manifest_path, manifest.model_dump())
             else:
                 if any(path.name != ".lock" for path in root.iterdir()):
                     raise BookCastError("目标任务目录非空且没有 manifest，拒绝覆盖已有数据。")
@@ -68,19 +83,31 @@ class Pipeline:
             runner = _Runner(root, manifest, self.llm, self.tts)
             try:
                 runner.run(source)
-            except (Exception, KeyboardInterrupt) as exc:
+            except (Exception, KeyboardInterrupt, SystemExit) as exc:
                 manifest.status = "failed"
                 manifest.error = str(exc) or "任务已中断"
                 runner.save()
-                if isinstance(exc, KeyboardInterrupt):
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
                 raise BookCastError(f"任务 {book_id} 失败：{manifest.error}；修复原因后加 --resume 继续。") from exc
         return root
 
 
 class _Runner:
-    def __init__(self, root: Path, manifest: Manifest, llm: LLMProvider, tts: TTSProvider):
+    def __init__(self, root: Path, manifest: Manifest, llm: ProviderChain, tts: ProviderChain):
         self.root, self.manifest, self.llm, self.tts = root, manifest, llm, tts
+        recovered = False
+        for call in manifest.ai_calls:
+            if call.status in {"pending", "running"}:
+                call.status, call.error, call.retryable = "failed_retryable", "interrupted", True
+                call.timestamp = utc_now()
+                manifest.provider_status[f"{call.kind}:{call.provider}"] = ProviderStatus.from_error(
+                    call.provider, call.model, ProviderError(ErrorKind.INTERRUPTED)).model_dump(mode="json")
+                recovered = True
+        llm.restore(manifest.ai_calls, "llm")
+        tts.restore(manifest.ai_calls, "tts")
+        if recovered:
+            self.save()
 
     def path(self, relative: str) -> Path:
         return artifact_path(self.root, relative)
@@ -89,12 +116,18 @@ class _Runner:
         self.manifest.updated_at = utc_now()
         write_json(self.path("manifest.json"), self.manifest.model_dump())
 
-    def step(self, name: str, inputs: object, operation: Callable[[], list[str]]) -> None:
+    def step(self, name: str, inputs: object, operation: Callable[[], list[str]], *, legacy_inputs=None) -> None:
         key = fingerprint({"pipeline": self.manifest.pipeline_version, "step": name, "inputs": inputs})
         previous = self.manifest.steps.get(name)
-        if (previous and previous.status == "completed" and previous.fingerprint == key
-                and artifacts_valid(self.root, previous)):
-            return
+        if previous and previous.status == "completed" and artifacts_valid(self.root, previous):
+            if previous.fingerprint == key:
+                return
+            if self.manifest.legacy_config and legacy_inputs is not None:
+                old_key = fingerprint({"pipeline": "1", "step": name, "inputs": legacy_inputs})
+                if previous.fingerprint == old_key:
+                    previous.fingerprint, previous.legacy = key, True
+                    self.save()
+                    return
         record = StepRecord(status="running", fingerprint=key, attempts=previous.attempts + 1 if previous else 1)
         self.manifest.steps[name] = record
         self.manifest.status, self.manifest.error = "running", None
@@ -105,12 +138,41 @@ class _Runner:
             if not record.artifacts:
                 raise BookCastError(f"步骤 {name} 没有产生文件。")
             record.status = "completed"
-        except (Exception, KeyboardInterrupt) as exc:
+        except (Exception, KeyboardInterrupt, SystemExit) as exc:
             record.status, record.error = "failed", str(exc) or "任务已中断"
             raise
         finally:
             record.updated_at = utc_now()
             self.save()
+
+    def observe(self, attempt: AIAttempt) -> None:
+        calls = self.manifest.ai_calls
+        for index, existing in enumerate(calls):
+            if existing.id == attempt.id:
+                calls[index] = attempt.model_copy(deep=True)
+                break
+        else:
+            calls.append(attempt.model_copy(deep=True))
+        if attempt.error:
+            report = ProviderStatus.from_error(attempt.provider, attempt.model, ProviderError(ErrorKind(attempt.error)))
+        else:
+            report = ProviderStatus(provider=attempt.provider, model=attempt.model,
+                                    availability="available" if attempt.status == "completed" else "unknown")
+        self.manifest.provider_status[f"{attempt.kind}:{attempt.provider}"] = report.model_dump(mode="json")
+        self.save()
+
+    def ai_operation(self, name: str, kind: str, version: str, inputs: object, invoke: Callable) -> list[str]:
+        digest = fingerprint(inputs)
+        # Recover the small window between AI completion and step completion.
+        for call in reversed(self.manifest.ai_calls):
+            if (call.task == name and call.status == "completed" and call.prompt_version == version
+                    and call.input_hash == digest and artifacts_valid(self.root, call)):
+                return list(call.artifacts)
+        chain = self.llm if kind == "llm" else self.tts
+        artifacts = chain.execute(task=name, kind=kind, prompt_version=version, input_hash=digest,
+                                  invoke=invoke, persist=lambda names: {n: sha256_file(self.path(n)) for n in names},
+                                  observe=self.observe)
+        return list(artifacts)
 
     def run(self, source: Path) -> None:
         manifest = self.manifest
@@ -141,40 +203,64 @@ class _Runner:
         self.step("parse", {"source": sha256_file(self.path(source_relative)), "format": manifest.source_format}, parse)
         metadata = BookMetadata.model_validate_json(self.path("metadata.json").read_text(encoding="utf-8"))
         manifest.warnings = metadata.warnings
+        legacy_config = manifest.legacy_config or {}
         for chapter_id in metadata.chapter_ids:
             chapter_name = f"chapters/{chapter_id}.json"
             chapter = Chapter.model_validate_json(self.path(chapter_name).read_text(encoding="utf-8"))
             analysis_name, script_name, audio_name = (f"analysis/{chapter_id}.json", f"scripts/{chapter_id}.json", f"audio/{chapter_id}.wav")
 
-            def analyze() -> list[str]:
-                analysis = ChapterAnalysis.model_validate(self.llm.analyze(chapter))
+            prompt = analysis_prompt(chapter)
+            analysis_inputs = {"prompt": prompt, "schema": ChapterAnalysis.model_json_schema()}
+
+            def analyze(provider) -> list[str]:
+                if not provider.capabilities().structured:
+                    raise ProviderError(ErrorKind.INPUT)
+                analysis = ChapterAnalysis.model_validate(provider.generate_structured(prompt, ChapterAnalysis))
                 if analysis.chapter_id != chapter.id or analysis.source_locator != chapter.source_locator:
-                    raise BookCastError("LLM 分析返回了错误的章节或来源位置。")
+                    raise ProviderError(ErrorKind.BUSINESS)
                 write_json(self.path(analysis_name), analysis.model_dump())
                 return [analysis_name]
 
-            self.step(f"analysis:{chapter_id}", {"chapter": sha256_file(self.path(chapter_name)), "llm": self.llm.cache_key}, analyze)
+            self.step(f"analysis:{chapter_id}", analysis_inputs,
+                      lambda: self.ai_operation(f"analysis:{chapter_id}", "llm", ANALYSIS_VERSION, analysis_inputs, analyze),
+                      legacy_inputs={"chapter": sha256_file(self.path(chapter_name)), "llm": legacy_config.get("llm")})
             analysis = ChapterAnalysis.model_validate_json(self.path(analysis_name).read_text(encoding="utf-8"))
 
-            def script() -> list[str]:
-                result = PodcastScript.model_validate(self.llm.script(chapter, analysis))
+            prompt = script_prompt(chapter, analysis)
+            script_inputs = {"prompt": prompt, "schema": PodcastScript.model_json_schema()}
+
+            def script(provider) -> list[str]:
+                if not provider.capabilities().structured:
+                    raise ProviderError(ErrorKind.INPUT)
+                result = PodcastScript.model_validate(provider.generate_structured(prompt, PodcastScript))
                 if (result.chapter_id != chapter.id or result.source_locator != chapter.source_locator
                         or {turn.speaker for turn in result.turns} != {"主持人", "嘉宾"}):
-                    raise BookCastError("播客脚本必须对应当前章节，且包含两位说话者。")
+                    raise ProviderError(ErrorKind.BUSINESS)
                 write_json(self.path(script_name), result.model_dump())
                 return [script_name]
 
-            self.step(f"script:{chapter_id}", {"analysis": sha256_file(self.path(analysis_name)),
-                      "chapter": sha256_file(self.path(chapter_name)), "llm": self.llm.cache_key}, script)
+            self.step(f"script:{chapter_id}", script_inputs,
+                      lambda: self.ai_operation(f"script:{chapter_id}", "llm", SCRIPT_VERSION, script_inputs, script),
+                      legacy_inputs={"analysis": sha256_file(self.path(analysis_name)),
+                      "chapter": sha256_file(self.path(chapter_name)), "llm": legacy_config.get("llm")})
             podcast = PodcastScript.model_validate_json(self.path(script_name).read_text(encoding="utf-8"))
 
-            def tts() -> list[str]:
+            tts_inputs = {"script": sha256_file(self.path(script_name)), "prompt_version": TTS_VERSION}
+
+            def tts(provider) -> list[str]:
+                if not provider.capabilities().speech:
+                    raise ProviderError(ErrorKind.INPUT)
                 with atomic_target(self.path(audio_name)) as temporary:
-                    self.tts.synthesize(podcast, temporary)
-                    validate_wav(temporary)
+                    provider.synthesize(podcast, temporary)
+                    try:
+                        validate_wav(temporary)
+                    except BookCastError:
+                        raise ProviderError(ErrorKind.SCHEMA) from None
                 return [audio_name]
 
-            self.step(f"tts:{chapter_id}", {"script": sha256_file(self.path(script_name)), "tts": self.tts.cache_key}, tts)
+            self.step(f"tts:{chapter_id}", tts_inputs,
+                      lambda: self.ai_operation(f"tts:{chapter_id}", "tts", TTS_VERSION, tts_inputs, tts),
+                      legacy_inputs={"script": sha256_file(self.path(script_name)), "tts": legacy_config.get("tts")})
 
         def merge() -> list[str]:
             with atomic_target(self.path("podcast.mp3")) as temporary:

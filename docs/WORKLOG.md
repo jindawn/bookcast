@@ -47,3 +47,14 @@
 - 在该提交上运行离线项目校验、30 项 pytest 测试和 `git diff --check`，全部通过。
 - 清理 STATE 中的 blocker 与 in_progress，更新 last_verified_commit 为该功能提交，标记 Phase 1 completed。
 - 更新 HANDOFF 与 WORKLOG，准备提交交接快照并推送到 GitHub `origin/main`。
+
+## 2026-09-13T13:06:34Z — Phase 2 Provider 与恢复实现，完整测试通过
+
+- 核对 AGENTS、架构、交接和实际 Git：main 为 4bc8123，Phase 1 功能提交 9e6e5aa 已存在，原路线图的提交阻塞描述过期。
+- 实现 Provider API、Registry、TOML 配置、Mock/兼容 HTTP/local LLM、受控 failover、manifest v2 审计和逐任务恢复；无新增依赖。
+- 新增 48 项 Provider 场景测试，覆盖第七章切换、三级链、真实子进程强制退出、调用完成窗口、TTS 和 v1 迁移。
+- 新测试首次 5 项失败源于时间断言只接受 Z，修正为校验 UTC ISO 8601；当前全量 78 passed、10 subtests passed，5 个既有 PyMuPDF 弃用警告。
+- compileall 与 git diff --check 通过；同步 README、产品/架构/路线图、新增 PROVIDERS 指南和 D-009/D-010。
+- 未连接真实 AI 服务，未实现真实语音、找书、OCR、M4B，未开始后续阶段；功能提交与最终快照待创建。
+
+- 2026-09-13T13:07:04Z：文档状态校验通过；三级 Mock CLI 冒烟生成 MP3，doctor ready，status integrity=ok，resume 不修改 manifest。

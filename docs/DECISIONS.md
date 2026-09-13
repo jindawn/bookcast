@@ -44,15 +44,15 @@
 
 ## 待决定事项
 
-以下均为 deferred，不阻塞已完成的 Phase 1 MVP：
+以下均为 deferred，不阻塞当前 Phase 2：
 
 | 事项 | 何时决定 | 判断依据 |
 | --- | --- | --- |
 | CLI 之外的 UI、数据库迁移和长期任务存储 | 后续产品阶段 | 本地安装复杂度、任务规模、维护成本 |
-| 真实 Provider 的配置、隐私提示与重试策略 | 真实服务阶段 | 中文质量、成本、数据发送边界 |
-| EPUB / PDF 解析库与 OCR 策略 | 对应解析阶段 | 授权样本、章节/页码保持、错误可见性 |
+| 真实 Provider 的成本预算与质量验收 | 后续真实服务验收 | 配置、外发边界与 failover 已由 D-009 确定；尚未验证付费服务 |
+| EPUB / PDF 深度解析与 OCR 策略 | 对应解析阶段 | 当前库已由 D-007 选定，后续依据授权样本、章节/页码保持、错误可见性 |
 | 合法书目与资源服务 | 来源发现阶段 | 元数据质量、来源使用条件、版本辨识、失败降级 |
-| 内容生成模型、TTS 供应商和音频工具 | 对应生成阶段 | 中文质量、成本、时长、一致性、数据发送边界 |
+| 内容生成模型、真实 TTS 供应商与 M4B 封装 | 对应生成阶段 | MP3 已用 FFmpeg；后续评估中文质量、成本、时长、一致性、外发边界 |
 | 开源许可证与贡献说明 | 首次公开发布前 | 维护者意愿、依赖与样本许可兼容性；目前未授予项目开源许可 |
 
 ## D-007 — Phase 1 采用 Python 本地 CLI 与可替换 Mock Provider
@@ -63,8 +63,30 @@ Phase 1 采用 Python 3.12+、Typer、Pydantic、EbookLib、BeautifulSoup、PyMu
 
 ## D-008 — 任务按步骤原子落盘并以指纹恢复
 
-状态：accepted；日期：2026-09-13。
+状态：部分被 D-010 取代（Provider 指纹与配置变化策略）；日期：2026-09-13。其余原子写入、产物哈希与恢复原则仍 accepted。
 
 每个步骤先写 `running` manifest，再以临时文件加原子替换写入产物，成功后保存产物 SHA-256 和输入/Provider 指纹。`--resume` 只复用指纹一致且哈希校验通过的完成步骤；损坏、缺失、失败或上游输入变化会重跑，配置指纹变化拒绝覆盖原任务。任务元数据保存在 `output/{book_id}/manifest.json`，不使用数据库。
+
+## D-009 — 统一 Provider Registry 与有界故障切换
+
+状态：accepted；日期：2026-09-13。
+
+按本次 Phase 2 要求，以中立 Protocol 定义 LLM 的 generate/generate_structured/health_check/capabilities 与 TTS 契约。Registry 通过 kind/type 工厂注册适配器，CLI 组合注入，业务 Pipeline 禁止导入具体厂商实现。内置 Mock 和以标准库 HTTP 调用的 OpenAI-compatible/local LLM；TTS 只提供 Mock，避免本阶段引入真实语音和未被追踪的隐式子调用。
+
+优先级通过严格 TOML 配置；默认 Mock 离线，远程端点由用户显式启用，章节与分析会发送到所选链中的服务。凭证仅用环境变量引用，服务错误只保存安全枚举；不保存原始响应错误、认证头和 Secret。local 限 loopback，远程要求 HTTPS，不跟随重定向。
+
+只允许限流、额度耗尽、临时不可用和超时自动切换；认证、输入、schema 与业务错误停止。单次运行禁用失败实例，成功实例持续处理后续任务，无隐藏重试和隐式 Mock 回退。相比所有异常都换模型，此策略暴露程序与数据错误；代价是需要用户修复永久错误，并可能在一次显式 resume 时重新探测先前失败的服务。
+
+## D-010 — 逐次调用审计与 Provider 无关的完成检查点
+
+状态：accepted；日期：2026-09-13。取代 D-008 的 Provider 绑定缓存部分。
+
+运行 manifest 升为 v2；ai_calls 单独保存每次尝试的 pending/running/completed/failed_retryable/failed_permanent、实际 provider/model、prompt_version、input_hash、output_hash、UTC timestamp。调用结果先原子写文件并校验，再记录完成；进程退出后恢复 analysis/script/tts 最小未完成任务。
+
+完成检查点只依赖版本化输入、schema/音频契约与产物哈希，不依赖 Provider 名称，防止第七章额度耗尽导致前六章重做。配置变更需显式 --resume，旧章节保留实际归属；整本换模型需要新输出目录。代价是一本书可能混用多个 Provider，审计必须保留这些差异。
+
+v1 manifest 原样备份后使用旧指纹验证产物，迁移为 legacy 步骤，不伪造缺失的调用历史。保留 pipeline_version=1 以复用未改变的解析/合并步骤，AI 输入指纹已有独立版本。仓库 docs/STATE 的 v1 契约与运行 manifest v2 无关。
+
+外部请求成功但本地尚未持久化时无法保证远端恰好一次，resume 可能重发该未完成调用；已经完整落盘的任务不会因此重做。长期并发、预算和端点幂等键另行决策。
 
 新增决策继续使用稳定编号，并同步 [ARCHITECTURE.md](ARCHITECTURE.md)、[ROADMAP.md](ROADMAP.md) 及当前交接状态。

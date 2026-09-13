@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-1",
-  "current_task": "Phase 1 功能已提交并验证，完成 Phase 1 交接",
-  "task_status": "completed",
+  "current_phase": "phase-2",
+  "current_task": "Phase 2 功能与 78 项测试通过；整理交接并创建功能提交",
+  "task_status": "in_progress",
   "branch": "main",
   "last_verified_commit": "9e6e5aaa0db1a61320be9c28815caaf7c4b3f5cc",
   "completed_tasks": [
@@ -14,38 +14,66 @@
     "抽查本地书籍、生成音频和凭证的 Git 忽略规则",
     "创建并验证首个基础提交，完成 Phase 0 交接快照",
     "实现 EPUB/PDF/TXT 解析、Mock Provider、章节级可恢复流水线、CLI 和 MP3 输出，并完成工作区验证",
-    "创建并验证 Phase 1 功能提交 (9e6e5aa)，实现本地电子书导入与 Mock 播客生成闭环"
+    "创建并验证 Phase 1 功能提交 (9e6e5aa)，实现本地电子书导入与 Mock 播客生成闭环",
+    "实现统一 Provider API、可扩展 Registry、兼容 HTTP/local LLM、Mock 与 TOML 配置",
+    "实现受控 failover、manifest v2 调用审计、最小任务恢复及 v1 原样备份迁移",
+    "完整测试 78 passed，验证第七章接管、强制退出恢复及永久错误停止"
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "task": "文档一致性检查、功能提交与最终交接快照",
+      "owner": "primary-agent",
+      "files": [
+        "docs/",
+        "README.md"
+      ]
+    }
+  ],
   "next_actions": [
-    "Phase 2：评估 EPUB/PDF 深度解析、目录层级、OCR 支持范围与授权样本，并在 DECISIONS 记录取舍",
-    "定义真实 LLM/TTS Provider 的配置、隐私提示、超时重试与成本边界",
-    "首次公开发布前确定开源许可证并补充贡献说明"
+    "完成文档校验并创建 Phase 2 功能提交",
+    "验证功能提交，按 D-006 更新最终 STATE/HANDOFF 快照",
+    "等待用户确定后续阶段范围，不自动开始 Phase 3"
   ],
   "tests": [
+    {
+      "name": "full-suite",
+      "command": ".venv/bin/python -m pytest -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "78 passed，10 subtests passed；5 个既有 PyMuPDF SWIG 弃用警告；无需网络",
+      "checked_at": "2026-09-13T13:06:34Z"
+    },
+    {
+      "name": "compile",
+      "command": ".venv/bin/python -m compileall -q src tests",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "所有应用与测试文件编译通过",
+      "checked_at": "2026-09-13T13:06:34Z"
+    },
     {
       "name": "project-integrity",
       "command": "python3 scripts/validate_project.py",
       "status": "passed",
-      "scope": "commit",
-      "summary": "必需文件、STATE 契约与语义、UTC 时间、本地链接和 Git 检查通过",
-      "checked_at": "2026-09-13T02:48:17Z"
-    },
-    {
-      "name": "validator-regression",
-      "command": "python3 -m unittest discover -s tests -v",
-      "status": "passed",
-      "scope": "commit",
-      "summary": "30 项 pytest 测试全部通过（含 10 个参数化子场景）",
-      "checked_at": "2026-09-13T02:48:17Z"
+      "scope": "working_tree",
+      "summary": "必需文件、STATE 契约/语义、UTC、本地链接和 Git 全部通过",
+      "checked_at": "2026-09-13T13:07:04Z"
     },
     {
       "name": "git-whitespace",
       "command": "git diff --check",
       "status": "passed",
-      "scope": "commit",
-      "summary": "git diff --check 与工作区差异检查通过",
-      "checked_at": "2026-09-13T02:48:17Z"
+      "scope": "working_tree",
+      "summary": "无空白错误",
+      "checked_at": "2026-09-13T13:06:34Z"
+    },
+    {
+      "name": "cli-smoke",
+      "command": "bookcast config providers / doctor / generate --provider auto / generate --resume / status --json",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "examples/providers.toml 三级 Mock；doctor ready，生成 MP3、6 次 AI 调用、integrity=ok，resume 后 manifest 字节不变",
+      "checked_at": "2026-09-13T13:07:04Z"
     }
   ],
   "known_failures": [],
@@ -126,7 +154,43 @@
     {
       "path": "examples/example.txt",
       "purpose": "可再分发的自制端到端示例输入"
+    },
+    {
+      "path": "src/bookcast/provider_api.py",
+      "purpose": "中立 Provider 接口、能力、状态与安全错误枚举"
+    },
+    {
+      "path": "src/bookcast/provider_chain.py",
+      "purpose": "有界故障切换与调用状态持久化回调"
+    },
+    {
+      "path": "src/bookcast/provider_registry.py",
+      "purpose": "Provider 工厂注册与依赖注入"
+    },
+    {
+      "path": "src/bookcast/provider_config.py",
+      "purpose": "TOML 配置与端点校验"
+    },
+    {
+      "path": "src/bookcast/adapters/compatible.py",
+      "purpose": "远程及本地兼容 LLM HTTP 适配器"
+    },
+    {
+      "path": "src/bookcast/prompts.py",
+      "purpose": "与 Provider 无关的版本化领域提示"
+    },
+    {
+      "path": "tests/test_providers.py",
+      "purpose": "Phase 2 故障注入、恢复、HTTP 协议和配置测试"
+    },
+    {
+      "path": "examples/providers.toml",
+      "purpose": "无密钥的三级 Mock 链配置示例"
+    },
+    {
+      "path": "docs/PROVIDERS.md",
+      "purpose": "配置、恢复、审计与扩展说明"
     }
   ],
-  "updated_at": "2026-09-13T02:48:17Z"
+  "updated_at": "2026-09-13T13:07:04Z"
 }
