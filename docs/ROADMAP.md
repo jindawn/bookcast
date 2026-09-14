@@ -84,7 +84,7 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 
 ## Phase 5：可靠性、断点恢复与任务系统
 
-**状态：实现与恢复测试已完成，完整验收和功能提交验证进行中；实时状态见 STATE.json。**
+**状态：已完成并验证（功能提交 c05af03）；204项测试、10个子测试及实际CLI恢复demo通过。证据见 STATE.json、HANDOFF.md 和 PHASE5_VERIFICATION.md。**
 
 1. manifest v3 的 Job、Step、Artifact、Attempt 和六态投影；旧 v1/v2 原样备份、保留原内容流程。
 2. 最小 AI 调用与本地步骤独立保存；内核锁排除并发，崩溃遗留 RUNNING 安全恢复。
