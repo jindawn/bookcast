@@ -40,8 +40,8 @@ uv run bookcast status <job> --json
 | `quota_exhausted` | true | 默认允许 |
 | `temporary_unavailable` | true | 默认允许 |
 | `timeout` | true | 默认允许 |
-| `authentication_error` | false | 禁止，修复凭证后手动 resume |
-| `input_error` / `schema_error` / `business_error` | false | 禁止，修复原因后手动 resume |
+| `authentication_error` | false | 禁止，修复凭证后显式 retry |
+| `input_error` / `schema_error` / `business_error` | false | 禁止，修复原因后显式 retry |
 | `interrupted` | true | 本次进程停止；下一次 resume 处理 |
 
 429 根据错误 code/type 区分额度耗尽和限流；401/403 为认证错误，408/504 为超时，其余 5xx 为临时不可用，其余 HTTP 错误为输入错误。额度分类依据 [OpenAI 错误码文档](https://developers.openai.com/api/docs/guides/error-codes)，兼容厂商若返回不同代码需在适配器补充映射。异常消息不参与分类；未识别的异常归为业务错误，避免切模型隐藏程序缺陷。
@@ -50,15 +50,21 @@ uv run bookcast status <job> --json
 
 ## 调用状态与可复现性
 
-manifest v2 的 `ai_calls` 为逐次尝试日志。每个 attempt 在调用前先保存 `pending`，再保存 `running`；写入并校验输出后保存 `completed`，异常保存 `failed_retryable` 或 `failed_permanent`。同一次尝试的状态原地更新，切换 Provider 会追加一个新 attempt。每个条目包含：
+manifest v3 的 `ai_calls` 为逐次尝试日志。每个 attempt 在调用前先保存 `pending`，再保存 `running`；写入并校验输出后保存 `completed`，异常保存 `failed_retryable` 或 `failed_permanent`。同一次尝试的状态原地更新，切换 Provider 会追加一个新 attempt。每个条目包含：
 
-`id`、`task`（例如 `analysis:0007:0002` 或 `consistency:0002`）、`kind`、`status`、`provider`、`model`、`prompt_version`、`input_hash`、`output_hash`、`artifacts`、`timestamp`、`error`、`retryable`。
+`id`、`task`（例如 `analysis:0007:0002` 或 `consistency:0002`）、`kind`、`status`、`provider`、`model`、`prompt_version`、`input_hash`、`output_hash`、`artifacts`、`timestamp`、`error`、`retryable`，以及只读六态 `state` 和具体实例的 `provider_config_hash`（旧调用可为空）。
 
 未成功的调用 `output_hash=null`。当前每次调用输出一个 JSON 或 WAV，output_hash 为文件 SHA-256。输入哈希覆盖版本化提示/结构 schema 或脚本哈希/音频契约版本。时间是 UTC ISO 8601。`provider_status` 报告各已调用 Provider 的名称、模型、可用性、last_error、retryable、rate_limited、quota_exhausted、authentication_error；`doctor` 报告当前配置的全部实例。
 
-Phase 4 的文本块分析、综合节点、片段脚本、逐段一致性复核和 TTS 是最小任务；规划是本地确定性计算。完成步骤的缓存身份不含 Provider；输入与产物哈希未变化就复用，调用归属保持原值。进程在 attempt 完成后、步骤完成前退出时，可从 attempt 产物恢复；遗留 pending/running 标为 interrupted 后重新处理该最小任务。远端已完成但本地尚无完成记录的窗口无法保证不重复请求或计费。
+Phase 4 的文本块分析、综合节点、片段脚本、逐段一致性复核和 TTS 是最小任务；规划是本地确定性计算。完成步骤同时检查输入、提示、产物哈希和 Provider 配置摘要。同名实例配置变化会使该实例的旧调用失效；选择另一实例接管保留有效完成调用及其原始归属。具体规则见 D-014 和 [JOBS.md](JOBS.md)。进程在 attempt 完成后、步骤完成前退出时，可从 attempt 产物恢复；遗留 pending/running 标为 interrupted 后重新处理该最小任务。远端已完成但本地尚无完成记录的窗口无法保证不重复请求或计费。
 
-v1 迁移保留原始 `manifest.v1.json`，使用原配置指纹验证旧产物，再标记步骤 `legacy=true`。不会伪造旧调用的 provider/model/time。旧 pipeline_version=1 保留原流程；新内容任务使用 pipeline_version=2、content-v1 提示。模式/预算和修订规则见 [CONTENT.md](CONTENT.md)。仓库开发状态 [STATE.json](STATE.json) 仍为独立的 v1 契约。
+v1/v2 迁移分别保留原始 `manifest.v1.json` / `manifest.v2.json`；v1 使用原配置指纹验证旧产物，再标记步骤 `legacy=true`。不会伪造旧调用的 provider/model/time。旧 pipeline_version=1 保留原流程；新内容任务使用 pipeline_version=2、content-v1 提示。模式/预算和修订规则见 [CONTENT.md](CONTENT.md)。仓库开发状态 [STATE.json](STATE.json) 仍为独立的 v1 契约。
+
+## 恢复配置
+
+CLI 创建任务时保存通过严格 schema 校验的配置快照及 LLM/TTS 选择，只有 api_key_env 的环境变量名，没有密钥值。resume/retry 和 generate --resume 默认沿用该快照；使用 --config 才读取新的配置文件。旧任务没有快照时，只允许能匹配原配置摘要的默认 Mock；其他任务要求显式 --config，避免切换工作目录后误用服务。
+
+链位置恢复还匹配具体实例配置摘要；同名而配置改变的实例不会沿用旧调用位置。永久失败使用 retry；原 generate --resume 为兼容保留显式重试语义。环境变量值改变不修改配置摘要，但可修复认证后重试。
 
 ## 增加 Provider
 

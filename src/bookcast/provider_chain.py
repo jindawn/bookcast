@@ -8,6 +8,10 @@ from .provider_api import Provider, ProviderError, ProviderStatus, ErrorKind, FA
 from .storage import fingerprint
 
 
+def provider_config_hash(provider: Provider) -> str:
+    return fingerprint({'name': provider.name, 'model': provider.model, 'configuration': provider.cache_key})
+
+
 class ProviderChain:
     def __init__(self, providers: Sequence[Provider], *, failover_on=FAILOVER_ERRORS):
         if not providers or not set(failover_on).issubset(FAILOVER_ERRORS):
@@ -33,7 +37,8 @@ class ProviderChain:
             if call.kind != kind or call.status not in {"completed", "failed_retryable"}:
                 continue
             for index, provider in enumerate(self.providers):
-                if (provider.name, provider.model) == (call.provider, call.model):
+                if ((provider.name, provider.model) == (call.provider, call.model)
+                        and (call.provider_config_hash is None or call.provider_config_hash == provider_config_hash(provider))):
                     self.index = index
                     if call.status == "failed_retryable" and call.error in self.failover_on:
                         self.index = (index + 1) % len(self.providers)
@@ -48,7 +53,8 @@ class ProviderChain:
                 continue
             provider = self.providers[index]
             attempt = AIAttempt(id=uuid4().hex, task=task, kind=kind, provider=provider.name,
-                                model=provider.model, prompt_version=prompt_version, input_hash=input_hash)
+                                model=provider.model, prompt_version=prompt_version, input_hash=input_hash,
+                                provider_config_hash=provider_config_hash(provider))
             observe(attempt)
             attempt.status, attempt.timestamp = "running", utc_now()
             observe(attempt)

@@ -10,13 +10,69 @@ import typer
 
 from .errors import BookCastError
 from .pipeline import Pipeline, job_status, load_manifest
-from .provider_config import load_config
+from .provider_config import load_config, ProvidersConfig
 from .provider_registry import default_registry
 from .provider_api import ProviderStatus, classify_error
+from .jobs import list_jobs, resolve_job
 
 app = typer.Typer(no_args_is_help=True, help="BookCast：本地电子书 → 可恢复的双人播客流水线。")
 config_app = typer.Typer(help="查看 Provider 配置。")
 app.add_typer(config_app, name="config")
+
+
+def settings_snapshot(settings, provider, tts_provider):
+    return {'config': settings.model_dump(mode='json'), 'llm_selection': provider, 'tts_selection': tts_provider}
+
+
+def show_progress(event):
+    def clean(value):
+        return ''.join(c for c in str(value if value is not None else '-') if c.isprintable())[:160]
+    if event['event'] == 'attempt' and event['state'] == 'PENDING':
+        return
+    suffix = '' if event['total_final'] else '（后续任务数待规划）'
+    typer.echo(f"[{clean(event['state'])}] {clean(event['book'])} | {clean(event['stage'])} | "
+               f"章节 {event['chapters_completed']}/{event['chapters_total']} | Provider {clean(event['provider'])} | "
+               f"完成 {event['completed']} 剩余 {event['remaining']}{suffix} | 最近错误 {clean(event['error'])}", err=True)
+
+
+def resume_pipeline(manifest, root, config, provider, tts_provider):
+    saved = manifest.provider_settings
+    if config is not None:
+        settings = load_config(config)
+    elif saved is not None:
+        try:
+            settings = ProvidersConfig.model_validate(saved['config'])
+        except (KeyError, ValueError):
+            raise BookCastError('任务保存的 Provider 配置无效；请显式提供 --config。') from None
+    else:
+        # Do not use an unrelated CWD bookcast.toml after a reboot or directory change.
+        settings = ProvidersConfig(providers=[
+            {'name':'mock','kind':'llm','type':'mock','model':'mock-llm-v1'},
+            {'name':'mock-tts','kind':'tts','type':'mock','model':'mock-tones-v1'}],
+            llm_priority=['mock'],tts_priority=['mock-tts'])
+    llm_selection = provider or (saved.get('llm_selection','auto') if saved and config is None else 'auto')
+    tts_selection = tts_provider or (saved.get('tts_selection','auto') if saved and config is None else 'auto')
+    if not isinstance(llm_selection,str) or not isinstance(tts_selection,str):
+        raise BookCastError('任务保存的 Provider 选择无效；请显式提供 --config。')
+    registry = default_registry()
+    llm, tts = registry.chain(settings,'llm',llm_selection), registry.chain(settings,'tts',tts_selection)
+    if saved is None and config is None and {'llm':llm.cache_key,'tts':tts.cache_key} != manifest.config:
+        raise BookCastError('旧任务没有可恢复的 Provider 配置；请显式提供 --config，避免误用 Mock 或当前目录配置。')
+    return Pipeline(llm,tts,root.parent, provider_settings=settings_snapshot(settings,llm_selection,tts_selection),
+                    progress=show_progress)
+
+
+def generation_pipeline(source, output_dir, config, provider, tts_provider, resume):
+    if resume and source.is_file():
+        from .storage import artifact_path, fingerprint, sha256_file
+        book_id = fingerprint({'source_sha256': sha256_file(source), 'format': source.suffix.lower().lstrip('.')})[:24]
+        root = artifact_path(output_dir.resolve(), book_id)
+        if (root/'manifest.json').is_file():
+            return resume_pipeline(load_manifest(root/'manifest.json'), root, config,
+                                   None if provider == 'auto' else provider, None if tts_provider == 'auto' else tts_provider)
+    settings, registry = load_config(config), default_registry()
+    return Pipeline(registry.chain(settings,'llm',provider), registry.chain(settings,'tts',tts_provider), output_dir,
+                    provider_settings=settings_snapshot(settings,provider,tts_provider), progress=show_progress)
 
 
 @app.command()
@@ -95,9 +151,8 @@ def acquire(
         if offer.jurisdiction == "US":
             result["warnings"].append("来源版权声明仅指美国公有领域；其他地区需核对当地适用条件。")
         if generate_audio:
-            settings, ai_registry = load_config(config), default_registry()
-            job = Pipeline(ai_registry.chain(settings, "llm", provider), ai_registry.chain(settings, "tts", tts_provider),
-                           pipeline_output_dir).generate(Path(result["file"]), resume=resume, metadata_seed=metadata, mode=mode, minutes=minutes)
+            pipeline = generation_pipeline(Path(result['file']), pipeline_output_dir, config, provider, tts_provider, resume)
+            job = pipeline.generate(Path(result['file']), resume=resume, metadata_seed=metadata, mode=mode, minutes=minutes)
             result["pipeline_job"], result["podcast"] = str(job), str(job / "podcast.mp3")
         typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
     except (BookCastError, OSError, ValueError) as exc:
@@ -120,14 +175,13 @@ def generate(
 ) -> None:
     """分块分析、全书综合、节目规划、脚本复核与音频；默认 Mock 离线运行。"""
     try:
-        settings, registry = load_config(config), default_registry()
-        root = Pipeline(registry.chain(settings, "llm", provider), registry.chain(settings, "tts", tts_provider),
-                        output_dir).generate(source, resume=resume, mode=mode, minutes=minutes, revise_segment=revise_segment)
+        pipeline = generation_pipeline(source, output_dir, config, provider, tts_provider, resume)
+        root = pipeline.generate(source, resume=resume, mode=mode, minutes=minutes, revise_segment=revise_segment)
         manifest = load_manifest(root / "manifest.json")
     except (BookCastError, OSError, ValueError) as exc:
         typer.echo(f"错误：{exc}", err=True)
         raise typer.Exit(1) from exc
-    typer.echo(f"任务完成：{root.name}\n音频：{root / 'podcast.mp3'}\n内置 Mock TTS 生成测试音调（非人声）。")
+    typer.echo(f"任务完成：{manifest.job_id or root.name}\n音频：{root / 'podcast.mp3'}\n内置 Mock TTS 生成测试音调（非人声）。")
     if manifest.pipeline_version == "2":
         report = json.loads((root / "evaluation/quality.json").read_text(encoding="utf-8"))
         typer.echo(f"质量报告：{root / 'evaluation/quality.json'}（{report['status']}）")
@@ -157,6 +211,7 @@ def config_providers(
 @app.command()
 def doctor(
     config: Annotated[Path | None, typer.Option(help="Provider TOML 文件")] = None,
+    output_dir: Annotated[Path, typer.Option(help="检查任务存储根目录")] = Path("output"),
 ) -> None:
     """检查运行环境和 Provider；兼容端点只查询 models，不生成内容。"""
     try:
@@ -177,7 +232,12 @@ def doctor(
         environment = {"python": sys.version.split()[0], "python_supported": sys.version_info >= (3, 12),
                        "ffmpeg": shutil.which("ffmpeg") is not None}
         healthy = all(ready.values()) and environment["python_supported"] and environment["ffmpeg"]
-        typer.echo(json.dumps({"ready": healthy, "environment": environment, "chains": ready,
+        inventory = list_jobs(output_dir)
+        job_health = {'total': len(inventory['jobs']), 'active': sum(j['active'] for j in inventory['jobs']),
+                      'stale': [j['job_id'] for j in inventory['jobs'] if j['stale']],
+                      'corrupt': inventory['errors'], 'output_dir': str(output_dir.resolve()),
+                      'recovery': 'stale 任务使用 resume；永久错误修复后使用 retry。'}
+        typer.echo(json.dumps({"ready": healthy, "environment": environment, "chains": ready, 'jobs': job_health,
                               "providers": reports}, ensure_ascii=False, indent=2))
     except BookCastError as exc:
         typer.echo(f"错误：{exc}", err=True)
@@ -188,8 +248,8 @@ def doctor(
 
 @app.command()
 def status(
-    job: Annotated[str, typer.Argument(help="book_id、任务目录或 manifest.json 路径")],
-    output_dir: Annotated[Path, typer.Option(help="按 book_id 查找时使用的产物根目录")] = Path("output"),
+    job: Annotated[str, typer.Argument(help="Job ID、book_id、任务目录或 manifest.json 路径")],
+    output_dir: Annotated[Path, typer.Option(help="按 ID 查找时使用的产物根目录")] = Path("output"),
     as_json: Annotated[bool, typer.Option("--json", help="输出机器可读 JSON")] = False,
 ) -> None:
     """只读查看任务检查点和产物完整性。"""
@@ -201,7 +261,9 @@ def status(
     if as_json:
         typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        typer.echo(f"任务：{result['book_id']}\n状态：{result['status']}\n产物完整性：{result['integrity']}")
+        typer.echo(f"任务：{result['job_id']}\n书籍：{result['progress']['book']}\n状态：{result['effective_state']}"
+                   f"\n进程持锁：{result['active']}；stale：{result['stale']}\n产物完整性：{result['integrity']}")
+        show_progress({'event':'status', 'state':result['effective_state'], **result['progress']})
         for name, record in result["steps"].items():
             typer.echo(f"  {name}: {record['status']}（尝试 {record['attempts']} 次）")
         if result["error"]:
@@ -209,4 +271,63 @@ def status(
         for warning in result["warnings"]:
             typer.echo(f"解析警告：{warning}")
         if result["damaged_steps"]:
-            typer.echo(f"损坏步骤：{', '.join(result['damaged_steps'])}；请使用 --resume 修复。")
+            typer.echo(f"损坏步骤：{', '.join(result['damaged_steps'])}；请使用 bookcast resume 修复。")
+
+
+@app.command('jobs')
+def jobs_command(
+    output_dir: Annotated[Path, typer.Option(help='任务存储根目录，包含其子目录')] = Path('output'),
+    as_json: Annotated[bool, typer.Option('--json', help='输出机器可读任务列表')] = False,
+) -> None:
+    """列出持久化任务，不修改或自动重试任务。"""
+    result = list_jobs(output_dir)
+    if as_json:
+        typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if not result['jobs']:
+        typer.echo('没有找到任务。')
+    for job in result['jobs']:
+        p = job['progress']
+        typer.echo(f"{job['job_id']}  {job['effective_state']}  {p['book']}  "
+                   f"完成 {p['completed']} / 已知 {p['completed']+p['remaining']}  {job['directory']}")
+    for error in result['errors']:
+        typer.echo(f"无效任务：{error['directory']}；{error['error']}",err=True)
+
+
+def continue_job(job, output_dir, config, provider, tts_provider, *, retry, revise_segment=None):
+    try:
+        path = resolve_job(job, output_dir)
+        manifest = load_manifest(path)
+        pipeline = resume_pipeline(manifest, path.parent, config, provider, tts_provider)
+        root = pipeline.resume_job(path.parent, retry=retry, revise_segment=revise_segment)
+        manifest = load_manifest(root/'manifest.json')
+        typer.echo(f"任务完成：{manifest.job_id or manifest.book_id}\n目录：{root}\n音频：{root/'podcast.mp3'}")
+    except (BookCastError, OSError, ValueError) as exc:
+        message = str(exc) if isinstance(exc, BookCastError) else '任务文件或配置无效。'
+        typer.echo(f'错误：{message}',err=True)
+        raise typer.Exit(1) from None
+
+
+@app.command('resume')
+def resume_command(
+    job: Annotated[str, typer.Argument(help='Job ID 或任务目录')],
+    output_dir: Annotated[Path, typer.Option(help='任务存储根目录')] = Path('output'),
+    config: Annotated[Path | None, typer.Option(help='显式替换保存的 Provider 配置')] = None,
+    provider: Annotated[str | None, typer.Option(help='LLM 配置名或 auto')] = None,
+    tts_provider: Annotated[str | None, typer.Option(help='TTS 配置名或 auto')] = None,
+) -> None:
+    """从导入副本恢复 pending、stale 或临时失败任务；保留已完成产物。"""
+    continue_job(job,output_dir,config,provider,tts_provider,retry=False)
+
+
+@app.command('retry')
+def retry_command(
+    job: Annotated[str, typer.Argument(help='Job ID 或任务目录')],
+    output_dir: Annotated[Path, typer.Option(help='任务存储根目录')] = Path('output'),
+    config: Annotated[Path | None, typer.Option(help='修复或替换 Provider 配置')] = None,
+    provider: Annotated[str | None, typer.Option(help='LLM 配置名或 auto')] = None,
+    tts_provider: Annotated[str | None, typer.Option(help='TTS 配置名或 auto')] = None,
+    revise_segment: Annotated[str | None, typer.Option(help='显式改写质量失败的片段')] = None,
+) -> None:
+    """原因修复后显式重试永久失败；不从头生成已完成章节。"""
+    continue_job(job,output_dir,config,provider,tts_provider,retry=True,revise_segment=revise_segment)

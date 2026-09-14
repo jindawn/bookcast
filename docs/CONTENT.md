@@ -71,10 +71,10 @@ LLM 逐段复核每条 source 发言，给出 supported / contradicted / unverif
 
 ## 恢复、修订与兼容
 
-新任务 `manifest.schema_version=2`、`pipeline_version=2`，附带 `content_options` 和 `segment_revisions`；仓库 STATE 和获取 acquisition 的版本保持不变。旧 `pipeline_version=1` 任务保留原分析/脚本/音频路径，仍可原样恢复和迁移 manifest v1；不会被静默升级、重新生成或冒称有 Phase 4 质量报告。想对旧书运行分层流程应使用新 `--output-dir`。
+Phase 5 新任务 `manifest.schema_version=3`、`pipeline_version=2`，附带 `content_options` 和 `segment_revisions`；仓库 STATE 和获取 acquisition 的版本保持不变。旧 `pipeline_version=1` 任务保留原分析/脚本/音频路径，仍可校验复用产物，并原样备份迁移 manifest v1/v2；不会被静默升级、重新生成或冒称有 Phase 4 质量报告。想对旧书运行分层流程应使用新 `--output-dir`。
 
-块分析、综合节点、片段脚本、复核、TTS 都立即原子落盘并校验哈希。更换 Provider 保留已完成调用的实际归属；中断从最小未完成任务继续。根综合、规划、质量报告同样缓存，上游变化通过依赖指纹传播。
+块分析、综合节点、片段脚本、复核、TTS 都立即原子落盘并校验哈希。更换为另一 Provider 保留已完成调用的实际归属；同名实例配置变化会使其调用缓存失效。中断从最小未完成任务继续。按 Job ID 恢复、永久失败重试和缓存策略见 [JOBS.md](JOBS.md)。根综合、规划、质量报告同样缓存，上游变化通过依赖指纹传播。
 
-如果质量失败或需要改写，可显式 `--resume --revise-segment 0002`。片段修订号先持久化，重新生成该片段；其来源分析和全局规划保持不变。若新的结尾变化，后续依赖它的脚本会重新生成；复核与 TTS 仅在输入变化时重做。调用审计保留，当前产物文件更新。修订后再次崩溃只需普通 `--resume`，不要重复增加修订号。没有自动重写循环；若证据提取本身错误，应修复相应实现/提示版本，或用新输出目录重新验证。
+如果质量失败或需要改写，可执行 `bookcast retry JOB_ID --revise-segment 0002`，也兼容原 `generate 源文件 --resume --revise-segment 0002`。片段修订号先持久化，重新生成该片段；其来源分析和全局规划保持不变。若新的结尾变化，后续依赖它的脚本会重新生成；复核与 TTS 仅在输入变化时重做。调用审计保留，当前产物文件更新。修订后再次崩溃只需普通 `--resume`，不要重复增加修订号。没有自动重写循环；若证据提取本身错误，应修复相应实现/提示版本，或用新输出目录重新验证。
 
 验证命令和实际 demo 见 [PHASE4_DEMO.md](PHASE4_DEMO.md)。

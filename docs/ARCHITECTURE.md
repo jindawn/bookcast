@@ -1,8 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 4）
+## 当前实际实现（Phase 5）
 
-Phase 4 新任务采用分块分析、章节与全书综合树、全局节目规划、分段写作和一致性复核，支持三种内容模式及质量门禁。当前支持书名候选解析、官方公开来源安全获取、用户 URL/本地文件导入，以及 EPUB/PDF/TXT → 可恢复 Mock 播客输出。公开来源首批为 Gutenberg CSV/RDF 与官方镜像 TXT；专门开放许可库和其他官方目录待扩展。内置 TTS 只有测试音调，真实语音、OCR、M4B 和 UI 未实现。LLM 兼容端点仅做过离线协议测试。
+Phase 5 增加持久化任务模型、按 ID 恢复/重试、stale 恢复、产物缓存来源和日志。内容新任务采用分块分析、章节与全书综合树、全局节目规划、分段写作和一致性复核，支持三种内容模式及质量门禁。当前支持书名候选解析、官方公开来源安全获取、用户 URL/本地文件导入，以及 EPUB/PDF/TXT → 可恢复 Mock 播客输出。公开来源首批为 Gutenberg CSV/RDF 与官方镜像 TXT；专门开放许可库和其他官方目录待扩展。内置 TTS 只有测试音调，真实语音、OCR、M4B 和 UI 未实现。LLM 兼容端点仅做过离线协议测试。
 
 ```text
 AGENTS.md / CLAUDE.md      Agent 统一入口
@@ -17,6 +17,8 @@ docs/
   PROVIDERS.md             Provider 配置、错误策略、审计和扩展指南
   SOURCES.md               书名、来源、安全下载和获取恢复说明
   CONTENT.md              分层内容、质量规则、模式和修订
+  JOBS.md                 任务模型、恢复、缓存与可观测性
+  PHASE5_VERIFICATION.md  强制终止测试与实际 CLI 恢复证据
   PHASE4_DEMO.md           内容 demo 的实际指标与音频证据
   PHASE3_DEMO.md           真实公开书籍 demo 的命令与证据
   HANDOFF.md               最新交接快照
@@ -26,8 +28,9 @@ docs/
 scripts/
   validate_project.py     标准库离线校验
 src/bookcast/
-  cli.py                  Typer acquire/generate/status/config providers/doctor 入口
-  models.py               Pydantic 任务与书稿模型
+  cli.py                  Typer acquire/generate/jobs/status/resume/retry/config/doctor
+  jobs.py                 只读任务发现、ID 解析、持锁/stale 与完整性投影
+  models.py               Pydantic Job/Step/Artifact/Attempt、六态与书稿模型
   parsers.py              TXT/EPUB/PDF 本地解析
   source_api.py           BookIdentity、BookSourceProvider 与获取记录契约
   sources.py              Gutenberg/用户来源适配器、Source Registry
@@ -53,6 +56,8 @@ tests/
   test_phase1.py          Phase 1 解析、Provider、恢复和 CLI 测试
   test_providers.py       Phase 2 协议、故障注入、强制退出恢复及配置测试
   test_content.py         长书、三种模式、质量门禁、分块恢复和修订
+  test_job_recovery.py    真实 SIGKILL、并发排除、缓存失效与最小任务恢复
+  test_job_cli.py         Job 命令、快照配置、迁移、损坏隔离与日志故障
   test_sources.py         书籍身份、来源资格、获取恢复与安全容器测试
   test_source_http.py     下载限额、MIME、重定向、公网 IP 与 TLS 测试
 examples/
@@ -75,7 +80,7 @@ examples/
 | 内容生成 | Chapter → 分块分析 → 分层综合 → 全局规划 → 分段对话 → 一致性复核 | 九类 finding、证据定位、预算与去重、三种模式和质量门禁；详见 CONTENT |
 | 语音合成 | 脚本 → WAV 片段 | 已实现 Mock 测试音调；真实 TTS 待后续 Provider |
 | 封装导出 | WAV 片段 → MP3 | 已实现 FFmpeg concat；M4B 待后续阶段 |
-| 任务编排 | 输入与配置 → manifest.json | 已实现步骤指纹、原子写入、重试、恢复和状态命令 |
+| 任务编排 | 输入与配置 → manifest.json | 已实现 Job/Step/Artifact/Attempt、原子写入、六态恢复、缓存与任务命令 |
 
 正常流程为“书名识别 → 版本确认 → 合法来源/用户导入 → 解析 → 内容生成 → TTS → 导出”；直接导入用户文件也是独立入口，不强迫先联网搜书。扫描型 PDF 的 OCR 需求必须显式检测与报告，具体实现排期见 ROADMAP。
 
@@ -85,13 +90,19 @@ Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry /
 
 获取任务保存独立 acquisition.json v1（pending/downloading/downloaded/parsing/parsed/failed），默认位于 imports。下载成功即保存凭据与哈希，解析失败可复用源文件；完成解析记录各 JSON 哈希。网络层和容器层都检查边界，不执行、浏览或解压运行下载内容。详细数值限制及网络例外选项见 [SOURCES.md](SOURCES.md)。
 
-运行 manifest 升至 v2，steps 保留原有步骤状态；ai_calls 独立持久化 pending/running/completed/failed_retryable/failed_permanent，以及真实 provider/model、提示版本、输入输出哈希、UTC 时间。调用成功前原子落盘产物，失败只切换配置允许的四类临时/额度故障。认证、输入、结构与业务错误立即停止。新任务各块 analysis、综合节点、片段 script、consistency、tts 独立恢复，已完成步骤不会因切换 Provider 失效。旧 v1 manifest 原样备份后验证并迁移；无法补齐的历史调用不伪造。
+运行 manifest v3 是 Job 的权威状态，持有 Steps、Artifact 索引、AI Attempts、随机 job_id、导入前路径、来源 metadata seed、无密钥 Provider 配置快照与运行所有者。旧 status/error_kind 为兼容写入字段，state 是只读六态投影；不双写两套状态。每次 AI 调用和本地步骤各自落盘；文件及 manifest 使用临时文件、fsync、原子替换和父目录同步。
+
+启动恢复先取得内核独占文件锁，再将遗留 RUNNING 步骤和 pending/running 尝试标为 interrupted/FAILED_RETRYABLE。RunOwner 的 PID、主机和会话 ID 只用于诊断；不根据超时抢锁。有效完成 Attempt 可修复尚未写成成功的 Step。新计划不再使用的历史步骤标为 SKIPPED，保留文件与调用历史。
+
+缓存同时验证输入/提示版本、产物 SHA-256 和具体 Provider 配置摘要。同名实例配置改变使其旧调用失效；显式替换为其他实例保留已完成结果和原始归属，保证额度切换不重做前六章。规则和 D-010 的局部替代见 D-014 与 [JOBS.md](JOBS.md)。认证、输入、schema、业务错误仍不会自动切模型，需修复后 retry。
+
+任务清单分阶段注册 PENDING，规划前显示已知剩余量与数量待定标志。jobs/status/doctor 不修改状态；损坏任务单独列出。进度写 stderr，事件追加至 logs/events.jsonl；日志不是恢复依据，日志或终端写入失败不能使已持久化 AI 成功变成失败。
 
 ## 分层内容与兼容
 
 [CONTENT.md](CONTENT.md) 是当前内容契约与数值限制的使用指南。`ContentFlow` 复用 `_Runner.step/ai_operation`，所有随机生成结果由 ProviderChain 持久化调用记录。全局规划是确定性预算算法；每段只收到精选证据、前后主题及上一段有限结尾。质量报告先于 TTS 落盘，严重引用/矛盾/复述/角色问题停止，其他指标警告明确显示。
 
-新 manifest 保持 schema v2，以 `pipeline_version=2` 区分内容契约，记录模式、预算与片段修订号。旧 pipeline_version=1 自动沿用旧路径，无静默重生成；迁移 manifest v1 的备份逻辑保留。内容版本、Provider 配置、开发 STATE 与获取 acquisition 是不同概念，见 D-013。
+新 manifest 使用 schema v3，以 `pipeline_version=2` 区分内容契约，记录模式、预算与片段修订号。旧 pipeline_version=1 自动沿用旧路径，无静默重生成；迁移 manifest v1/v2 时原样备份，旧产物校验后复用，缺失历史字段不伪造。内容版本、Provider 配置、开发 STATE 与获取 acquisition 是不同概念，见 D-013。
 
 ## 数据与失败边界（设计约束）
 
@@ -116,4 +127,4 @@ Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry /
 
 ## 下一步架构工作
 
-Phase 4 范围止于分层内容、质量诊断和 Mock demo；没有增加 Provider 或 UI。真实中文写作与语义复核仍需授权样本及人工验收。句子边界分块、语义去重、根综合代表性、时间预算精度、真实语音等属于后续候选，不能从 Mock 测试推断已达到出版质量。
+Phase 5 范围止于持久化任务、缓存、恢复与可观测性；没有新增 Provider、数据库、后台调度或 UI。真实重启后的用户操作是重新运行 resume，未实现开机自动执行。真实中文写作与语义复核仍需授权样本及人工验收。句子边界分块、语义去重、根综合代表性、时间预算精度、真实语音等属于后续候选，不能从 Mock 测试推断已达到出版质量。

@@ -69,7 +69,7 @@ def test_chapter_seven_failover_and_idempotence(book, failure):
     pipeline = Pipeline(ProviderChain([a, b]), MockTTSProvider(), output)
     job = pipeline.generate(source)
     manifest = load_manifest(job / "manifest.json")
-    assert manifest.status == "completed" and manifest.schema_version == 2
+    assert manifest.status == "completed" and manifest.schema_version == 3
     assert len(a.calls) == (13 if failure else 35)
     assert [call for call in b.calls if call[0] == 'analysis'] == ([('analysis', '0007'), ('analysis', '0008')] if failure else [])
     assert [call for call in b.calls if call[0] == 'script'] == ([('script', f'{n:04}') for n in range(1, 9)] if failure else [])
@@ -245,7 +245,7 @@ def test_phase1_manifest_migration_reuses_verified_legacy_artifacts(book):
     new = RecordingLLM("new")
     Pipeline(new, MockTTSProvider(), output).generate(source, resume=True)
     migrated = load_manifest(job / "manifest.json")
-    assert not new.calls and not migrated.ai_calls and migrated.schema_version == 2
+    assert not new.calls and not migrated.ai_calls and migrated.schema_version == 3
     assert all(step.legacy for name, step in migrated.steps.items() if ":" in name)
     assert completed_files(job, 8) == before
     assert (job / "manifest.v1.json").read_bytes() == raw

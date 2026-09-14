@@ -150,6 +150,12 @@ class ContentFlow:
 
     def run(self):
         r, claims, chapter_themes, chapter_paths = self.r, {}, [], []
+        pending = []
+        for cid in self.metadata.chapter_ids:
+            chapter = self.read(f'chapters/{cid}.json', Chapter)
+            pending.append(f'analysis:{cid}')
+            pending.extend(f'analysis:{cid}:{p["chunk_id"]}' for p in chunks(chapter))
+        r.register(pending)
         for cid in self.metadata.chapter_ids:
             chapter = self.read(f'chapters/{cid}.json', Chapter)
             parts, themes = [], []
@@ -196,6 +202,7 @@ class ContentFlow:
                            'chapters': [(cid, [t.model_dump() for t in ts]) for cid, ts in chapter_themes]}, 'plans/episode.json',
                    lambda: planner(chapter_themes, root, claims, self.options))
         plan = self.read('plans/episode.json', EpisodePlan)
+        r.register([f'{stage}:{s.id}' for s in plan.segments for stage in ('script','consistency','tts')], final=True)
         scripts = []
         for segment in plan.segments:
             evidence = {cid: claims[cid] for cid in segment.claim_ids}
@@ -261,5 +268,5 @@ class ContentFlow:
                             'estimated_seconds': report['estimated_seconds'], 'sha256': sha256_file(r.path('podcast.mp3')),
                             'note': 'Mock TTS 是测试音调；脚本时长估计不等于音频实际时长。'})
         if r.manifest.status != 'completed':
-            r.manifest.status, r.manifest.error = 'completed', None
+            r.manifest.status, r.manifest.error, r.manifest.error_kind = 'completed', None, None
             r.save()

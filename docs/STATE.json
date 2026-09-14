@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-4",
-  "current_task": "Phase 4 分层内容生成、质量检查与实际 Mock demo 已完成并提交验证",
-  "task_status": "completed",
+  "current_phase": "phase-5",
+  "current_task": "Phase 5 工作区验证完成；创建功能提交并验证，再提交最终交接快照",
+  "task_status": "in_progress",
   "branch": "main",
   "last_verified_commit": "d0bfde29681d063c97917cae2a7168a9765c79e2",
   "completed_tasks": [
@@ -27,54 +27,77 @@
     "实现 Phase 4 九类证据分析、长章分块、章节/全书综合树与全局预算规划",
     "实现 summary/deep_read/two_host、上下文连续写作、逐段一致性复核、质量门禁和定向片段修订",
     "Phase 4 全量工作区测试 187 passed；三章中文 demo 覆盖100%、重复率4.93%、Host B占比27.47%，恢复无新增调用",
-    "创建并验证 Phase 4 功能提交 d0bfde2；187项测试、10个子测试、编译、项目校验与提交检查通过"
+    "创建并验证 Phase 4 功能提交 d0bfde2；187项测试、10个子测试、编译、项目校验与提交检查通过",
+    "实现 manifest v3 的 Job/Step/Artifact/Attempt、六态投影、持锁恢复与配置/来源快照",
+    "实现 jobs/status/resume/retry/doctor 与进度日志；17项新增任务测试通过，含三处真实SIGKILL、额度接管、缓存与旧任务迁移",
+    "Phase 5 全量204项测试和10个子测试通过；实际CLI demo完成27步骤/16调用，resume/retry后32文件字节与mtime不变"
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "task": "文档一致性检查、功能提交验证与最终交接快照",
+      "owner": "Codex /root",
+      "files": [
+        "README.md",
+        "CONTEXT.md",
+        "docs/PRODUCT.md",
+        "docs/ARCHITECTURE.md",
+        "docs/ROADMAP.md",
+        "docs/DECISIONS.md",
+        "docs/PROVIDERS.md",
+        "docs/SOURCES.md",
+        "docs/CONTENT.md",
+        "docs/JOBS.md",
+        "docs/PHASE5_VERIFICATION.md",
+        "docs/STATE.json",
+        "docs/HANDOFF.md",
+        "docs/WORKLOG.md"
+      ]
+    }
+  ],
   "next_actions": [
-    "按 AGENTS 核对 Git、实际代码和 docs/PHASE4_DEMO.md，使用 CONTENT.md 的命令运行或恢复",
-    "等待用户明确下一阶段范围；建议用授权样本和人工评审验收真实中文写作、论证保留与语义复核",
-    "保留分层检查点、质量门禁、Provider 无关恢复和合法来源边界；后续再评估句子边界分块与语义去重"
+    "创建并验证 Phase 5 功能提交",
+    "更新 last_verified_commit、HANDOFF 与最终快照提交"
   ],
   "tests": [
     {
       "name": "full-suite",
       "command": ".venv/bin/python -m pytest -q",
       "status": "passed",
-      "scope": "commit",
-      "summary": "187 passed，10 subtests passed，5 个既有 PyMuPDF 弃用警告；含长书、三种模式、四阶段接管、分块恢复、质量门禁与修订",
-      "checked_at": "2026-09-14T09:17:07Z"
+      "scope": "working_tree",
+      "summary": "204 passed，10 subtests passed，5个既有PyMuPDF/SWIG弃用警告；17项新增任务测试，含真实SIGKILL三场景、配置缓存和额度接管",
+      "checked_at": "2026-09-14T14:40:00Z"
     },
     {
-      "name": "phase4-demo",
-      "command": ".venv/bin/bookcast generate examples/content-demo.txt --mode two_host --minutes 6 --output-dir output/phase4-final-demo",
+      "name": "phase5-demo",
+      "command": ".venv/bin/bookcast generate examples/content-demo.txt --mode two_host --minutes 6 --output-dir output/phase5-demo",
       "status": "passed",
       "scope": "working_tree",
-      "summary": "3章/3片段，1285字符；覆盖100%、重复4.93%、Host B27.47%；16次完成调用；MP3测试音调15.25秒。语义需人工复核。相同CLI恢复全部字节和mtime不变，详见 docs/PHASE4_DEMO.md",
-      "checked_at": "2026-09-14T04:12:39Z"
+      "summary": "27步骤、30个Artifact、16次调用，3/3章；jobs/status/resume/retry/doctor通过，恢复前后32文件字节和mtime不变，MP3测试音调15.25秒。详见 docs/PHASE5_VERIFICATION.md",
+      "checked_at": "2026-09-14T14:36:05Z"
     },
     {
       "name": "compile",
       "command": ".venv/bin/python -m compileall -q src tests scripts",
       "status": "passed",
-      "scope": "commit",
-      "summary": "应用、测试与校验脚本编译通过",
-      "checked_at": "2026-09-14T09:17:07Z"
+      "scope": "working_tree",
+      "summary": "应用、测试与脚本编译通过",
+      "checked_at": "2026-09-14T14:40:57Z"
     },
     {
       "name": "project-validation",
       "command": "python3 scripts/validate_project.py",
       "status": "passed",
-      "scope": "commit",
-      "summary": "必需文件、STATE契约、UTC时间、链接与Git检查通过；文档人工对照已同步 Phase 4",
-      "checked_at": "2026-09-14T09:17:07Z"
+      "scope": "working_tree",
+      "summary": "必需文件、STATE契约、链接和Git校验通过；人工对照README/架构/路线图/决策/交接已统一Phase 5",
+      "checked_at": "2026-09-14T14:40:57Z"
     },
     {
       "name": "diff-check",
-      "command": "git show --format= --check d0bfde29681d063c97917cae2a7168a9765c79e2",
+      "command": "git diff --check",
       "status": "passed",
-      "scope": "commit",
-      "summary": "无空白错误",
-      "checked_at": "2026-09-14T09:17:07Z"
+      "scope": "working_tree",
+      "summary": "工作区无空白错误",
+      "checked_at": "2026-09-14T14:40:57Z"
     }
   ],
   "known_failures": [],
@@ -259,7 +282,27 @@
     {
       "path": "examples/content-demo.txt",
       "purpose": "自制三章中文测试短书"
+    },
+    {
+      "path": "src/bookcast/jobs.py",
+      "purpose": "只读任务发现、稳定ID与状态/完整性视图"
+    },
+    {
+      "path": "tests/test_job_recovery.py",
+      "purpose": "真实SIGKILL、锁、最小恢复与配置缓存测试"
+    },
+    {
+      "path": "tests/test_job_cli.py",
+      "purpose": "任务CLI、配置快照、旧记录迁移及只读查询"
+    },
+    {
+      "path": "docs/JOBS.md",
+      "purpose": "任务模型、命令、恢复、缓存与日志指南"
+    },
+    {
+      "path": "docs/PHASE5_VERIFICATION.md",
+      "purpose": "强制终止测试和CLI恢复的实际证据"
     }
   ],
-  "updated_at": "2026-09-14T09:17:07Z"
+  "updated_at": "2026-09-14T14:40:57Z"
 }

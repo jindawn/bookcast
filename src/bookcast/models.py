@@ -2,8 +2,9 @@
 
 from datetime import datetime, timezone
 from typing import Literal
+from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 
 def utc_now() -> str:
@@ -62,17 +63,74 @@ class PodcastScript(Model):
     is_mock: bool = True
 
 
-class StepRecord(Model):
-    status: Literal["running", "completed", "failed"]
-    fingerprint: str
+class TaskState(StrEnum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED_RETRYABLE = "FAILED_RETRYABLE"
+    FAILED_PERMANENT = "FAILED_PERMANENT"
+    SKIPPED = "SKIPPED"
+
+
+def task_state(status: str, error_kind: str | None = None) -> TaskState:
+    if status == "completed":
+        return TaskState.SUCCEEDED
+    if status == "failed":
+        return TaskState.FAILED_RETRYABLE if error_kind in {
+            'interrupted', 'timeout', 'quota_exhausted', 'rate_limit', 'temporary_unavailable'
+        } else TaskState.FAILED_PERMANENT
+    return TaskState(status.upper())
+
+
+class ExecutionModel(Model):
+    @model_validator(mode='before')
+    @classmethod
+    def read_state_projection(cls, data):
+        # `status` is the compatibility storage field; state is its read-only enum projection.
+        if isinstance(data, dict) and 'state' in data:
+            data = {k: v for k, v in data.items() if k != 'state'}
+        return data
+
+
+class Artifact(Model):
+    path: str
+    sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    step: str
+    input_hash: str
+    prompt_version: str | None = None
+    provider_config_hash: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    cache_key: str
+    size_bytes: int = Field(ge=0)
+    created_at: str = Field(default_factory=utc_now)
+
+
+class RunOwner(Model):
+    session_id: str
+    pid: int
+    hostname: str
+    started_at: str = Field(default_factory=utc_now)
+
+
+class Step(ExecutionModel):
+    status: Literal["pending", "running", "completed", "failed", "failed_retryable", "failed_permanent", "skipped"] = "pending"
+    fingerprint: str = ""
+    input_hash: str | None = None
     artifacts: dict[str, str] = Field(default_factory=dict)
-    attempts: int = 1
+    attempts: int = 0
     error: str | None = None
+    error_kind: str | None = None
+    skip_reason: str | None = None
     legacy: bool = False
     updated_at: str = Field(default_factory=utc_now)
+    @computed_field
+    @property
+    def state(self) -> TaskState:
+        return task_state(self.status, self.error_kind)
 
 
-class AIAttempt(Model):
+class Attempt(ExecutionModel):
     id: str
     task: str
     kind: Literal["llm", "tts"]
@@ -81,15 +139,29 @@ class AIAttempt(Model):
     model: str
     prompt_version: str
     input_hash: str
+    provider_config_hash: str | None = None
     output_hash: str | None = None
     artifacts: dict[str, str] = Field(default_factory=dict)
     timestamp: str = Field(default_factory=utc_now)
     error: str | None = None
     retryable: bool = False
 
+    @computed_field
+    @property
+    def state(self) -> TaskState:
+        return task_state(self.status)
 
-class Manifest(Model):
-    schema_version: Literal[1, 2] = 2
+
+class Job(ExecutionModel):
+    schema_version: Literal[1, 2, 3] = 3
+    job_id: str | None = None
+    source_path: str | None = None
+    metadata_seed: BookMetadata | None = None
+    provider_settings: dict | None = None
+    owner: RunOwner | None = None
+    inventory_complete: bool = False
+    error_kind: str | None = None
+    artifact_records: dict[str, Artifact] = Field(default_factory=dict)
     pipeline_version: Literal["1", "2"] = "1"
     content_options: dict | None = None
     segment_revisions: dict[str, int] = Field(default_factory=dict)
@@ -99,11 +171,22 @@ class Manifest(Model):
     source_format: Literal["epub", "pdf", "txt"]
     config: dict[str, str]
     status: Literal["pending", "running", "failed", "completed"] = "pending"
-    steps: dict[str, StepRecord] = Field(default_factory=dict)
-    ai_calls: list[AIAttempt] = Field(default_factory=list)
+    steps: dict[str, Step] = Field(default_factory=dict)
+    ai_calls: list[Attempt] = Field(default_factory=list)
     provider_status: dict[str, dict] = Field(default_factory=dict)
     legacy_config: dict[str, str] | None = None
     warnings: list[str] = Field(default_factory=list)
     error: str | None = None
     created_at: str = Field(default_factory=utc_now)
     updated_at: str = Field(default_factory=utc_now)
+
+    @computed_field
+    @property
+    def state(self) -> TaskState:
+        return task_state(self.status, self.error_kind)
+
+
+# Source-compatible imports for earlier phases; there is one durable job model.
+StepRecord = Step
+AIAttempt = Attempt
+Manifest = Job

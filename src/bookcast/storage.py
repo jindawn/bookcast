@@ -94,3 +94,29 @@ def job_lock(root: Path) -> Iterator[None]:
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+def job_is_locked(root: Path) -> bool:
+    """Read-only liveness probe. Kernel locks, not a PID or timeout, prove ownership."""
+    path = artifact_path(root, '.lock')
+    if not path.exists():
+        return False
+    # Do not create/change files during jobs/status. Windows needs a writable handle
+    # for the byte-range lock but no data are written.
+    with path.open('r+b' if os.name == 'nt' else 'rb') as stream:
+        if os.name == 'nt':
+            import msvcrt
+            stream.seek(0)
+            try:
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError:
+                return True
+            msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            try:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+    return False

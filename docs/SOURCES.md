@@ -61,3 +61,5 @@ CSV 保存在 `imports/.catalog/gutenberg/`（使用 --output-dir 时相对于�
 `BookSourceProvider.search()` 返回独立候选与结果是否完整，`sources()` 返回带使用依据的来源候选。通过 `SourceRegistry.register()` 接入工厂，不修改 AI Pipeline。后续适配器应明确地区/许可条件，不能将任意错误、未知版权或缺失身份静默视为成功。
 
 运行 manifest v2 仍用于音频流水线，仓库 `docs/STATE.json` 仍用于 Agent 接力；二者都不是 acquisition.json。可复现的真实演示证据见 [PHASE3_DEMO.md](PHASE3_DEMO.md)。
+
+Phase 5 的音频 Job 会持久化导入副本、来源 metadata seed 和无密钥 Provider 配置。获取之后的音频中断可直接使用 `bookcast resume JOB_ID`，无需重新联网获取；永久失败修复后用 `retry`。获取任务本身仍使用 acquisition v1，恢复命令和边界见 [JOBS.md](JOBS.md)。
