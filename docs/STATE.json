@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-4",
-  "current_task": "Phase 4 实现、demo 与工作区检查完成；待创建功能提交并验证交接",
-  "task_status": "in_progress",
+  "current_task": "Phase 4 分层内容生成、质量检查与实际 Mock demo 已完成并提交验证",
+  "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "9bdf53ca5aef40b710142ba332849390592f6422",
+  "last_verified_commit": "d0bfde29681d063c97917cae2a7168a9765c79e2",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -26,33 +26,23 @@
     "创建并验证 Phase 3 功能提交 9bdf53c；160 项测试、文档校验和提交检查通过，完成交接快照",
     "实现 Phase 4 九类证据分析、长章分块、章节/全书综合树与全局预算规划",
     "实现 summary/deep_read/two_host、上下文连续写作、逐段一致性复核、质量门禁和定向片段修订",
-    "Phase 4 全量工作区测试 187 passed；三章中文 demo 覆盖100%、重复率4.93%、Host B占比27.47%，恢复无新增调用"
+    "Phase 4 全量工作区测试 187 passed；三章中文 demo 覆盖100%、重复率4.93%、Host B占比27.47%，恢复无新增调用",
+    "创建并验证 Phase 4 功能提交 d0bfde2；187项测试、10个子测试、编译、项目校验与提交检查通过"
   ],
-  "in_progress": [
-    {
-      "task": "提交 Phase 4 并验证功能提交，完成最终交接快照",
-      "owner": "Codex",
-      "files": [
-        "docs/STATE.json",
-        "docs/HANDOFF.md",
-        "docs/WORKLOG.md",
-        "docs/ROADMAP.md"
-      ]
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
-    "创建 Phase 4 功能提交并对该提交运行完整测试与项目校验",
-    "记录实际验证的提交哈希，完成交接快照提交",
-    "后续按用户范围以授权样本验收真实中文写作与语义复核；保留分层恢复和来源边界"
+    "按 AGENTS 核对 Git、实际代码和 docs/PHASE4_DEMO.md，使用 CONTENT.md 的命令运行或恢复",
+    "等待用户明确下一阶段范围；建议用授权样本和人工评审验收真实中文写作、论证保留与语义复核",
+    "保留分层检查点、质量门禁、Provider 无关恢复和合法来源边界；后续再评估句子边界分块与语义去重"
   ],
   "tests": [
     {
       "name": "full-suite",
       "command": ".venv/bin/python -m pytest -q",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "187 passed，10 subtests passed，5 个既有 PyMuPDF 弃用警告；含长书、三种模式、四阶段接管、分块恢复、质量门禁与修订",
-      "checked_at": "2026-09-14T04:12:39Z"
+      "checked_at": "2026-09-14T09:17:07Z"
     },
     {
       "name": "phase4-demo",
@@ -66,25 +56,25 @@
       "name": "compile",
       "command": ".venv/bin/python -m compileall -q src tests scripts",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "应用、测试与校验脚本编译通过",
-      "checked_at": "2026-09-14T04:12:39Z"
+      "checked_at": "2026-09-14T09:17:07Z"
     },
     {
       "name": "project-validation",
       "command": "python3 scripts/validate_project.py",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "必需文件、STATE契约、UTC时间、链接与Git检查通过；文档人工对照已同步 Phase 4",
-      "checked_at": "2026-09-14T04:12:39Z"
+      "checked_at": "2026-09-14T09:17:07Z"
     },
     {
       "name": "diff-check",
-      "command": "git diff --check",
+      "command": "git show --format= --check d0bfde29681d063c97917cae2a7168a9765c79e2",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "无空白错误",
-      "checked_at": "2026-09-14T04:12:39Z"
+      "checked_at": "2026-09-14T09:17:07Z"
     }
   ],
   "known_failures": [],
@@ -271,5 +261,5 @@
       "purpose": "自制三章中文测试短书"
     }
   ],
-  "updated_at": "2026-09-14T04:12:39Z"
+  "updated_at": "2026-09-14T09:17:07Z"
 }
