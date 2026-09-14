@@ -1,10 +1,10 @@
 # 给下一位 Agent 的交接
 
-更新时间：2026-09-14T15:00:02Z；当前分支 `main`。先按 AGENTS 阅读文档并核对实际代码/Git。
+更新时间：2026-09-14T15:02:26Z；当前分支 `main`。先按 AGENTS 阅读文档并核对实际代码/Git。
 
 ## 当前目标
 
-Phase 6：封装可选 BookCast Skill，仅理解意图并调用现有 Core。Skill、19项专门测试、223项全量回归与文档校验已完成；准备阶段提交与提交后验证。没有改动 Core。
+Phase 6：封装可选 BookCast Skill，仅理解意图并调用现有 Core。Skill、19项专门测试、223项全量回归、文档和功能提交验证均已完成；Core未改动。
 
 ## 刚刚完成
 
@@ -27,7 +27,7 @@ Core 继续使用 manifest v3、pipeline_version=2（旧任务保留原版本）
 - `tests/test_skill.py`：19 passed，包含11条文档命令参数、三模式实际生成/恢复、两种来源资格、永久失败和无Skill运行；生成均为自制样本与Mock。
 - skill-creator 的 quick_validate.py：Skill is valid；`python3 scripts/validate_project.py` 通过。
 - `git diff --exit-code c05af03 -- src/bookcast pyproject.toml uv.lock` 通过：没有重写核心能力。
-- Phase 6全量回归：223 passed、10 subtests passed；编译、项目校验和git diff --check通过。实际功能提交验证待完成。Phase 5实际demo证据保留在 [PHASE5_VERIFICATION.md](PHASE5_VERIFICATION.md)。
+- 对实际功能提交0175f44重新运行全量回归：223 passed、10 subtests passed；Skill格式、编译、项目校验、Core无差异与git show --check均通过。Phase 5实际demo证据保留在 [PHASE5_VERIFICATION.md](PHASE5_VERIFICATION.md)。
 
 ## 未解决问题与技术债
 
@@ -39,7 +39,7 @@ Mock 仍为规则写作/未验证语义和测试音调，真实兼容 LLM/TTS �
 
 ## 下一步建议
 
-1. 完成本阶段全量验证与提交，更新 STATE 的实际已验证SHA，按 D-006 创建交接快照。
+1. 核对STATE中已验证SHA与实际Git，阅读Skill、test_skill和JOBS；该阶段已完成，无需重新封装核心逻辑。
 2. 按用户授权选择后续工作；可在目标Agent中做真实对话演练，或验收真实中文内容/TTS。
 3. 若CLI参数或结果契约变化，同步Skill示例并运行test_skill；不要在Skill中修复Core缺陷。
 
@@ -49,6 +49,6 @@ Mock 仍为规则写作/未验证语义和测试音调，真实兼容 LLM/TTS �
 
 ## 最近已存在的 Git commit
 
-Phase 6 接手 HEAD：`bc8fd9f` — docs: finalize Phase 5 verification and handoff；接手时工作区干净，与origin/main一致（Phase 5已推送）。最近已验证功能提交仍为 `c05af03be05d50995d90940112a902c101f29135`。Phase 6修改尚未提交；接手时以实际Git核对。
+最近已验证功能提交：`0175f44db8a913f5a477c88fec2b60c3629fb1e8` — feat: package BookCast skill over existing CLI（10个文件）。在此提交上的223项测试、10个子测试、Skill格式、编译、项目/提交校验全部通过。Phase 6接手HEAD为bc8fd9f且与origin/main一致；本阶段仅本地提交，远端状态以实际Git核对。
 
 最终快照自身的提交通过 `git log -1` 获取，按 D-006 不自引用。

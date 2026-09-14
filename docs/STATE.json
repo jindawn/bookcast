@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-6",
-  "current_task": "Phase 6 Skill、223项全量测试及文档校验完成；准备提交并验证",
-  "task_status": "in_progress",
+  "current_task": "Phase 6 已完成：可选 BookCast Skill、Core边界测试与提交验证齐备",
+  "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "c05af03be05d50995d90940112a902c101f29135",
+  "last_verified_commit": "0175f44db8a913f5a477c88fec2b60c3629fb1e8",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -35,18 +35,14 @@
     "Phase 6 开始前核验 Phase 5 基线：204项测试和10个子测试通过，main干净且与origin/main同步",
     "新增 skills/bookcast/SKILL.md：意图/模式/预算、合法来源、命令、状态、失败恢复和结果反馈；无实现脚本",
     "19项Skill测试通过：文档命令实际CLI解析、三模式Core委托、版本/版权/永久失败门禁及无Skill独立运行",
-    "Phase 6 工作区全量223项测试和10个子测试通过；Skill格式、编译、项目校验与Core无差异检查通过"
+    "Phase 6 工作区全量223项测试和10个子测试通过；Skill格式、编译、项目校验与Core无差异检查通过",
+    "创建并验证 Phase 6 功能提交 0175f44；223项测试和10个子测试、Skill格式、编译、项目/提交校验通过，Core完全未变"
   ],
-  "in_progress": [
-    {
-      "task": "功能提交验证与最终阶段交接",
-      "owner": "Codex /root",
-      "files": ["skills/bookcast/SKILL.md", "tests/test_skill.py", "README.md", "docs/ARCHITECTURE.md", "docs/PRODUCT.md", "docs/ROADMAP.md", "docs/DECISIONS.md", "docs/HANDOFF.md", "docs/STATE.json", "docs/WORKLOG.md"]
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
-    "同步STATE/HANDOFF并创建功能提交",
-    "验证实际功能提交并完成最终交接快照"
+    "接手先核对AGENTS、Git和STATE，阅读BookCast Skill及test_skill的调用边界",
+    "后续可按用户选择的宿主Agent做自然语言演练，或授权样本真实中文内容/TTS验收",
+    "CLI参数或结果格式改变时同步Skill及示例测试；核心缺陷仍在Core修复，不扩展Skill为第二套实现"
   ],
   "tests": [
     {
@@ -59,51 +55,51 @@
     },
     {
       "name": "core-unchanged",
-      "command": "git diff --exit-code c05af03 -- src/bookcast pyproject.toml uv.lock",
+      "command": "git diff --exit-code c05af03 0175f44db8a913f5a477c88fec2b60c3629fb1e8 -- src/bookcast pyproject.toml uv.lock",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "Core源码、包配置及依赖锁与Phase 5已验证功能提交完全一致",
-      "checked_at": "2026-09-14T15:00:02Z"
+      "checked_at": "2026-09-14T15:02:26Z"
     },
     {
       "name": "full-suite",
       "command": ".venv/bin/python -m pytest -q",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "223 passed，10 subtests passed，5个既有PyMuPDF/SWIG弃用警告；包含19项Skill边界测试及既有全部Core回归",
-      "checked_at": "2026-09-14T15:00:02Z"
+      "checked_at": "2026-09-14T15:02:26Z"
     },
     {
       "name": "skill-format",
       "command": "python3 /Users/wumj/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/bookcast",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "Skill is valid；本机skill-creator格式工具，不是BookCast运行依赖",
-      "checked_at": "2026-09-14T15:00:02Z"
+      "checked_at": "2026-09-14T15:02:26Z"
     },
     {
       "name": "compile",
       "command": ".venv/bin/python -m compileall -q src tests scripts",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "应用、测试与脚本编译通过",
-      "checked_at": "2026-09-14T15:00:02Z"
+      "checked_at": "2026-09-14T15:02:26Z"
     },
     {
       "name": "project-validation",
       "command": "python3 scripts/validate_project.py",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "必需文件、STATE契约、链接和Git校验通过；文档已统一Phase 6范围及能力限制",
-      "checked_at": "2026-09-14T15:00:02Z"
+      "checked_at": "2026-09-14T15:02:26Z"
     },
     {
       "name": "diff-check",
-      "command": "git diff --check",
+      "command": "git show --format= --check 0175f44db8a913f5a477c88fec2b60c3629fb1e8",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "工作区无空白错误",
-      "checked_at": "2026-09-14T15:00:02Z"
+      "scope": "commit",
+      "summary": "功能提交无空白错误",
+      "checked_at": "2026-09-14T15:02:26Z"
     }
   ],
   "known_failures": [],
@@ -318,5 +314,5 @@
       "purpose": "强制终止测试和CLI恢复的实际证据"
     }
   ],
-  "updated_at": "2026-09-14T15:00:02Z"
+  "updated_at": "2026-09-14T15:02:26Z"
 }

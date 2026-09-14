@@ -98,7 +98,7 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 
 ## Phase 6：封装可选 BookCast Skill
 
-**状态：Skill 与19项专门测试完成，正在全量回归和提交验证；实时证据见 STATE/HANDOFF。**
+**状态：已完成并验证（功能提交0175f44）；19项Skill专门测试、223项全量测试和10个子测试通过，证据见STATE/HANDOFF。**
 
 1. 提供 skills/bookcast/SKILL.md，定义使用条件、意图/模式/预算映射、CLI 参数、版权规则、状态、错误、resume 与示例。
 2. 只调用既有 CLI，不复制 parsing、下载、AI pipeline、缓存算法或 FFmpeg 拼接；不依赖厂商 SDK 或私有模块。
