@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-5",
-  "current_task": "Phase 5 已完成并验证；任务系统、崩溃恢复、缓存、日志与交接齐备",
-  "task_status": "completed",
+  "current_phase": "phase-6",
+  "current_task": "Phase 6 Skill、223项全量测试及文档校验完成；准备提交并验证",
+  "task_status": "in_progress",
   "branch": "main",
   "last_verified_commit": "c05af03be05d50995d90940112a902c101f29135",
   "completed_tasks": [
@@ -31,59 +31,92 @@
     "实现 manifest v3 的 Job/Step/Artifact/Attempt、六态投影、持锁恢复与配置/来源快照",
     "实现 jobs/status/resume/retry/doctor 与进度日志；17项新增任务测试通过，含三处真实SIGKILL、额度接管、缓存与旧任务迁移",
     "Phase 5 全量204项测试和10个子测试通过；实际CLI demo完成27步骤/16调用，resume/retry后32文件字节与mtime不变",
-    "创建并验证 Phase 5 功能提交 c05af03；204项测试、10个子测试、编译、项目校验与提交检查通过"
+    "创建并验证 Phase 5 功能提交 c05af03；204项测试、10个子测试、编译、项目校验与提交检查通过",
+    "Phase 6 开始前核验 Phase 5 基线：204项测试和10个子测试通过，main干净且与origin/main同步",
+    "新增 skills/bookcast/SKILL.md：意图/模式/预算、合法来源、命令、状态、失败恢复和结果反馈；无实现脚本",
+    "19项Skill测试通过：文档命令实际CLI解析、三模式Core委托、版本/版权/永久失败门禁及无Skill独立运行",
+    "Phase 6 工作区全量223项测试和10个子测试通过；Skill格式、编译、项目校验与Core无差异检查通过"
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "task": "功能提交验证与最终阶段交接",
+      "owner": "Codex /root",
+      "files": ["skills/bookcast/SKILL.md", "tests/test_skill.py", "README.md", "docs/ARCHITECTURE.md", "docs/PRODUCT.md", "docs/ROADMAP.md", "docs/DECISIONS.md", "docs/HANDOFF.md", "docs/STATE.json", "docs/WORKLOG.md"]
+    }
+  ],
   "next_actions": [
-    "接手先核对 AGENTS、STATE、Git 及 JOBS/PHASE5_VERIFICATION，确认当前任务与实际代码",
-    "等待下一阶段范围；可优先验收真实中文内容与TTS，或补跨平台恢复验证",
-    "后续改动保留最小调用检查点与来源/配置快照，契约变化同步版本、决策和测试"
+    "同步STATE/HANDOFF并创建功能提交",
+    "验证实际功能提交并完成最终交接快照"
   ],
   "tests": [
+    {
+      "name": "phase6-skill",
+      "command": ".venv/bin/python -m pytest tests/test_skill.py -q --tb=short",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "19 passed；含文档11条命令参数校验、三模式实际CLI、Core版本/版权门禁、永久失败保护及无Skill应用副本运行",
+      "checked_at": "2026-09-14T15:00:02Z"
+    },
+    {
+      "name": "core-unchanged",
+      "command": "git diff --exit-code c05af03 -- src/bookcast pyproject.toml uv.lock",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Core源码、包配置及依赖锁与Phase 5已验证功能提交完全一致",
+      "checked_at": "2026-09-14T15:00:02Z"
+    },
     {
       "name": "full-suite",
       "command": ".venv/bin/python -m pytest -q",
       "status": "passed",
-      "scope": "commit",
-      "summary": "204 passed，10 subtests passed，5个既有PyMuPDF/SWIG弃用警告；17项新增任务测试，含真实SIGKILL三场景、配置缓存和额度接管",
-      "checked_at": "2026-09-14T14:42:38Z"
+      "scope": "working_tree",
+      "summary": "223 passed，10 subtests passed，5个既有PyMuPDF/SWIG弃用警告；包含19项Skill边界测试及既有全部Core回归",
+      "checked_at": "2026-09-14T15:00:02Z"
     },
     {
-      "name": "phase5-demo",
-      "command": ".venv/bin/bookcast generate examples/content-demo.txt --mode two_host --minutes 6 --output-dir output/phase5-demo",
+      "name": "skill-format",
+      "command": "python3 /Users/wumj/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/bookcast",
       "status": "passed",
       "scope": "working_tree",
-      "summary": "27步骤、30个Artifact、16次调用，3/3章；jobs/status/resume/retry/doctor通过，恢复前后32文件字节和mtime不变，MP3测试音调15.25秒。详见 docs/PHASE5_VERIFICATION.md",
-      "checked_at": "2026-09-14T14:36:05Z"
+      "summary": "Skill is valid；本机skill-creator格式工具，不是BookCast运行依赖",
+      "checked_at": "2026-09-14T15:00:02Z"
     },
     {
       "name": "compile",
       "command": ".venv/bin/python -m compileall -q src tests scripts",
       "status": "passed",
-      "scope": "commit",
+      "scope": "working_tree",
       "summary": "应用、测试与脚本编译通过",
-      "checked_at": "2026-09-14T14:42:38Z"
+      "checked_at": "2026-09-14T15:00:02Z"
     },
     {
       "name": "project-validation",
       "command": "python3 scripts/validate_project.py",
       "status": "passed",
-      "scope": "commit",
-      "summary": "必需文件、STATE契约、链接和Git校验通过；人工对照README/架构/路线图/决策/交接已统一Phase 5",
-      "checked_at": "2026-09-14T14:42:38Z"
+      "scope": "working_tree",
+      "summary": "必需文件、STATE契约、链接和Git校验通过；文档已统一Phase 6范围及能力限制",
+      "checked_at": "2026-09-14T15:00:02Z"
     },
     {
       "name": "diff-check",
-      "command": "git show --format= --check c05af03be05d50995d90940112a902c101f29135",
+      "command": "git diff --check",
       "status": "passed",
-      "scope": "commit",
-      "summary": "功能提交无空白错误",
-      "checked_at": "2026-09-14T14:42:38Z"
+      "scope": "working_tree",
+      "summary": "工作区无空白错误",
+      "checked_at": "2026-09-14T15:00:02Z"
     }
   ],
   "known_failures": [],
   "blockers": [],
   "important_files": [
+    {
+      "path": "skills/bookcast/SKILL.md",
+      "purpose": "可选Agent意图到CLI调用指令；不包含核心逻辑"
+    },
+    {
+      "path": "tests/test_skill.py",
+      "purpose": "Skill文档命令契约、Core委托和无Skill运行验证"
+    },
     {
       "path": "AGENTS.md",
       "purpose": "所有 Coding Agent 的统一入口"
@@ -285,5 +318,5 @@
       "purpose": "强制终止测试和CLI恢复的实际证据"
     }
   ],
-  "updated_at": "2026-09-14T14:42:38Z"
+  "updated_at": "2026-09-14T15:00:02Z"
 }

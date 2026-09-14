@@ -2,7 +2,7 @@
 
 BookCast 是一个以开源为目标的本地工具：从书名或用户提供的 EPUB、PDF、TXT 出发，确认正确书籍版本，获取合法来源，解析整本书，再用 AI 生成高质量中文音频、精读内容或双人播客，最终导出 MP3 / M4B。
 
-**当前阶段：Phase 5 可靠性、断点恢复与任务系统。** 已实现持久化 Job/Step/Artifact/Attempt、六态任务、按 ID 恢复/重试和进度日志。新任务执行分块分析 → 全书综合 → 全局规划 → 分段脚本 → 一致性复核 → TTS，支持 `summary`、`deep_read`、`two_host`。书名来源入口和 Provider 故障恢复继续可用；默认 Mock 无需密钥，内置 TTS 仍是测试音调。真实服务质量、真实人声、OCR、M4B 与 UI 尚未验收或实现。证据见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)、[内容指南](docs/CONTENT.md) 和 [任务指南](docs/JOBS.md)。
+**当前阶段：Phase 6 可选 BookCast Skill。** Skill 将自然语言目标映射到现有 CLI，负责版本选择、模式/预算、状态查询、恢复和结果反馈。Core 保留持久化 Job/Step/Artifact/Attempt、分层内容流程和全部解析/获取/音频能力，CLI 无需 Skill 即可独立使用。支持 `summary`、`deep_read`、`two_host`；默认 Mock 无需密钥，内置 TTS 仍是测试音调。真实服务质量、真实人声、OCR、M4B 与 UI 尚未验收或实现。证据见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)、[内容指南](docs/CONTENT.md) 和 [任务指南](docs/JOBS.md)。
 
 ## 开始接手
 
@@ -17,6 +17,7 @@ BookCast 是一个以开源为目标的本地工具：从书名或用户提供�
 | [DECISIONS.md](docs/DECISIONS.md) | 已确定原则、原因和待选型事项 |
 | [PROVIDERS.md](docs/PROVIDERS.md) | Provider 配置、故障分类、调用审计与扩展方式 |
 | [JOBS.md](docs/JOBS.md) | Job ID、崩溃恢复、缓存、日志与旧任务迁移 |
+| [BookCast Skill](skills/bookcast/SKILL.md) | 可选 Agent 入口：意图、命令参数、版权、失败与恢复 |
 | [CONTENT.md](docs/CONTENT.md) | 分层内容、三种模式、质量指标与定向修订 |
 | [SOURCES.md](docs/SOURCES.md) | 书籍身份、合法来源、安全下载与获取检查点 |
 | [HANDOFF.md](docs/HANDOFF.md) | 给下一位 Agent 的最新交接快照 |
@@ -70,6 +71,14 @@ uv run bookcast acquire "The Wealth of Nations" --edition gutenberg:3300 --gener
 ```
 
 示例 URL 需换成有权使用的真实直接链接。用户来源保留用户声明，不伪装成独立核验的授权。下载限制大小、MIME、公开网络地址和文件结构；全部源文件、书稿及缓存默认被 Git 忽略。获取失败后重复命令即可恢复；音频阶段失败时加 `--resume`。详细限制、Fake-IP 网络的安全处理和真实演示见 [SOURCES.md](docs/SOURCES.md) / [PHASE3_DEMO.md](docs/PHASE3_DEMO.md)。
+
+## 可选 Skill 入口
+
+让支持 Skill 的 Agent 读取 [skills/bookcast/SKILL.md](skills/bookcast/SKILL.md)，或按宿主 Agent 的加载方式安装整个 `skills/bookcast` 目录。本仓库只提供可移植的 Skill 文档，不自动修改全局 Agent 配置，也不假设该目录会被所有工具自动发现。BookCast 本身仍需按上文安装；Skill 可调用 PATH 中的 bookcast，或明确仓库内的 CLI。
+
+用户可以说：“把《国富论》做成一个 40 分钟中文双人播客。”Skill 映射为 `two_host`、40 分钟预算，先通过 acquire 列出来源候选，确定版本后调用现有生成命令。中文输出不等于中文原版，`acquire --language` 只筛选源书语言；40 分钟也不保证实际音频等长。目前内置 TTS 为测试音调，Skill 必须如实说明，不能宣称已经生成 40 分钟人声。
+
+Skill 包含状态检查、有限恢复、永久错误处理和版权规则，不包含解析器、下载器、第二套 Pipeline 或音频脚本。[test_skill.py](tests/test_skill.py) 执行文档中的命令，验证它们委托 Core，并在无 Skill 的独立应用目录验证 CLI；可运行 `uv run pytest tests/test_skill.py -q`。这些测试不依赖外部 Agent 或 API key，也不等同于所有模型自然语言行为的验收。
 
 ## Provider 配置与恢复
 

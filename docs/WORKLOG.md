@@ -120,3 +120,13 @@
 - 在该提交运行完整测试：204 passed、10 subtests passed；5个既有PyMuPDF/SWIG弃用警告。编译、项目状态校验和 git show --check 全部通过。
 - STATE 标为 phase-5 completed，清空 in_progress，记录已验证功能提交；HANDOFF、ROADMAP同步，最终快照按 D-006 单独提交。
 - 本阶段未推送远程，也未开始下一阶段。
+
+## 2026-09-14T15:00:02Z — Phase 6 可选 Skill 与核心边界验证
+
+- 接手 HEAD=bc8fd9f，工作区干净并与origin/main一致；Phase 5已由前一轮推送。重新运行基线204项测试和10个子测试通过。
+- 按skill-creator指导创建skills/bookcast/SKILL.md，仅包含Agent指令和公共CLI示例，没有解析、下载、Pipeline或音频实现脚本。
+- 明确源书版本/语言、中文内容、三种模式/分钟预算、Mock人声限制、版权规则、状态、有限恢复、永久错误和产物反馈。
+- 新增19项测试，实际校验11条示例命令；三种模式生成和无新增调用恢复通过，版本歧义/版权资格/永久失败仍由Core拦截。独立无Skill应用目录可生成、查询和恢复。
+- 全量223项测试、10个子测试通过；5个既有PyMuPDF/SWIG弃用警告。Skill格式、编译、项目校验和空白检查通过。
+- Core源码、pyproject.toml及uv.lock与c05af03完全一致；没有新增运行依赖、持久格式、Provider或宿主全局配置。
+- README/产品/架构/路线图/STATE/HANDOFF已同步，待功能提交验证及最终交接快照。自然语言跨Agent行为与真实人声不在本次自动测试证明范围。

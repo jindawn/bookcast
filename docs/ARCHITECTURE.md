@@ -1,8 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 5）
+## 当前实际实现（Phase 6）
 
-Phase 5 增加持久化任务模型、按 ID 恢复/重试、stale 恢复、产物缓存来源和日志。内容新任务采用分块分析、章节与全书综合树、全局节目规划、分段写作和一致性复核，支持三种内容模式及质量门禁。当前支持书名候选解析、官方公开来源安全获取、用户 URL/本地文件导入，以及 EPUB/PDF/TXT → 可恢复 Mock 播客输出。公开来源首批为 Gutenberg CSV/RDF 与官方镜像 TXT；专门开放许可库和其他官方目录待扩展。内置 TTS 只有测试音调，真实语音、OCR、M4B 和 UI 未实现。LLM 兼容端点仅做过离线协议测试。
+Phase 6 增加可选的 BookCast Skill 文档，只调用原 CLI。Phase 5 的持久化任务、按 ID 恢复/重试、stale 恢复、缓存与日志保持原实现。内容新任务采用分块分析、章节与全书综合树、全局节目规划、分段写作和一致性复核，支持三种内容模式及质量门禁。当前支持书名候选解析、官方公开来源安全获取、用户 URL/本地文件导入，以及 EPUB/PDF/TXT → 可恢复 Mock 播客输出。公开来源首批为 Gutenberg CSV/RDF 与官方镜像 TXT；专门开放许可库和其他官方目录待扩展。内置 TTS 只有测试音调，真实语音、OCR、M4B 和 UI 未实现。LLM 兼容端点仅做过离线协议测试。
 
 ```text
 AGENTS.md / CLAUDE.md      Agent 统一入口
@@ -27,6 +27,8 @@ docs/
   STATE.schema.json         状态契约 v1
 scripts/
   validate_project.py     标准库离线校验
+skills/bookcast/
+  SKILL.md                可移植 Agent 指令，只有 CLI 调用，无实现代码
 src/bookcast/
   cli.py                  Typer acquire/generate/jobs/status/resume/retry/config/doctor
   jobs.py                 只读任务发现、ID 解析、持锁/stale 与完整性投影
@@ -58,6 +60,7 @@ tests/
   test_content.py         长书、三种模式、质量门禁、分块恢复和修订
   test_job_recovery.py    真实 SIGKILL、并发排除、缓存失效与最小任务恢复
   test_job_cli.py         Job 命令、快照配置、迁移、损坏隔离与日志故障
+  test_skill.py           Skill 示例调用、Core 委托、无 Skill 独立运行
   test_sources.py         书籍身份、来源资格、获取恢复与安全容器测试
   test_source_http.py     下载限额、MIME、重定向、公网 IP 与 TLS 测试
 examples/
@@ -69,6 +72,10 @@ examples/
 应用运行环境为 Python 3.12+、Typer、Pydantic、EbookLib、BeautifulSoup、PyMuPDF 和 FFmpeg；`uv.lock` 固定依赖解析结果。`scripts/validate_project.py` 仍是标准库工具，应用测试用 pytest。没有数据库，任务状态保存在每个输出目录的 `manifest.json`。
 
 ## Pipeline 与边界
+
+可选入口为用户目标 → Agent 加载 Skill → 既有 CLI → BookCast Core。Skill 选择命令和参数、读取状态/质量报告并反馈；版本候选、版权资格、文件验证、解析、生成、恢复算法和音频拼接都由 Core 执行。Skill 不导入私有模块或厂商 SDK，不写 manifest/缓存，不维护第二套任务状态。Core 对 Skill 没有反向依赖，包的构建配置只分发原应用，命令行用户不需要安装 Skill。
+
+技能目录只有 SKILL.md；可单独给 Agent 加载，不绑定某个宿主的全局安装路径。命令示例由测试直接传入真实 CLI，外部来源边界用自制样本隔离；这验证调用边界，不证明任意 Agent 一定遵守每条自然语言指令。
 
 应用仍是单机本地工具，不预设微服务。当前 Pipeline 由 `Pipeline` 编排，Provider 与具体厂商解耦；以下表格同时标示已实现和后续边界。
 
@@ -127,4 +134,4 @@ Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry /
 
 ## 下一步架构工作
 
-Phase 5 范围止于持久化任务、缓存、恢复与可观测性；没有新增 Provider、数据库、后台调度或 UI。真实重启后的用户操作是重新运行 resume，未实现开机自动执行。真实中文写作与语义复核仍需授权样本及人工验收。句子边界分块、语义去重、根综合代表性、时间预算精度、真实语音等属于后续候选，不能从 Mock 测试推断已达到出版质量。
+Phase 6 范围止于可选 Skill、命令契约/依赖边界验证和文档；核心模块与持久格式不变。真实重启后的用户操作是重新运行 resume，未实现开机自动执行。真实中文写作与语义复核仍需授权样本及人工验收。句子边界分块、语义去重、根综合代表性、时间预算精度、真实语音等属于后续候选，不能从 Mock 测试推断已达到出版质量。
