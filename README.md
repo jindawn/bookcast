@@ -2,7 +2,7 @@
 
 BookCast 是一个以开源为目标的本地工具：从书名或用户提供的 EPUB、PDF、TXT 出发，确认正确书籍版本，获取合法来源，解析整本书，再用 AI 生成高质量中文音频、精读内容或双人播客，最终导出 MP3 / M4B。
 
-**当前阶段：Phase 3 书名识别与合法 Source Resolver。** 新增 `bookcast acquire`，从官方目录识别书籍候选、明确版本、核验来源后安全获取并解析，也接受用户 URL/本地文件。可选 `--generate` 接入原有可恢复的 AI/音频流水线。默认 Mock 无需密钥；内置 TTS 仍是测试音调，真实语音、OCR、M4B 与 UI 未实现。验证与提交证据见 [HANDOFF.md](docs/HANDOFF.md) 和 [STATE.json](docs/STATE.json)。
+**当前阶段：Phase 4 分层内容生成与质量检查。** 新任务执行分块分析 → 全书综合 → 全局规划 → 分段脚本 → 一致性复核 → TTS，支持 `summary`、`deep_read`、`two_host`。书名来源入口和 Provider 故障恢复继续可用；默认 Mock 无需密钥，内置 TTS 仍是测试音调。真实服务质量、真实人声、OCR、M4B 与 UI 尚未验收或实现。证据见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json) 和 [内容指南](docs/CONTENT.md)。
 
 ## 开始接手
 
@@ -16,6 +16,7 @@ BookCast 是一个以开源为目标的本地工具：从书名或用户提供�
 | [ROADMAP.md](docs/ROADMAP.md) | 分阶段范围及验收条件 |
 | [DECISIONS.md](docs/DECISIONS.md) | 已确定原则、原因和待选型事项 |
 | [PROVIDERS.md](docs/PROVIDERS.md) | Provider 配置、故障分类、调用审计与扩展方式 |
+| [CONTENT.md](docs/CONTENT.md) | 分层内容、三种模式、质量指标与定向修订 |
 | [SOURCES.md](docs/SOURCES.md) | 书籍身份、合法来源、安全下载与获取检查点 |
 | [HANDOFF.md](docs/HANDOFF.md) | 给下一位 Agent 的最新交接快照 |
 | [WORKLOG.md](docs/WORKLOG.md) | 追加式开发事实记录 |
@@ -33,6 +34,7 @@ uv run bookcast config providers
 uv run bookcast doctor
 uv run bookcast acquire "The Wealth of Nations" --list
 uv run bookcast acquire "The Wealth of Nations" --edition gutenberg:3300
+uv run bookcast generate examples/content-demo.txt --mode two_host --minutes 6 --output-dir output/phase4-demo
 uv run bookcast generate examples/example.txt --provider auto
 uv run bookcast generate examples/example.txt --provider auto --resume
 uv run bookcast status <book_id> --json
@@ -41,7 +43,11 @@ python3 scripts/validate_project.py
 git diff --check
 ```
 
-`bookcast generate ./books/example.epub` 是主入口；也支持 `.pdf` 和 `.txt`。产物在 `output/{book_id}/`，包含 `source/`、`metadata.json`、`chapters/`、`analysis/`、`scripts/`、`audio/`、`manifest.json` 和 `podcast.mp3`。失败后用相同输入加 `--resume`，只重跑缺失、损坏或指纹改变的步骤；`bookcast status <job>` 显示进度和产物完整性。`--output-dir` 可指定产物根目录。
+`bookcast generate ./books/example.epub` 是主入口；也支持 `.pdf` 和 `.txt`。产物在 `output/{book_id}/`，包含 `source/`、`metadata.json`、`chapters/`、`analysis/`、`synthesis/`、`plans/`、`scripts/`、`evaluation/`、`audio/`、`manifest.json` 和 `podcast.mp3`。失败后用相同输入加 `--resume`，只重跑缺失、损坏或指纹改变的步骤；`bookcast status <job>` 显示进度和产物完整性。`--output-dir` 可指定产物根目录。
+
+`--mode summary|deep_read|two_host` 选择模式，`--minutes` 设置脚本时间预算；同一本书比较不同模式时使用不同输出目录。质量报告包含重复率、实际章节覆盖、长度、角色比例、空泛表达和事实检查。阻断项会在 TTS 前停止；警告可以继续，Mock 的语义核验始终需人工复核。报告通过不代表内容已达到真实播客质量。
+
+用 `--resume --revise-segment 0002` 可重写指定片段，保留分析和规划，并按输入变化重建下游。旧任务保持原流水线；不会因升级代码重做整本书。规则、缓存和限制见 [CONTENT.md](docs/CONTENT.md)，实际运行样本见 [PHASE4_DEMO.md](docs/PHASE4_DEMO.md)。
 
 `python3 scripts/validate_project.py` 仍用于 Phase 0 文档/状态入口校验。`uv run pytest -q` 运行解析、Provider、流水线、幂等、恢复和 CLI 测试；当前不需要访问网络。
 
@@ -65,9 +71,9 @@ uv run bookcast acquire "The Wealth of Nations" --edition gutenberg:3300 --gener
 
 默认读取工作目录的 `bookcast.toml`；没有该文件时仅使用 Mock。可从 [examples/providers.toml](examples/providers.toml) 复制配置，或通过 `--config examples/providers.toml` 使用示例。示例的 primary、secondary、tertiary 都是 Mock，可安全离线运行。`llm_priority` / `tts_priority` 决定链顺序；`--provider <配置名称>` 与 `--tts-provider <配置名称>` 各自限定为单一 Provider。详细字段见 [PROVIDERS.md](docs/PROVIDERS.md)。
 
-显式配置外部 LLM 会将当前章节正文、分析、提示词及 JSON Schema 发往所配置端点；自动切换时也可能发送给链中的备用端点。请只启用愿意接收这些内容的服务。密钥仅通过 `api_key_env` 指向环境变量，禁止直接写进 TOML；运行日志和 manifest 不记录凭证或服务原始错误正文。
+显式配置外部 LLM 会将当前文本块、精选来源证据、分层分析、片段脚本、提示词及 JSON Schema 发往所配置端点；自动切换时也可能发送给链中的备用端点。请只启用愿意接收这些内容的服务。密钥仅通过 `api_key_env` 指向环境变量，禁止直接写进 TOML；运行日志和 manifest 不记录凭证或服务原始错误正文。
 
-仅 rate limit、quota、临时不可用和 timeout 可触发切换；认证、输入、schema 和业务错误会停止。第 7 章失败时从第 7 章尚未完成的分析、脚本或 TTS 子任务接续，前六章检查点保持不变。修改 Provider 配置后用 `--resume` 继续；已完成任务的归属仍保留在 manifest 的 `ai_calls`，不会被新模型名称覆盖。若要整本使用新模型，选择新的 `--output-dir`。
+仅 rate limit、quota、临时不可用和 timeout 可触发切换；认证、输入、schema 和业务错误会停止。第 7 章分析失败时从其未完成文本块接续，前六章分析保持不变；综合节点、片段脚本、复核和 TTS 同样独立恢复。修改 Provider 配置后用 `--resume` 继续；已完成任务的归属仍保留在 manifest 的 `ai_calls`，不会被新模型名称覆盖。若要整本使用新模型，选择新的 `--output-dir`。
 
 manifest v2 保存每次调用的状态、provider、model、prompt_version、输入/输出 SHA-256 和 UTC 时间。旧 v1 任务会备份为 `manifest.v1.json`，验证并复用原产物；旧调用没有审计信息，迁移不会伪造记录。外部请求已被服务处理但本地结果尚未落盘时，重启可能再次请求该未完成任务；不承诺外部请求恰好一次或无重复计费。
 

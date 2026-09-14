@@ -90,7 +90,9 @@ class AIAttempt(Model):
 
 class Manifest(Model):
     schema_version: Literal[1, 2] = 2
-    pipeline_version: Literal["1"] = "1"
+    pipeline_version: Literal["1", "2"] = "1"
+    content_options: dict | None = None
+    segment_revisions: dict[str, int] = Field(default_factory=dict)
     book_id: str
     source_sha256: str
     source_name: str

@@ -1,81 +1,52 @@
-# 给下一位 AI Agent 的交接
+# 给下一位 Agent 的交接
 
-快照更新：2026-09-13T23:28:15Z。Phase 3 已完成，功能提交已验证，交接快照已同步；状态见 [STATE.json](STATE.json)。
+更新时间：2026-09-14T04:12:39Z；当前分支 `main`。接手先按 AGENTS 阅读文档、检查 Git 与实际代码。
 
 ## 当前目标
 
-从书名识别候选，明确版本与来源依据，再安全获取并解析；可选接入原有 Pipeline。本阶段不开发 UI、盗版爬虫、访问控制绕过或真实音频功能。
+Phase 4：提高书到播客的内容处理质量。功能、自动测试及实际 Mock demo 已完成，当前剩余工作是功能提交后的验证及最终交接快照。没有开始下一阶段。
 
-## 刚刚完成了什么
+## 刚刚完成
 
-- 建立 BookIdentity（title/authors/language/isbn/edition/publication_year）、EditionCandidate、SourceOffer、BookSourceProvider 和 Source Registry。
-- 从 Gutenberg 官方镜像取得 CSV 目录并缓存；查询所选条目的 RDF，区分书籍版权声明与元数据 CC0。首批只接受明确声明美国公有领域的条目，下载 UTF-8 TXT 并核对头部 eBook 编号。
-- 多候选必须显式 --edition，可按作者/语言筛选；未知 ISBN/印刷版次/出版年份不猜填，目录发行日期单列。
-- 用户 --url 需要格式和 --rights-confirmed；本地 --file 支持 EPUB/PDF/TXT。身份及使用权声明标记为用户提供，不冒充独立核验。
-- 下载检查 MIME、声明/实际大小、公开 IP、TLS 和重定向；拒绝私网、异常压缩、路径穿越、实体声明和不安全容器。不会执行下载内容或将服务文件名用作本地路径。
-- acquisition.json v1 持久化下载和解析阶段，重复获取校验哈希后复用；解析失败不重下书籍。acquire --generate 将来源 metadata seed 注入既有 Pipeline，默认仍是 Mock 音调。
-- 实际查询 The Wealth of Nations 得到 gutenberg:3300 / gutenberg:38194 两个候选；显式选择 3300，成功下载 2,468,951 字节并解析 67 个文本段。重复获取时文件、解析结果和获取记录的字节/mtime 均不变。
+- 新任务由分块九类分析、章节/整书综合树、全局规划、分段脚本、逐段一致性复核、质量门禁组成，再进入 TTS。
+- 支持 summary、deep_read、two_host 和分钟预算；双人角色分工、论据归属、前段实际结尾均进入写作提示。
+- 全部生成调用复用 ProviderChain 审计和原子检查点，新增最小块/综合/复核任务；旧任务保留原路径和迁移能力。
+- `--resume --revise-segment` 定向改写，保留分析与规划，按结尾和产物变化更新下游。
+- 新增内容指南、决策 D-013、领域词汇及三章自制中文 demo；全部已与 README/架构/路线图对照。
 
-## 修改的关键文件
+## 关键文件与当前代码
 
-- [source_api.py](../src/bookcast/source_api.py)、[sources.py](../src/bookcast/sources.py)：中立身份/来源契约、官方与用户 Adapter、Registry。
-- [source_http.py](../src/bookcast/source_http.py)、[source_validation.py](../src/bookcast/source_validation.py)：有界 HTTPS 与容器安全检查。
-- [acquisition.py](../src/bookcast/acquisition.py)：版本选择、导入、解析和检查点。
-- [cli.py](../src/bookcast/cli.py)、[models.py](../src/bookcast/models.py)、[pipeline.py](../src/bookcast/pipeline.py)：acquire 命令及来源元数据桥接；旧 AI 契约未变。
-- [test_sources.py](../tests/test_sources.py)、[test_source_http.py](../tests/test_source_http.py)：82 项新增离线测试场景。
-- [SOURCES.md](SOURCES.md)、[PHASE3_DEMO.md](PHASE3_DEMO.md)、README、CONTEXT、PRODUCT、ARCHITECTURE、ROADMAP、DECISIONS（D-011/D-012）、STATE、HANDOFF、WORKLOG：完整接力记录。
+`src/bookcast/content_models.py` 定义有界 schema；`content.py` 编排分层生成与本地 Planner；`quality.py` 计算诊断和阻断项；`content_mock.py` 提供规则示例。`pipeline.py` 保留旧运行器并按版本分流；`cli.py` 的 generate/acquire --generate 都支持模式与预算。新任务仍为 manifest schema v2，pipeline_version=2；STATE v1、acquisition v1 不变。
 
-## 当前代码状态与运行方法
+测试集中在 `tests/test_content.py`；`test_providers.py` 的故障注入已适配新调用顺序，仍验证永久错误停止、强制进程退出、旧任务迁移与无重复处理。没有新增依赖或厂商 SDK。
 
-```sh
-uv sync --extra dev
-uv run bookcast acquire "The Wealth of Nations" --list
-uv run bookcast acquire "The Wealth of Nations" --edition gutenberg:3300
-uv run bookcast acquire "自己的书" --file ./books/own.epub --generate
-uv run pytest -q
-python3 scripts/validate_project.py
-```
+## 实际验证
 
-默认获取目录 imports，音频目录 output。acquire 默认只到解析；加 --generate 才调用 AI/TTS。获取检查点自动复用，音频失败或配置变化后加 --resume。详见 SOURCES。
-
-本次运行环境将官方镜像解析为 Fake-IP 198.18.0.37，安全校验按设计拒绝。经公开 DNS 查询确认公网 IP 69.55.231.8 后，使用 --resolve gutenberg.pglaf.org=69.55.231.8 保留域名 TLS 校验；首次 21 MB 目录另设 --download-timeout 600。IP 会变化，接手时不要盲用旧值或关闭防护。普通公网 DNS 环境无需该选项。
-
-真实产物在本机 imports/phase3-demo/7e7a23a67db5bbc3d961bd5c/，被 Git 忽略。可复现命令、版权依据、源文件/目录/RDF 哈希见 PHASE3_DEMO；仓库没有提交书籍全文或生成产物。
-
-## 已运行测试及结果
-
-- `.venv/bin/python -m pytest -q`：160 passed、10 subtests passed；5 个既有 PyMuPDF SWIG 弃用警告。全部自动化测试离线。
-- `.venv/bin/python -m compileall -q src tests`、`git diff --check`：通过。python3 scripts/validate_project.py 通过，具体证据见 STATE。
-- 真实 demo：官方目录 → 两个候选 → 显式选择 → RDF 资格 → 下载 → 原 Parser，status=parsed、coverage=complete、67 段、2,432,512 字符。
-- 真实重复获取及所有产物 SHA-256 核对通过；本地自制书 acquire --generate → Mock MP3 → --resume 通过，来源元数据保留。
-- 安全场景包含大小头缺失/伪造、截断、错误 MIME、伪装 HTML、私网/保留 IP、重定向、TLS 固定地址、ZIP 路径/符号链接/异常压缩、DTD/实体、源文件复制时变化和损坏检查点。
+- `.venv/bin/python -m pytest -q`：187 passed、10 subtests passed；5 个既有 PyMuPDF/SWIG 弃用警告。
+- `.venv/bin/python -m compileall -q src tests scripts`：通过。
+- `python3 scripts/validate_project.py`、`git diff --check`：通过。
+- 实际 CLI demo：`examples/content-demo.txt --mode two_host --minutes 6`，产物在 `output/phase4-final-demo/5bdad5ca96f5e42cd019ff30/`。1285 字符、3/3 章来源覆盖、重复率 4.93%、Host B 27.47%，无阻断项。16 次调用，恢复后全部字节和 mtime 不变。
+- ffprobe：MP3、24kHz、单声道、15.25 秒测试音调；这不是估计 321.2 秒的人声播客。语义复核明确 needs_review。详情及第一段实际话语见 [PHASE4_DEMO.md](PHASE4_DEMO.md)。
 
 ## 未解决问题与技术债
 
-- 当前无未解决代码测试失败或 blocker。功能提交为 9bdf53ca5aef40b710142ba332849390592f6422，本次提交尚未推送。首次测试失败来自自制 EPUB 缺少目录资源，已修正。
-- Gutenberg 是目录条目匹配，不能据此保证特定印刷版；ISBN、版次、原出版年份没有可靠元数据时为空。
-- 专门开放许可库和其他出版社目录尚未接入；用户 URL 的权限由用户声明，程序只校验传输与格式。
-- Gutenberg 首批仅 TXT，版权来源范围为美国；其他地区条件仍需核对。67 个解析段包含前后附文，未做目录层级/内容质量验收。
-- 默认 HTTPS/443、无 query/fragment/认证/代理；私网服务、签名 URL 和部分复杂 EPUB 会被拒绝。首次目录较大，慢网络需调高有界时限。
-- 获取失败不支持 HTTP Range 断点续传，下载重试整个文件；解析阶段复用下载。真实模型/TTS、长章节、OCR、M4B、CI、许可证及跨平台验证仍为后续事项。
-- 之前一次联网审批因 Codex 额度被拒绝，用户继续且额度重置后已获准完成；该事项现在不是 blocker。
+自动测试没有未解决失败。Mock 是规则提取和模板对话，不具备完整理解或语义事实核验；真实兼容 LLM 与真实 TTS 尚未验收。不要把结构测试通过当作内容达到发布质量。
+
+分块是固定字符边界；上层代表性压缩会丢细节，Planner 仅精确文本去重、最多24片段；预算覆盖不足会显式报告。预算是估计，极长单段可能触发有界脚本限制；没有自动扩写、无限改写或语义去重。整书解析仍会占用内存，有界的是模型输入。
+
+质量规则只检查部分引用、数字、角色和复述问题，不能证明所有事实正确或满足版权要求。修订失败时旧音频可能仍在目录中，应以 manifest 状态和质量报告为准。用户授权来源、Secret、下载防护及原文件保留原则继续有效；开源许可证、OCR、M4B、UI 等待后续范围。
 
 ## 下一步建议
 
-1. 按 AGENTS 核对代码、Git 和 STATE；当前无进行中任务，下一阶段范围等待用户确认。
-2. 用户确认范围后，可选择增加有明确许可依据的 Source Adapter，或推进真实 LLM/TTS 与内容质量验收。
-3. 后续仍须保留身份歧义、来源证据、已有 AI 恢复和安全下载边界；当前没有开始下一阶段或 UI。
+1. 完成功能提交后，完整测试与项目校验通过再记录实际完整提交哈希；按 D-006 提交最终快照。
+2. 新 Agent 先核对仓库，再按用户授权范围选择下一阶段；建议用小型授权样本和人工评审验收真实中文写作、论证保留与语义复核。
+3. 改动内容契约或提示时更新版本及缓存依赖，不让模型切换重做已完成内容。
 
-## 不要重复做的事情
+## 不要重复做
 
-- 不重建 Phase 0–2，不将取得一本公开书籍泛化成全目录验收。
-- 不以元数据 CC0 代替书籍授权，不猜填版次，不静默选择多候选。
-- 不关闭公网/TLS 校验来适应 Fake-IP，不绕过 DRM、付费墙或访问控制。
-- 不提交 imports/output、书籍、密钥或生成音频，不删除用户原件。
-- 不因来源 Adapter 或 AI Provider 切换重做已有有效成果；不追逐 STATE 自引用哈希。
+不要重新初始化项目或添加另一套 Agent 规则，不要用旧聊天猜代码。不要静默升级旧任务、重新获取 Phase 3 公有领域 demo 或改写已完成章节。已有来源、Provider 注册/故障切换、质量门禁和恢复都有回归测试。书稿、生成 JSON 和 MP3 留在忽略目录，不提交；不要 force push。
 
-## 最近 Git commit
+## 最近已存在的 Git commit
 
-- 接手时 HEAD 为 b6f0aa9（Phase 2 交接）；其功能提交为 2f06b0107af9470f6a8758b8a1620ac8ab8f7cbe。
-- Phase 3 功能提交：`9bdf53ca5aef40b710142ba332849390592f6422`（feat: add legal book source resolver and safe acquisition），已在该提交上运行 160 项测试、文档校验和提交差异检查，全部通过。
-- 最终快照自身通过 `git log -1 --oneline` 查询，遵守 D-006。
+`ac2c3ad2e11b8cd2ea2ef76845d08c10cb376d26` — docs: finalize Phase 3 verification and handoff。
+当前 Phase 4 变更尚未提交；最近已验证功能提交仍是 STATE 中的 `9bdf53ca5aef40b710142ba332849390592f6422`。本快照的提交应使用 `git log -1` 查询，禁止自引用哈希。

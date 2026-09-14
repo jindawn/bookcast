@@ -6,6 +6,7 @@ import shutil
 
 from .audio import merge_audio, validate_wav
 from .errors import BookCastError
+from .content_models import ContentOptions
 from .models import AIAttempt, BookMetadata, Chapter, ChapterAnalysis, Manifest, PodcastScript, StepRecord, utc_now
 from .parsers import parse_book
 from .provider_api import LLMProvider, TTSProvider, ProviderError, ProviderStatus, ErrorKind
@@ -37,7 +38,11 @@ class Pipeline:
         self.tts = tts if isinstance(tts, ProviderChain) else ProviderChain([tts])
         self.output_dir = output_dir.resolve()
 
-    def generate(self, source: Path, *, resume: bool = False, metadata_seed: BookMetadata | None = None) -> Path:
+    def generate(self, source: Path, *, resume: bool = False, metadata_seed: BookMetadata | None = None,
+                 mode: str | None = None, minutes: int | None = None, revise_segment: str | None = None) -> Path:
+        if revise_segment and not resume:
+            raise BookCastError("修订片段需要 --resume。")
+        options = ContentOptions(mode="two_host" if mode is None else mode, minutes=10 if minutes is None else minutes)
         source = source.resolve()
         if not source.is_file():
             raise BookCastError(f"输入文件不存在：{source}")
@@ -60,6 +65,13 @@ class Pipeline:
                 if (manifest.book_id != book_id or manifest.source_sha256 != digest
                         or manifest.source_format != source_format):
                     raise BookCastError("任务输入不匹配，请使用另一个 --output-dir。")
+                if manifest.pipeline_version == "2":
+                    stored = ContentOptions.model_validate(manifest.content_options)
+                    requested = ContentOptions(mode=stored.mode if mode is None else mode, minutes=stored.minutes if minutes is None else minutes)
+                    if requested != stored:
+                        raise BookCastError("内容模式或预算改变，请使用另一个 --output-dir，避免混用旧脚本。")
+                elif mode is not None or minutes is not None:
+                    raise BookCastError("旧任务保留原流水线；使用新的 --output-dir 创建分层内容任务。")
                 if manifest.schema_version == 2 and manifest.config != config and not resume:
                     raise BookCastError("Provider 配置已改变。使用 --resume 保留已完成章节，或另选 --output-dir 创建新任务。")
                 if not resume and manifest.status != "completed":
@@ -80,7 +92,18 @@ class Pipeline:
                 if any(path.name != ".lock" for path in root.iterdir()):
                     raise BookCastError("目标任务目录非空且没有 manifest，拒绝覆盖已有数据。")
                 manifest = Manifest(book_id=book_id, source_sha256=digest, source_name=source.name,
-                                    source_format=source_format, config=config)
+                                    source_format=source_format, config=config, pipeline_version="2",
+                                    content_options=options.model_dump())
+                write_json(manifest_path, manifest.model_dump())
+            if revise_segment:
+                plan_path = artifact_path(root, 'plans/episode.json')
+                if manifest.pipeline_version != '2' or not plan_path.is_file():
+                    raise BookCastError('当前任务没有可修订的全局规划。')
+                from .content_models import EpisodePlan
+                plan = EpisodePlan.model_validate_json(plan_path.read_text(encoding='utf-8'))
+                if revise_segment not in {s.id for s in plan.segments}:
+                    raise BookCastError('片段编号不在规划中。')
+                manifest.segment_revisions[revise_segment] = manifest.segment_revisions.get(revise_segment, 0) + 1
                 write_json(manifest_path, manifest.model_dump())
             runner = _Runner(root, manifest, self.llm, self.tts)
             try:
@@ -212,6 +235,10 @@ class _Runner:
         self.step("parse", parse_inputs, parse)
         metadata = BookMetadata.model_validate_json(self.path("metadata.json").read_text(encoding="utf-8"))
         manifest.warnings = metadata.warnings
+        if manifest.pipeline_version == "2":
+            from .content import ContentFlow
+            ContentFlow(self, metadata).run()
+            return
         legacy_config = manifest.legacy_config or {}
         for chapter_id in metadata.chapter_ids:
             chapter_name = f"chapters/{chapter_id}.json"

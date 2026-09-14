@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-3",
-  "current_task": "Phase 3 书名识别、合法来源、安全获取与真实 demo 已完成并验证",
-  "task_status": "completed",
+  "current_phase": "phase-4",
+  "current_task": "Phase 4 实现、demo 与工作区检查完成；待创建功能提交并验证交接",
+  "task_status": "in_progress",
   "branch": "main",
   "last_verified_commit": "9bdf53ca5aef40b710142ba332849390592f6422",
   "completed_tasks": [
@@ -23,54 +23,68 @@
     "实现限量 HTTPS、MIME/容器验证、公网 IP 固定、逐获取阶段检查点及 Pipeline 元数据桥接",
     "Phase 3 全量离线测试 160 passed；真实目录返回国富论两个候选，拒绝静默选择",
     "真实国富论 gutenberg:3300 获取并解析 67 个文本段；源文件 2468951 字节，重复获取全部产物和检查点不变",
-    "创建并验证 Phase 3 功能提交 9bdf53c；160 项测试、文档校验和提交检查通过，完成交接快照"
+    "创建并验证 Phase 3 功能提交 9bdf53c；160 项测试、文档校验和提交检查通过，完成交接快照",
+    "实现 Phase 4 九类证据分析、长章分块、章节/全书综合树与全局预算规划",
+    "实现 summary/deep_read/two_host、上下文连续写作、逐段一致性复核、质量门禁和定向片段修订",
+    "Phase 4 全量工作区测试 187 passed；三章中文 demo 覆盖100%、重复率4.93%、Host B占比27.47%，恢复无新增调用"
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "task": "提交 Phase 4 并验证功能提交，完成最终交接快照",
+      "owner": "Codex",
+      "files": [
+        "docs/STATE.json",
+        "docs/HANDOFF.md",
+        "docs/WORKLOG.md",
+        "docs/ROADMAP.md"
+      ]
+    }
+  ],
   "next_actions": [
-    "按 AGENTS 阅读文档并核对 Git、测试与 docs/PHASE3_DEMO.md 的真实证据",
-    "等待用户确认下一阶段范围，可评估更多有明确许可的来源或真实 AI/TTS",
-    "保留版本歧义、来源证据、下载安全和已有 Pipeline 恢复；不自动开发 UI"
+    "创建 Phase 4 功能提交并对该提交运行完整测试与项目校验",
+    "记录实际验证的提交哈希，完成交接快照提交",
+    "后续按用户范围以授权样本验收真实中文写作与语义复核；保留分层恢复和来源边界"
   ],
   "tests": [
     {
       "name": "full-suite",
       "command": ".venv/bin/python -m pytest -q",
       "status": "passed",
-      "scope": "commit",
-      "summary": "160 passed，10 subtests passed，5 个既有 PyMuPDF 弃用警告；离线运行",
-      "checked_at": "2026-09-13T23:28:15Z"
+      "scope": "working_tree",
+      "summary": "187 passed，10 subtests passed，5 个既有 PyMuPDF 弃用警告；含长书、三种模式、四阶段接管、分块恢复、质量门禁与修订",
+      "checked_at": "2026-09-14T04:12:39Z"
     },
     {
-      "name": "live-acquisition-demo",
-      "command": "bookcast acquire \"The Wealth of Nations\" --edition gutenberg:3300 --output-dir imports/phase3-demo --resolve gutenberg.pglaf.org=69.55.231.8 --download-timeout 600",
+      "name": "phase4-demo",
+      "command": ".venv/bin/bookcast generate examples/content-demo.txt --mode two_host --minutes 6 --output-dir output/phase4-final-demo",
       "status": "passed",
       "scope": "working_tree",
-      "summary": "官方目录返回 3300/38194 两个候选；选择 3300，RDF 确认为美国公有领域，2468951 字节 TXT 解析 67 段；重复运行产物及检查点字节/mtime 不变，详见 docs/PHASE3_DEMO.md",
-      "checked_at": "2026-09-13T23:24:01Z"
+      "summary": "3章/3片段，1285字符；覆盖100%、重复4.93%、Host B27.47%；16次完成调用；MP3测试音调15.25秒。语义需人工复核。相同CLI恢复全部字节和mtime不变，详见 docs/PHASE4_DEMO.md",
+      "checked_at": "2026-09-14T04:12:39Z"
     },
     {
       "name": "compile",
-      "command": ".venv/bin/python -m compileall -q src tests",
+      "command": ".venv/bin/python -m compileall -q src tests scripts",
       "status": "passed",
       "scope": "working_tree",
-      "summary": "全部代码和测试编译通过",
-      "checked_at": "2026-09-13T23:24:01Z"
+      "summary": "应用、测试与校验脚本编译通过",
+      "checked_at": "2026-09-14T04:12:39Z"
     },
     {
-      "name": "git-whitespace",
-      "command": "git show --format=oneline --check HEAD",
-      "status": "passed",
-      "scope": "commit",
-      "summary": "功能提交差异无空白错误；验证前工作区干净",
-      "checked_at": "2026-09-13T23:28:15Z"
-    },
-    {
-      "name": "project-integrity",
+      "name": "project-validation",
       "command": "python3 scripts/validate_project.py",
       "status": "passed",
-      "scope": "commit",
-      "summary": "必需文件、STATE 契约/语义、UTC、本地链接与 Git 校验通过",
-      "checked_at": "2026-09-13T23:28:15Z"
+      "scope": "working_tree",
+      "summary": "必需文件、STATE契约、UTC时间、链接与Git检查通过；文档人工对照已同步 Phase 4",
+      "checked_at": "2026-09-14T04:12:39Z"
+    },
+    {
+      "name": "diff-check",
+      "command": "git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "无空白错误",
+      "checked_at": "2026-09-14T04:12:39Z"
     }
   ],
   "known_failures": [],
@@ -223,7 +237,39 @@
     {
       "path": "docs/PHASE3_DEMO.md",
       "purpose": "真实国富论获取解析的命令、版权依据与哈希证据"
+    },
+    {
+      "path": "src/bookcast/content_models.py",
+      "purpose": "有界分析、综合、规划、脚本及复核契约"
+    },
+    {
+      "path": "src/bookcast/content.py",
+      "purpose": "分层内容编排、规划、逐次调用缓存和TTS前门禁"
+    },
+    {
+      "path": "src/bookcast/content_mock.py",
+      "purpose": "离线规则内容示例；不宣称语义核验"
+    },
+    {
+      "path": "src/bookcast/quality.py",
+      "purpose": "内容质量指标与来源形式检查"
+    },
+    {
+      "path": "tests/test_content.py",
+      "purpose": "长书、模式、质量失败、恢复和修订回归"
+    },
+    {
+      "path": "docs/CONTENT.md",
+      "purpose": "分层内容使用、契约、限制与恢复说明"
+    },
+    {
+      "path": "docs/PHASE4_DEMO.md",
+      "purpose": "真实CLI内容demo与音频检查证据"
+    },
+    {
+      "path": "examples/content-demo.txt",
+      "purpose": "自制三章中文测试短书"
     }
   ],
-  "updated_at": "2026-09-13T23:28:15Z"
+  "updated_at": "2026-09-14T04:12:39Z"
 }

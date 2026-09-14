@@ -30,7 +30,7 @@ uv run bookcast status <job> --json
 
 注册组合：`llm/mock`、`tts/mock`、`llm/openai-compatible`、`llm/local`。兼容 LLM 使用 `/chat/completions`；结构化生成使用 JSON mode、提示中的 JSON Schema 和本地 Pydantic 校验，不自动降级为未校验文本。local 使用相同协议，仅允许 loopback 主机；远程地址要求 HTTPS，拒绝重定向。BookCast 不安装本地模型，不内置真实 TTS。
 
-启用外部端点意味着允许将当前章节、分析、提示和 schema 发给该端点及已配置备用端点。只保存环境变量名，环境变量值不会进入配置输出；HTTP 请求中的认证头、服务错误正文和原始异常消息不写入 manifest。配置中不要在模型名、名称或 URL 路径夹带 Secret。生成内容仍是本地用户数据，不加入 Git。
+启用外部端点意味着允许将当前文本块、精选证据、综合主题、片段脚本、提示和 schema 发给该端点及已配置备用端点。只保存环境变量名，环境变量值不会进入配置输出；HTTP 请求中的认证头、服务错误正文和原始异常消息不写入 manifest。配置中不要在模型名、名称或 URL 路径夹带 Secret。生成内容仍是本地用户数据，不加入 Git。
 
 ## 错误与切换策略
 
@@ -52,13 +52,13 @@ uv run bookcast status <job> --json
 
 manifest v2 的 `ai_calls` 为逐次尝试日志。每个 attempt 在调用前先保存 `pending`，再保存 `running`；写入并校验输出后保存 `completed`，异常保存 `failed_retryable` 或 `failed_permanent`。同一次尝试的状态原地更新，切换 Provider 会追加一个新 attempt。每个条目包含：
 
-`id`、`task`（例如 `analysis:0007`）、`kind`、`status`、`provider`、`model`、`prompt_version`、`input_hash`、`output_hash`、`artifacts`、`timestamp`、`error`、`retryable`。
+`id`、`task`（例如 `analysis:0007:0002` 或 `consistency:0002`）、`kind`、`status`、`provider`、`model`、`prompt_version`、`input_hash`、`output_hash`、`artifacts`、`timestamp`、`error`、`retryable`。
 
 未成功的调用 `output_hash=null`。当前每次调用输出一个 JSON 或 WAV，output_hash 为文件 SHA-256。输入哈希覆盖版本化提示/结构 schema 或脚本哈希/音频契约版本。时间是 UTC ISO 8601。`provider_status` 报告各已调用 Provider 的名称、模型、可用性、last_error、retryable、rate_limited、quota_exhausted、authentication_error；`doctor` 报告当前配置的全部实例。
 
-章节分析、脚本、TTS 是最小任务。完成步骤的缓存身份不含 Provider；输入与产物哈希未变化就复用，调用归属保持原值。进程在 attempt 完成后、步骤完成前退出时，可从 attempt 产物恢复；遗留 pending/running 标为 interrupted 后重新处理该最小任务。远端已完成但本地尚无完成记录的窗口无法保证不重复请求或计费。
+Phase 4 的文本块分析、综合节点、片段脚本、逐段一致性复核和 TTS 是最小任务；规划是本地确定性计算。完成步骤的缓存身份不含 Provider；输入与产物哈希未变化就复用，调用归属保持原值。进程在 attempt 完成后、步骤完成前退出时，可从 attempt 产物恢复；遗留 pending/running 标为 interrupted 后重新处理该最小任务。远端已完成但本地尚无完成记录的窗口无法保证不重复请求或计费。
 
-v1 迁移保留原始 `manifest.v1.json`，使用原配置指纹验证旧产物，再标记步骤 `legacy=true`。不会伪造旧调用的 provider/model/time。仓库开发状态 [STATE.json](STATE.json) 仍为独立的 v1 契约。
+v1 迁移保留原始 `manifest.v1.json`，使用原配置指纹验证旧产物，再标记步骤 `legacy=true`。不会伪造旧调用的 provider/model/time。旧 pipeline_version=1 保留原流程；新内容任务使用 pipeline_version=2、content-v1 提示。模式/预算和修订规则见 [CONTENT.md](CONTENT.md)。仓库开发状态 [STATE.json](STATE.json) 仍为独立的 v1 契约。
 
 ## 增加 Provider
 
@@ -67,4 +67,4 @@ v1 迁移保留原始 `manifest.v1.json`，使用原配置指纹验证旧产物�
 3. 使用 `ProviderRegistry.register(kind, type, factory)` 注册工厂，在组合入口配置注册表；不要改 Pipeline，也不要让业务代码 import 厂商 SDK。CLI 默认注册项集中在 [provider_registry.py](../src/bookcast/provider_registry.py)。
 4. 加入离线契约和故障注入测试；更新文档与决策后再启用真实服务验证。
 
-未知注册类型、错误优先级、重复名称、错误 kind 和永久错误切换策略均在启动时拒绝。当前运行串行、单本书加文件锁；并发调度、成本预算、真实语音和内容质量评估不在 Phase 2 范围内。
+未知注册类型、错误优先级、重复名称、错误 kind 和永久错误切换策略均在启动时拒绝。当前运行串行、单本书加文件锁；并发调度、成本预算和真实语音尚未实现。Phase 4 的复核不新增 Provider，沿用相同错误分类，不因质量失败盲目换模型。

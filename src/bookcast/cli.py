@@ -42,6 +42,8 @@ def acquire(
     tts_provider: Annotated[str, typer.Option(help="生成阶段 TTS 配置名或 auto")] = "auto",
     config: Annotated[Path | None, typer.Option(help="生成阶段 Provider 配置")] = None,
     resume: Annotated[bool, typer.Option(help="继续未完成的音频生成任务；获取步骤自动复用检查点")] = False,
+    mode: Annotated[str | None, typer.Option(help="生成模式：summary / deep_read / two_host")] = None,
+    minutes: Annotated[int | None, typer.Option(min=1, max=120, help="生成脚本的目标分钟数")] = None,
 ) -> None:
     """书名 → 明确版本 → 合法来源 → 安全获取 → 本地解析，默认不调用 AI。"""
     from .acquisition import Acquirer, choose_edition
@@ -95,7 +97,7 @@ def acquire(
         if generate_audio:
             settings, ai_registry = load_config(config), default_registry()
             job = Pipeline(ai_registry.chain(settings, "llm", provider), ai_registry.chain(settings, "tts", tts_provider),
-                           pipeline_output_dir).generate(Path(result["file"]), resume=resume, metadata_seed=metadata)
+                           pipeline_output_dir).generate(Path(result["file"]), resume=resume, metadata_seed=metadata, mode=mode, minutes=minutes)
             result["pipeline_job"], result["podcast"] = str(job), str(job / "podcast.mp3")
         typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
     except (BookCastError, OSError, ValueError) as exc:
@@ -112,17 +114,25 @@ def generate(
     provider: Annotated[str, typer.Option(help="LLM 配置名称；auto 按优先级切换")] = "auto",
     tts_provider: Annotated[str, typer.Option(help="TTS 配置名称或 auto")] = "auto",
     config: Annotated[Path | None, typer.Option(help="Provider TOML 文件，默认 bookcast.toml")] = None,
+    mode: Annotated[str | None, typer.Option(help="summary / deep_read / two_host；新任务默认 two_host")] = None,
+    minutes: Annotated[int | None, typer.Option(min=1, max=120, help="脚本目标分钟数；新任务默认10")] = None,
+    revise_segment: Annotated[str | None, typer.Option(help="与 --resume 配合，重新生成指定片段及受影响下游")] = None,
 ) -> None:
-    """生成 Mock 摘要、双人脚本和可播放的测试音调 MP3，无需 API Key。"""
+    """分块分析、全书综合、节目规划、脚本复核与音频；默认 Mock 离线运行。"""
     try:
         settings, registry = load_config(config), default_registry()
         root = Pipeline(registry.chain(settings, "llm", provider), registry.chain(settings, "tts", tts_provider),
-                        output_dir).generate(source, resume=resume)
+                        output_dir).generate(source, resume=resume, mode=mode, minutes=minutes, revise_segment=revise_segment)
         manifest = load_manifest(root / "manifest.json")
-    except (BookCastError, OSError) as exc:
+    except (BookCastError, OSError, ValueError) as exc:
         typer.echo(f"错误：{exc}", err=True)
         raise typer.Exit(1) from exc
     typer.echo(f"任务完成：{root.name}\n音频：{root / 'podcast.mp3'}\n内置 Mock TTS 生成测试音调（非人声）。")
+    if manifest.pipeline_version == "2":
+        report = json.loads((root / "evaluation/quality.json").read_text(encoding="utf-8"))
+        typer.echo(f"质量报告：{root / 'evaluation/quality.json'}（{report['status']}）")
+        for warning in report['warnings']:
+            typer.echo(f"内容提示：{warning}")
     for warning in manifest.warnings:
         typer.echo(f"解析警告：{warning}")
 

@@ -17,7 +17,7 @@ from typer.testing import CliRunner
 from bookcast.adapters.compatible import CompatibleLLMProvider, classify_http
 from bookcast.cli import app
 from bookcast.errors import BookCastError
-from bookcast.models import Chapter, ChapterAnalysis
+from bookcast.models import Chapter, ChapterAnalysis, Manifest
 from bookcast.pipeline import Pipeline, load_manifest
 from bookcast.prompts import analysis_prompt
 from bookcast.provider_api import ErrorKind, ProviderError, FAILOVER_ERRORS
@@ -34,7 +34,15 @@ class RecordingLLM(MockLLMProvider):
 
     def generate_structured(self, prompt, response_model):
         data = json.loads(prompt)
-        task = (data["operation"], data["chapter"]["id"])
+        operation = data['operation']
+        if operation == 'synthesis':
+            task = (operation, data['themes'][0]['claim_ids'][0])
+        elif operation == 'dialogue':
+            task = ('script', data['segment']['id'])
+        elif operation == 'consistency':
+            task = (operation, data['script']['segment_id'])
+        else:
+            task = (operation, data['chapter']['id'])
         self.calls.append(task)
         if task == self.target and self.failure:
             raise self.failure
@@ -62,8 +70,9 @@ def test_chapter_seven_failover_and_idempotence(book, failure):
     job = pipeline.generate(source)
     manifest = load_manifest(job / "manifest.json")
     assert manifest.status == "completed" and manifest.schema_version == 2
-    assert len(a.calls) == (13 if failure else 16)
-    assert b.calls == ([(op, chapter) for chapter in ("0007", "0008") for op in ("analysis", "script")] if failure else [])
+    assert len(a.calls) == (13 if failure else 35)
+    assert [call for call in b.calls if call[0] == 'analysis'] == ([('analysis', '0007'), ('analysis', '0008')] if failure else [])
+    assert [call for call in b.calls if call[0] == 'script'] == ([('script', f'{n:04}') for n in range(1, 9)] if failure else [])
     for call in manifest.ai_calls:
         assert len(call.input_hash) == 64 and call.prompt_version and call.model
         assert datetime.fromisoformat(call.timestamp).utcoffset() == timedelta(0)
@@ -73,13 +82,13 @@ def test_chapter_seven_failover_and_idempotence(book, failure):
     if failure:
         report = manifest.provider_status["llm:A"]
         assert report["last_error"] == failure.kind and report["retryable"]
-        assert any(c.task == "analysis:0007" and c.status == "failed_retryable" for c in manifest.ai_calls)
+        assert any(c.task == "analysis:0007:0001" and c.status == "failed_retryable" for c in manifest.ai_calls)
     before = completed_files(job, 8)
     manifest_before = (job / "manifest.json").read_bytes()
     pipeline.generate(source, resume=True)
     assert completed_files(job, 8) == before
     assert (job / "manifest.json").read_bytes() == manifest_before
-    assert len(a.calls) == (13 if failure else 16)
+    assert len(a.calls) == (13 if failure else 35)
 
 
 @pytest.mark.parametrize("failure,kind", [
@@ -127,8 +136,8 @@ def test_exhausted_chain_resumes_smallest_task_with_new_configuration(book):
     with pytest.raises(BookCastError, match="--resume"):
         Pipeline(replacement, MockTTSProvider(), output).generate(source)
     Pipeline(replacement, MockTTSProvider(), output).generate(source, resume=True)
-    assert replacement.calls == [("script", "0007"), ("analysis", "0008"), ("script", "0008")]
-    assert before == completed_files(job)
+    assert replacement.calls == [('script', '0007'), ('script', '0008')] + [('consistency', f'{n:04}') for n in range(1, 9)]
+    assert all((Path(p).stat().st_mtime_ns, sha256_file(Path(p))) == v for p, v in before.items())
     assert (job / "analysis/0007.json").stat().st_mtime_ns == seventh_analysis
 
 
@@ -151,7 +160,7 @@ class Crash(MockLLMProvider):
 observe = _Runner.observe
 def crash_observe(self, attempt):
     observe(self, attempt)
-    if after and attempt.task == "analysis:0007" and attempt.status == "completed":
+    if after and attempt.task == "analysis:0007:0001" and attempt.status == "completed":
         os._exit(17)
 _Runner.observe = crash_observe
 Pipeline(Crash(), MockTTSProvider(), Path(sys.argv[2])).generate(Path(sys.argv[1]))
@@ -162,14 +171,13 @@ Pipeline(Crash(), MockTTSProvider(), Path(sys.argv[2])).generate(Path(sys.argv[1
     job = next(output.iterdir())
     before = completed_files(job)
     manifest = load_manifest(job / "manifest.json")
-    assert manifest.steps["analysis:0007"].status == "running"
+    assert manifest.steps["analysis:0007:0001"].status == "running"
     assert manifest.ai_calls[-1].status == ("completed" if crash_after_completed else "running")
     b = RecordingLLM("B")
     Pipeline(b, MockTTSProvider(), output).generate(source, resume=True)
-    assert completed_files(job) == before
-    expected = ([] if crash_after_completed else [("analysis", "0007")]) + [
-        ("script", "0007"), ("analysis", "0008"), ("script", "0008")]
-    assert b.calls == expected
+    assert all((Path(p).stat().st_mtime_ns, sha256_file(Path(p))) == v for p, v in before.items())
+    assert [c for c in b.calls if c[0] == 'analysis'] == ([] if crash_after_completed else [('analysis', '0007')]) + [('analysis', '0008')]
+    assert [c for c in b.calls if c[0] == 'script'] == [('script', f'{n:04}') for n in range(1, 9)]
     if not crash_after_completed:
         assert any(c.error == "interrupted" for c in load_manifest(job / "manifest.json").ai_calls)
 
@@ -188,7 +196,7 @@ def test_attempt_states_are_durable_before_invocation_and_completion(book):
         states.append(stored.status)
     with patch.object(_Runner, "observe", observe):
         Pipeline(RecordingLLM(), MockTTSProvider(), output).generate(source)
-    assert states == [state for _ in range(24) for state in ("pending", "running", "completed")]
+    assert states == [state for _ in range(43) for state in ("pending", "running", "completed")]
 
 
 def test_tts_failover_keeps_prior_audio(book):
@@ -209,6 +217,15 @@ def test_tts_failover_keeps_prior_audio(book):
 
 def test_phase1_manifest_migration_reuses_verified_legacy_artifacts(book):
     source, output = book
+    # Construct a historical v1 job, then exercise the retained original runner and migration.
+    digest = sha256_file(source)
+    bid = fingerprint({'source_sha256': digest, 'format': 'txt'})[:24]
+    legacy = output / bid
+    legacy.mkdir(parents=True)
+    write_json(legacy / 'manifest.json', Manifest(book_id=bid, source_sha256=digest,
+        source_name=source.name, source_format='txt', status='completed',
+        config={'llm': ProviderChain([MockLLMProvider()]).cache_key,
+                'tts': ProviderChain([MockTTSProvider()]).cache_key}).model_dump())
     job = Pipeline(MockLLMProvider(), MockTTSProvider(), output).generate(source)
     manifest = load_manifest(job / "manifest.json")
     manifest.schema_version = 1
@@ -359,7 +376,7 @@ def test_tertiary_takes_over_and_policy_can_disable_switching(book):
     b = RecordingLLM("B", ProviderError(ErrorKind.TIMEOUT), ("analysis", "0001"))
     c = RecordingLLM("C")
     Pipeline(ProviderChain([a, b, c]), MockTTSProvider(), output).generate(source)
-    assert len(a.calls) == len(b.calls) == 1 and len(c.calls) == 16
+    assert len(a.calls) == len(b.calls) == 1 and len(c.calls) == 35
     a.calls.clear()
     c.calls.clear()
     with pytest.raises(BookCastError):

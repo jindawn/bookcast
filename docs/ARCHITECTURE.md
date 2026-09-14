@@ -1,8 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 3）
+## 当前实际实现（Phase 4）
 
-当前支持书名候选解析、官方公开来源安全获取、用户 URL/本地文件导入，以及 EPUB/PDF/TXT → 可恢复 Mock 播客输出。公开来源首批为 Gutenberg CSV/RDF 与官方镜像 TXT；专门开放许可库和其他官方目录待扩展。内置 TTS 只有测试音调，真实语音、OCR、M4B 和 UI 未实现。LLM 兼容端点仅做过离线协议测试。
+Phase 4 新任务采用分块分析、章节与全书综合树、全局节目规划、分段写作和一致性复核，支持三种内容模式及质量门禁。当前支持书名候选解析、官方公开来源安全获取、用户 URL/本地文件导入，以及 EPUB/PDF/TXT → 可恢复 Mock 播客输出。公开来源首批为 Gutenberg CSV/RDF 与官方镜像 TXT；专门开放许可库和其他官方目录待扩展。内置 TTS 只有测试音调，真实语音、OCR、M4B 和 UI 未实现。LLM 兼容端点仅做过离线协议测试。
 
 ```text
 AGENTS.md / CLAUDE.md      Agent 统一入口
@@ -16,6 +16,8 @@ docs/
   DECISIONS.md             已确定决策与待选项
   PROVIDERS.md             Provider 配置、错误策略、审计和扩展指南
   SOURCES.md               书名、来源、安全下载和获取恢复说明
+  CONTENT.md              分层内容、质量规则、模式和修订
+  PHASE4_DEMO.md           内容 demo 的实际指标与音频证据
   PHASE3_DEMO.md           真实公开书籍 demo 的命令与证据
   HANDOFF.md               最新交接快照
   WORKLOG.md               追加式事实记录
@@ -39,17 +41,23 @@ src/bookcast/
   providers.py            Mock 实现（兼容旧接口导入）
   adapters/compatible.py  兼容远程/本地 LLM HTTP 适配器
   prompts.py              版本化领域提示词
-  pipeline.py             章节级幂等流水线与恢复
+  pipeline.py             原子检查点、旧任务兼容与新流程入口
+  content_models.py       有界分析、主题、规划、脚本和复核模型
+  content.py              分层内容编排、全局规划、独立调用缓存
+  content_mock.py         离线规则分析与对话示例
+  quality.py              指标、来源检查与 TTS 前门禁
   storage.py              原子写入、指纹、锁和 SHA-256
   audio.py                WAV 校验与 FFmpeg MP3 合并
 tests/
   test_validate_project.py 交接校验器回归测试
   test_phase1.py          Phase 1 解析、Provider、恢复和 CLI 测试
   test_providers.py       Phase 2 协议、故障注入、强制退出恢复及配置测试
+  test_content.py         长书、三种模式、质量门禁、分块恢复和修订
   test_sources.py         书籍身份、来源资格、获取恢复与安全容器测试
   test_source_http.py     下载限额、MIME、重定向、公网 IP 与 TLS 测试
 examples/
   example.txt             可再分发的自制示例书
+  content-demo.txt         三章自制协作主题内容样本
   providers.toml          无凭证的三层 Mock 优先级配置
 ```
 
@@ -64,7 +72,7 @@ examples/
 | 书目识别 | 书名 → BookIdentity / EditionCandidate → 明确选择 | 已实现官方 CSV 目录搜索，多个候选不自动选择；未知印刷版次不猜填 |
 | 来源与导入 | SourceOffer → SourceAsset | 已实现官方 RDF 书籍版权判定、镜像 TXT、用户 URL/文件、安全下载和摘要 |
 | 整书解析 | SourceAsset → NormalizedBook | 已实现 TXT/EPUB/PDF；章节顺序、文本、源位置、警告 |
-| 内容生成 | Chapter → ChapterAnalysis → PodcastScript | Mock 与可选兼容 LLM；Pydantic 和章节身份校验 |
+| 内容生成 | Chapter → 分块分析 → 分层综合 → 全局规划 → 分段对话 → 一致性复核 | 九类 finding、证据定位、预算与去重、三种模式和质量门禁；详见 CONTENT |
 | 语音合成 | 脚本 → WAV 片段 | 已实现 Mock 测试音调；真实 TTS 待后续 Provider |
 | 封装导出 | WAV 片段 → MP3 | 已实现 FFmpeg concat；M4B 待后续阶段 |
 | 任务编排 | 输入与配置 → manifest.json | 已实现步骤指纹、原子写入、重试、恢复和状态命令 |
@@ -77,7 +85,13 @@ Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry /
 
 获取任务保存独立 acquisition.json v1（pending/downloading/downloaded/parsing/parsed/failed），默认位于 imports。下载成功即保存凭据与哈希，解析失败可复用源文件；完成解析记录各 JSON 哈希。网络层和容器层都检查边界，不执行、浏览或解压运行下载内容。详细数值限制及网络例外选项见 [SOURCES.md](SOURCES.md)。
 
-运行 manifest 升至 v2，steps 保留原有步骤状态；ai_calls 独立持久化 pending/running/completed/failed_retryable/failed_permanent，以及真实 provider/model、提示版本、输入输出哈希、UTC 时间。调用成功前原子落盘产物，失败只切换配置允许的四类临时/额度故障。认证、输入、结构与业务错误立即停止。各章节的 analysis、script、tts 独立恢复，已完成步骤不会因切换 Provider 失效。旧 v1 manifest 原样备份后验证并迁移；无法补齐的历史调用不伪造。
+运行 manifest 升至 v2，steps 保留原有步骤状态；ai_calls 独立持久化 pending/running/completed/failed_retryable/failed_permanent，以及真实 provider/model、提示版本、输入输出哈希、UTC 时间。调用成功前原子落盘产物，失败只切换配置允许的四类临时/额度故障。认证、输入、结构与业务错误立即停止。新任务各块 analysis、综合节点、片段 script、consistency、tts 独立恢复，已完成步骤不会因切换 Provider 失效。旧 v1 manifest 原样备份后验证并迁移；无法补齐的历史调用不伪造。
+
+## 分层内容与兼容
+
+[CONTENT.md](CONTENT.md) 是当前内容契约与数值限制的使用指南。`ContentFlow` 复用 `_Runner.step/ai_operation`，所有随机生成结果由 ProviderChain 持久化调用记录。全局规划是确定性预算算法；每段只收到精选证据、前后主题及上一段有限结尾。质量报告先于 TTS 落盘，严重引用/矛盾/复述/角色问题停止，其他指标警告明确显示。
+
+新 manifest 保持 schema v2，以 `pipeline_version=2` 区分内容契约，记录模式、预算与片段修订号。旧 pipeline_version=1 自动沿用旧路径，无静默重生成；迁移 manifest v1 的备份逻辑保留。内容版本、Provider 配置、开发 STATE 与获取 acquisition 是不同概念，见 D-013。
 
 ## 数据与失败边界（设计约束）
 
@@ -102,4 +116,4 @@ Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry /
 
 ## 下一步架构工作
 
-Phase 3 范围止于书名、合法来源、安全获取和解析接入。后续范围由用户确认；候选方向包括新增有明确许可的 Source Adapter、真实 AI/TTS 验收及深度解析。不得把某本公开书籍的演示视为全目录、所有版次或所有格式已验收。
+Phase 4 范围止于分层内容、质量诊断和 Mock demo；没有增加 Provider 或 UI。真实中文写作与语义复核仍需授权样本及人工验收。句子边界分块、语义去重、根综合代表性、时间预算精度、真实语音等属于后续候选，不能从 Mock 测试推断已达到出版质量。
