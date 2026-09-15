@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-9",
-  "current_task": "Phase 9离线Provider增强完成；验证功能提交，真实内容验收等待有效DeepSeek凭证",
-  "task_status": "in_progress",
+  "current_task": "Phase 9离线增强已提交并验证；真实DeepSeek+Kokoro验收等待有效API Key",
+  "task_status": "blocked",
   "branch": "main",
-  "last_verified_commit": "54c05adcc61d0023acfaaabf0dbd2648df2944a6",
+  "last_verified_commit": "ff3c48ac960e8435889dcc303665626e4438f186",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -52,24 +52,14 @@
     "Phase 9接手核实HEAD与origin/main均4137d85，修正旧未push描述；关键基线86项通过",
     "复用兼容LLM实现强类型thinking/effort/token预算、中央任务策略、有效配置缓存与可选usage审计；无厂商SDK",
     "新增51项离线专项，完整313项测试和10子测试通过；真实LLM测试显式env开关默认跳过",
-    "实际DeepSeek官方models无效凭证探测返回401并正确分类；有效生成尚未执行，未保存服务错误正文"
+    "实际DeepSeek官方models无效凭证探测返回401并正确分类；有效生成尚未执行，未保存服务错误正文",
+    "创建并验证功能提交ff3c48a：313项测试、10子测试、1联网测试跳过；项目校验/compileall/提交差异通过。Phase 9真实验收仍缺凭证"
   ],
-  "in_progress": [
-    {
-      "task": "核验Phase 9功能提交并保存交接快照",
-      "owner": "Codex",
-      "files": [
-        "docs/STATE.json",
-        "docs/HANDOFF.md",
-        "docs/WORKLOG.md",
-        "docs/PHASE9_REAL_LLM.md"
-      ]
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
-    "验证本次功能提交并更新last_verified_commit，完成可接手快照",
-    "用户安全提供DEEPSEEK_API_KEY后执行隔离联网内容测试与6分钟DeepSeek+Kokoro样例；当前不算Phase 9完成",
-    "补记实际usage、脚本/听感/时长与无新增网络resume证据，基于实际质量决定reasoning策略；不push、不开始Phase 10"
+    "用户安全配置DEEPSEEK_API_KEY并提供本机读取方式后，执行显式联网内容测试；不在聊天或Git中传递密钥",
+    "完成6分钟自制中文DeepSeek+Kokoro样例，基于真实质量评估/调整候选reasoning策略",
+    "记录真实usage、文本与听感检查、时长/产物SHA、无额外网络resume及D-014配置行为；完成Phase 9验收再更新状态提交，不push、不开始Phase 10"
   ],
   "tests": [
     {
@@ -92,9 +82,9 @@
       "name": "phase9-full",
       "command": ".venv/bin/pytest -q",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "313 passed，10 subtests passed，1显式联网测试跳过，7个既有依赖警告（43.73秒）",
-      "checked_at": "2026-09-15T14:25:01Z"
+      "scope": "commit",
+      "summary": "功能提交ff3c48ac960e8435889dcc303665626e4438f186：313 passed，10 subtests passed，1联网测试跳过，7个既有警告（44.35秒）",
+      "checked_at": "2026-09-15T14:27:26Z"
     },
     {
       "name": "phase9-live-auth",
@@ -116,9 +106,9 @@
       "name": "phase9-static",
       "command": "python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; git diff --check",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "项目状态/文档链接/Git、编译和差异检查通过",
-      "checked_at": "2026-09-15T14:25:01Z"
+      "scope": "commit",
+      "summary": "功能提交ff3c48a上的project validator、compileall、git diff HEAD^ HEAD --check通过",
+      "checked_at": "2026-09-15T14:27:26Z"
     }
   ],
   "known_failures": [],
@@ -411,5 +401,5 @@
       "purpose": "Phase 9真实/离线证据、缺少凭证的验收阻塞及执行步骤"
     }
   ],
-  "updated_at": "2026-09-15T14:25:01Z"
+  "updated_at": "2026-09-15T14:27:26Z"
 }

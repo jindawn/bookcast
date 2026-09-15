@@ -1,6 +1,6 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-15T14:25:01Z。
+更新时间：2026-09-15T14:27:26Z。
 
 ## 当前目标
 
@@ -35,13 +35,14 @@ BOOKCAST_RUN_LIVE_LLM=1 .venv/bin/pytest tests/test_live_deepseek.py -q
 - 接手HEAD 4137d85的关键基线86 passed。
 - 工作区专项99 passed，1联网测试跳过；包括新51项参数/HTTP/usage/缓存/中断测试。
 - 工作区全量313 passed、10 subtests passed、1联网测试跳过；7个既有依赖弃用警告，43.73秒。
+- 功能提交ff3c48a上全量再次通过：313 passed、10 subtests passed、1联网测试跳过，44.35秒；project validator、compileall和提交差异检查通过。
 - project validator、compileall、git diff --check通过。仅既有后端和CLI受影响，未重新运行浏览器E2E。
 - 实际向官方 /models 使用固定无效测试凭证探测：HTTP401 → authentication_error。402/429/timeout/5xx等为官方文档+离线fixtures验证，不能声称实际触发。
 - **有效生成没有执行，实际token数未知，尚无DeepSeek+Kokoro MP3或人工内容/听感结论。**
 
 ## 未解决问题与下一步
 
-1. 验证功能提交并保存D-006交接快照；检查git实际状态，不相信旧“尚未push”语句。
+1. 功能提交已验证，STATE记为blocked且清空in_progress；只剩真实验收需凭证。接手核对Git，不相信易腐远端状态描述。
 2. 用户在本机安全配置有效DEEPSEEK_API_KEY后，执行有界联网测试；测试失败保留真实原因，不盲目换模型/修补schema掩盖问题。
 3. 执行6分钟自制文本CLI样例；核验引文字符偏移、来源覆盖、A/B追问与回应、幻觉、复述、时长和真实音频；候选reasoning策略须据实际质量决定。
 4. 补记Job/产物SHA/官方usage与调用数、断网resume不新增调用、配置变化结果；更新状态再完成Phase 9提交。
@@ -55,4 +56,4 @@ BOOKCAST_RUN_LIVE_LLM=1 .venv/bin/pytest tests/test_live_deepseek.py -q
 ## 最近 Git commit
 
 2026-09-15接手核验：HEAD与本地origin/main均4137d8550a7cf1c603248732e0be97710e217eb1（Phase 8最终交接），此前Phase 7/8已推送。旧快照中的“未push”描述已纠正，这只是接手时观察。
-最近既有功能验证提交54c05adcc61d0023acfaaabf0dbd2648df2944a6。本次功能提交尚待创建并验证；快照自身提交用git log -1获取，避免自引用。
+最近已验证功能提交：ff3c48ac960e8435889dcc303665626e4438f186 — feat: add task reasoning and usage audit for compatible LLMs（24个文件）。本阶段没有push；快照自身提交用git log -1获取，避免自引用。
