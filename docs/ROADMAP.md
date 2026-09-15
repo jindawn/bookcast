@@ -108,6 +108,16 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 
 不新增 CLI 参数、Provider、人声、UI 或持久格式，也不自动安装宿主 Agent 配置。测试不等同于所有 Coding Agent 的自然语言行为验收；技能规则与维护说明见 [SKILL.md](../skills/bookcast/SKILL.md)。
 
+## Phase 7：最小本地 Web App
+
+**状态：功能与全部工作区验证完成，待实际提交验证；236项测试、10个子测试和3项浏览器E2E通过。最新证据见 STATE/HANDOFF。**
+
+1. Next.js 静态客户端 → FastAPI Application API → 既有 Core；CLI/Skill 独立可用。
+2. 书名候选、文件上传、三模式/分钟预算、进度、Provider 状态、Web 历史、MP3 播放及恢复。
+3. 提交先落盘、幂等键、独立 worker 与内核锁；复用 Core 的检查点与永久错误保护。
+4. API 测试包含上传边界、来源资格、音频 Range、缓存和真实 SIGKILL；Playwright 验证实际生成/播放/恢复及移动布局。
+5. [WEB.md](WEB.md) 记录运行、存储、API 和 Tauri 评估；无账户、支付、云同步、开机自动执行或桌面包。
+
 ## 后续候选：真实语音与 M4B 输出
 
 **状态：规划中。**

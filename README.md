@@ -2,7 +2,7 @@
 
 BookCast 是一个以开源为目标的本地工具：从书名或用户提供的 EPUB、PDF、TXT 出发，确认正确书籍版本，获取合法来源，解析整本书，再用 AI 生成高质量中文音频、精读内容或双人播客，最终导出 MP3 / M4B。
 
-**当前阶段：Phase 6 可选 BookCast Skill。** Skill 将自然语言目标映射到现有 CLI，负责版本选择、模式/预算、状态查询、恢复和结果反馈。Core 保留持久化 Job/Step/Artifact/Attempt、分层内容流程和全部解析/获取/音频能力，CLI 无需 Skill 即可独立使用。支持 `summary`、`deep_read`、`two_host`；默认 Mock 无需密钥，内置 TTS 仍是测试音调。真实服务质量、真实人声、OCR、M4B 与 UI 尚未验收或实现。证据见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)、[内容指南](docs/CONTENT.md) 和 [任务指南](docs/JOBS.md)。
+**当前阶段：Phase 7 本地 Web App。** Next.js 通过 FastAPI Application API 调用现有 Core，提供书名候选、文件上传、三种模式、时长预算、进度、Provider 状态、历史、播放和失败恢复。CLI 与可选 Skill 继续独立可用，没有重写解析、下载、AI 或音频管线。默认 Mock 无需密钥，TTS 仍是测试音调；真实人声、OCR、M4B 和桌面安装包尚未实现。运行与限制见 [Web 指南](docs/WEB.md)，验证见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)。
 
 ## 开始接手
 
@@ -31,7 +31,7 @@ BookCast 是一个以开源为目标的本地工具：从书名或用户提供�
 ```sh
 python3.12 --version
 git --version
-uv sync --extra dev
+uv sync --extra dev --extra web
 uv run bookcast config providers
 uv run bookcast doctor
 uv run bookcast acquire "The Wealth of Nations" --list
@@ -43,7 +43,7 @@ uv run bookcast jobs --json
 uv run bookcast status JOB_ID --json
 uv run bookcast resume JOB_ID
 uv run bookcast retry JOB_ID
-uv run pytest -q
+.venv/bin/python -m pytest -q
 python3 scripts/validate_project.py
 git diff --check
 ```
@@ -54,9 +54,31 @@ git diff --check
 
 用 `--resume --revise-segment 0002` 可重写指定片段，保留分析和规划，并按输入变化重建下游。旧任务保持原流水线；不会因升级代码重做整本书。规则、缓存和限制见 [CONTENT.md](docs/CONTENT.md)，实际运行样本见 [PHASE4_DEMO.md](docs/PHASE4_DEMO.md)。
 
-`python3 scripts/validate_project.py` 仍用于 Phase 0 文档/状态入口校验。`uv run pytest -q` 运行解析、Provider、流水线、幂等、恢复和 CLI 测试；当前不需要访问网络。
+`python3 scripts/validate_project.py` 校验项目文档/状态。安装 dev 和 web extras 后，`.venv/bin/python -m pytest -q` 运行 Core、CLI、Skill 与 API 全部测试，不需要互联网。仅使用 CLI 时 `uv sync` 即可，不需要 Node 或 Web extras。
 
 Mock TTS 生成的是主持人/嘉宾可区分的测试音调，并在导出元数据中标注“非人声”；它用于验证音频管线，不是自然语言朗读。PDF 当前按页形成章节，扫描页会产生 OCR 警告；EPUB 按 spine 顺序提取 HTML 正文。联网获取只走明确的公开来源，不绕过 DRM 或访问控制。
+
+## 本地 Web 界面
+
+需要 Node.js 20.9+（本机验证为 22.22.3）。在仓库根目录运行：
+
+```sh
+uv sync --extra dev --extra web
+npm --prefix web ci
+npm --prefix web run build
+.venv/bin/bookcast serve
+```
+
+打开 [本地 BookCast](http://127.0.0.1:8765)。静态页面由 FastAPI 同源提供，构建后只需 Python 服务；数据默认在 `data/web`。关闭页面或重启 API 不会清空任务。电脑重启后重新运行同一命令，从书架恢复。界面历史只列该 Web 工作空间的提交，已有 CLI 任务继续用 CLI 管理。
+
+浏览器测试在构建后运行：
+
+```sh
+npm --prefix web exec -- playwright install chromium
+npm --prefix web run test:e2e
+```
+
+测试在临时目录启动 8877 端口服务，验证上传、生成、实际播放、历史和恢复，不占用用户数据。源码更新后先重新 build。接口、桌面壳评估和限制见 [WEB.md](docs/WEB.md)。
 
 ## 从书名或用户来源开始
 

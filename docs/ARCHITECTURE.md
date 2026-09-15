@@ -1,8 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 6）
+## 当前实际实现（Phase 7）
 
-Phase 6 增加可选的 BookCast Skill 文档，只调用原 CLI。Phase 5 的持久化任务、按 ID 恢复/重试、stale 恢复、缓存与日志保持原实现。内容新任务采用分块分析、章节与全书综合树、全局节目规划、分段写作和一致性复核，支持三种内容模式及质量门禁。当前支持书名候选解析、官方公开来源安全获取、用户 URL/本地文件导入，以及 EPUB/PDF/TXT → 可恢复 Mock 播客输出。公开来源首批为 Gutenberg CSV/RDF 与官方镜像 TXT；专门开放许可库和其他官方目录待扩展。内置 TTS 只有测试音调，真实语音、OCR、M4B 和 UI 未实现。LLM 兼容端点仅做过离线协议测试。
+Phase 7 增加 Next.js 静态客户端、FastAPI Application API、持久化提交与独立 worker。UI → Application API → Core；CLI 与 worker 共用 composition.py 注入 Provider，不复制业务管线。既有任务恢复、缓存、分层内容、质量门禁、合法来源及解析保持原实现。内置 TTS 仍是测试音调；真实语音、OCR、M4B 与桌面包未实现。Web 接口、进程与存储见 [WEB.md](WEB.md)。
 
 ```text
 AGENTS.md / CLAUDE.md      Agent 统一入口
@@ -18,6 +18,7 @@ docs/
   SOURCES.md               书名、来源、安全下载和获取恢复说明
   CONTENT.md              分层内容、质量规则、模式和修订
   JOBS.md                 任务模型、恢复、缓存与可观测性
+  WEB.md                  Web/API、worker、恢复与 Tauri 评估
   PHASE5_VERIFICATION.md  强制终止测试与实际 CLI 恢复证据
   PHASE4_DEMO.md           内容 demo 的实际指标与音频证据
   PHASE3_DEMO.md           真实公开书籍 demo 的命令与证据
@@ -30,7 +31,11 @@ scripts/
 skills/bookcast/
   SKILL.md                可移植 Agent 指令，只有 CLI 调用，无实现代码
 src/bookcast/
-  cli.py                  Typer acquire/generate/jobs/status/resume/retry/config/doctor
+  cli.py                  Typer acquire/generate/jobs/status/resume/retry/config/doctor/serve
+  composition.py          CLI 与 worker 共用配置快照恢复及 Provider 注入
+  web_api.py              本地 HTTP、流式上传、状态与音频接口
+  web_service.py          提交记录、幂等派发和 Core 状态投影
+  web_worker.py           独立持锁进程，只调用既有 Acquirer/Pipeline
   jobs.py                 只读任务发现、ID 解析、持锁/stale 与完整性投影
   models.py               Pydantic Job/Step/Artifact/Attempt、六态与书稿模型
   parsers.py              TXT/EPUB/PDF 本地解析
@@ -61,8 +66,13 @@ tests/
   test_job_recovery.py    真实 SIGKILL、并发排除、缓存失效与最小任务恢复
   test_job_cli.py         Job 命令、快照配置、迁移、损坏隔离与日志故障
   test_skill.py           Skill 示例调用、Core 委托、无 Skill 独立运行
+  test_web.py             API、真实 worker/SIGKILL、Core 委托与恢复
   test_sources.py         书籍身份、来源资格、获取恢复与安全容器测试
   test_source_http.py     下载限额、MIME、重定向、公网 IP 与 TLS 测试
+web/
+  app/                    Next.js 页面，仅调用同源 Application API
+  e2e/                    Playwright 与测试专用 Core 失败样本
+  package-lock.json       Web 依赖锁
 examples/
   example.txt             可再分发的自制示例书
   content-demo.txt         三章自制协作主题内容样本
@@ -91,7 +101,7 @@ examples/
 
 正常流程为“书名识别 → 版本确认 → 合法来源/用户导入 → 解析 → 内容生成 → TTS → 导出”；直接导入用户文件也是独立入口，不强迫先联网搜书。扫描型 PDF 的 OCR 需求必须显式检测与报告，具体实现排期见 ROADMAP。
 
-Provider 的依赖方向为 CLI → Registry → 具体适配器，Pipeline → 中立接口/ProviderChain。业务代码不导入适配器或厂商 SDK。LLM 契约为 generate、generate_structured、health_check、capabilities；TTS 契约含 synthesize、health_check、capabilities。配置和错误策略详见 [PROVIDERS.md](PROVIDERS.md)。
+Provider 依赖方向为 CLI / Application composition → Registry → 具体适配器，Pipeline → 中立接口/ProviderChain。前端仅调用 Application API，业务代码不导入厂商实现。配置与错误策略见 [PROVIDERS.md](PROVIDERS.md)。
 
 Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry / BookSourceProvider → EditionCandidate / SourceOffer → Acquirer → 既有 Parser。身份解析用本地缓存的官方目录，不调用 LLM。acquire 默认仅解析；--generate 将源文件与 BookMetadata seed 注入既有 Pipeline，metadata.acquisition 保留身份、来源依据和下载哈希。更换 Source Adapter 不修改业务 Pipeline。
 
@@ -134,4 +144,4 @@ Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry /
 
 ## 下一步架构工作
 
-Phase 6 范围止于可选 Skill、命令契约/依赖边界验证和文档；核心模块与持久格式不变。真实重启后的用户操作是重新运行 resume，未实现开机自动执行。真实中文写作与语义复核仍需授权样本及人工验收。句子边界分块、语义去重、根综合代表性、时间预算精度、真实语音等属于后续候选，不能从 Mock 测试推断已达到出版质量。
+Phase 7 范围止于最小本地 Web；Core manifest/acquisition 契约不变。新增提交记录只处理 Core Job 创建之前的输入和进程派发。没有开机自动执行、账户、支付、云同步或桌面发行。Tauri 的后续复用与取舍见 WEB/D-015；真实中文写作和语音仍需授权样本及人工验收。

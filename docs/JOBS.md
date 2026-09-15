@@ -1,5 +1,7 @@
 # 任务、恢复与缓存（Phase 5）
 
+Phase 7 的 [Web 客户端](WEB.md) 复用此处 Core 语义。Web 提交 ID 与 Core Job ID 不同；任务面板可展开 Core 目录，供 CLI status/resume/retry 使用。Web 历史仅显示当前工作空间提交。
+
 每本书的运行状态保存在产物目录的 `manifest.json`。终端关闭、进程崩溃或重启后，用任务 ID 或目录继续；不依赖聊天、原终端、PID 存活记录或当前工作目录的配置文件。
 
 ## 常用命令

@@ -1,5 +1,7 @@
 # Provider 使用与扩展
 
+Phase 7 的 [Web 界面](WEB.md) 只读显示 Registry 状态，配置仍在本地 TOML。CLI 与 worker 共用 composition.py；浏览器不接受密钥、端点配置，也不直接调用 Provider。恢复沿用任务快照，改配置须用 CLI 的显式 --config。
+
 Phase 2 提供统一契约、配置、注册表、调用状态和选择性切换。默认全部 Mock；远程服务和本地模型均需用户自行准备。未增加厂商 SDK 或 Python 依赖。
 
 ## 命令与配置

@@ -137,3 +137,13 @@
 - 在此提交重跑全量测试：223 passed、10 subtests passed；Skill格式、编译、项目校验、Core无差异和提交空白检查全部通过。
 - STATE标为phase-6 completed、清空in_progress并记录实际已验证SHA；HANDOFF与ROADMAP同步。最终交接快照按D-006单独提交。
 - 本阶段未推送远程；未自动安装Skill到宿主或开始后续阶段。
+
+## 2026-09-15T04:12:21Z — Phase 7 本地 Web 工作区验证
+
+- 接手892eb61，与origin/main同步；Phase 6基线223项测试及10个子测试通过。
+- 增加Next.js静态页面、FastAPI Application API、持久提交/幂等键、独立持锁worker与serve命令。CLI配置组合提取共用；原解析、来源、Provider、分层内容、缓存、质量、音频算法及持久格式未改。
+- 上传/候选选择、三模式/预算、任务/Provider状态、历史、音频播放与恢复可用。13项API测试覆盖真实Core调用、SIGKILL、quota/timeout/schema、缓存、容量、文件边界与Range。
+- 3项Playwright通过：真实上传到播放、刷新历史、quota恢复首章不重复、候选交互；桌面和移动截图已查看。初次定位器与Next无障碍alert重名，修复后重跑通过。
+- 最终236项pytest、10个子测试通过；7个依赖弃用警告。Next构建、TypeScript、编译、项目与差异校验通过。
+- 同步README/产品/架构/来源/内容/任务/Provider/路线图；新增WEB指南、D-015和Tauri评估。没有账户、支付、云同步或桌面包，真实音频仍为Mock音调。
+- 正在创建可交接功能提交；最后按D-006验证实际提交并单独保存完成快照。本阶段未push。

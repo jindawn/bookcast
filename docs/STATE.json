@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-6",
-  "current_task": "Phase 6 已完成：可选 BookCast Skill、Core边界测试与提交验证齐备",
-  "task_status": "completed",
+  "current_phase": "phase-7",
+  "current_task": "Phase 7 全部工作区验证通过；待功能提交与提交验证快照",
+  "task_status": "in_progress",
   "branch": "main",
   "last_verified_commit": "0175f44db8a913f5a477c88fec2b60c3629fb1e8",
   "completed_tasks": [
@@ -36,75 +36,123 @@
     "新增 skills/bookcast/SKILL.md：意图/模式/预算、合法来源、命令、状态、失败恢复和结果反馈；无实现脚本",
     "19项Skill测试通过：文档命令实际CLI解析、三模式Core委托、版本/版权/永久失败门禁及无Skill独立运行",
     "Phase 6 工作区全量223项测试和10个子测试通过；Skill格式、编译、项目校验与Core无差异检查通过",
-    "创建并验证 Phase 6 功能提交 0175f44；223项测试和10个子测试、Skill格式、编译、项目/提交校验通过，Core完全未变"
+    "创建并验证 Phase 6 功能提交 0175f44；223项测试和10个子测试、Skill格式、编译、项目/提交校验通过，Core完全未变",
+    "Phase 7 接手 main=892eb61 且与 origin/main 同步；223项基线和10个子测试通过",
+    "实现 FastAPI/Next.js 同源本地客户端、持久化提交与独立worker，解析/获取/生成/恢复继续委托Core",
+    "Web覆盖上传、候选确认、三种模式、预算、进度、Provider、历史、音频播放与恢复；完成Tauri评估",
+    "13项API测试覆盖Core委托、上传边界、幂等/容量、Range、失败恢复和真实SIGKILL；3项Playwright E2E通过且已查看桌面/移动截图",
+    "最终工作区236项测试和10个子测试通过；13项API、3项浏览器、构建、类型、编译与项目校验通过"
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "task": "最终全量回归、功能提交与实际提交验证",
+      "owner": "Codex",
+      "files": [
+        "docs/STATE.json",
+        "docs/HANDOFF.md",
+        "docs/WORKLOG.md",
+        "docs/ROADMAP.md"
+      ]
+    }
+  ],
   "next_actions": [
-    "接手先核对AGENTS、Git和STATE，阅读BookCast Skill及test_skill的调用边界",
-    "后续可按用户选择的宿主Agent做自然语言演练，或授权样本真实中文内容/TTS验收",
-    "CLI参数或结果格式改变时同步Skill及示例测试；核心缺陷仍在Core修复，不扩展Skill为第二套实现"
+    "完成最终全量测试、项目/编译/差异检查并提交Phase 7功能",
+    "验证实际功能提交后写入last_verified_commit并提交最终交接快照",
+    "后续仅按授权开展真实中文TTS/内容验收或桌面发行，不扩展用户系统"
   ],
   "tests": [
     {
-      "name": "phase6-skill",
-      "command": ".venv/bin/python -m pytest tests/test_skill.py -q --tb=short",
+      "name": "phase7-api",
+      "command": ".venv/bin/python -m pytest tests/test_web.py -q",
       "status": "passed",
       "scope": "working_tree",
-      "summary": "19 passed；含文档11条命令参数校验、三模式实际CLI、Core版本/版权门禁、永久失败保护及无Skill应用副本运行",
-      "checked_at": "2026-09-14T15:00:02Z"
+      "summary": "13 passed；含三模式、Core恢复、真实SIGKILL、来源资格、边界、幂等、容量和Range",
+      "checked_at": "2026-09-14T23:34:29Z"
     },
     {
-      "name": "core-unchanged",
-      "command": "git diff --exit-code c05af03 0175f44db8a913f5a477c88fec2b60c3629fb1e8 -- src/bookcast pyproject.toml uv.lock",
+      "name": "browser-e2e",
+      "command": "npm --prefix web run test:e2e",
       "status": "passed",
-      "scope": "commit",
-      "summary": "Core源码、包配置及依赖锁与Phase 5已验证功能提交完全一致",
-      "checked_at": "2026-09-14T15:02:26Z"
+      "scope": "working_tree",
+      "summary": "3 passed；真实上传/生成/播放/历史、quota恢复缓存不变、候选交互；桌面/移动截图已查看",
+      "checked_at": "2026-09-14T23:34:29Z"
+    },
+    {
+      "name": "web-build",
+      "command": "npm --prefix web run build && npm --prefix web run typecheck",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Next.js静态导出与TypeScript检查通过",
+      "checked_at": "2026-09-14T23:34:29Z"
     },
     {
       "name": "full-suite",
       "command": ".venv/bin/python -m pytest -q",
       "status": "passed",
-      "scope": "commit",
-      "summary": "223 passed，10 subtests passed，5个既有PyMuPDF/SWIG弃用警告；包含19项Skill边界测试及既有全部Core回归",
-      "checked_at": "2026-09-14T15:02:26Z"
-    },
-    {
-      "name": "skill-format",
-      "command": "python3 /Users/wumj/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/bookcast",
-      "status": "passed",
-      "scope": "commit",
-      "summary": "Skill is valid；本机skill-creator格式工具，不是BookCast运行依赖",
-      "checked_at": "2026-09-14T15:02:26Z"
-    },
-    {
-      "name": "compile",
-      "command": ".venv/bin/python -m compileall -q src tests scripts",
-      "status": "passed",
-      "scope": "commit",
-      "summary": "应用、测试与脚本编译通过",
-      "checked_at": "2026-09-14T15:02:26Z"
+      "scope": "working_tree",
+      "summary": "236 passed、10 subtests passed；7个依赖弃用警告，无失败",
+      "checked_at": "2026-09-15T04:12:21Z"
     },
     {
       "name": "project-validation",
       "command": "python3 scripts/validate_project.py",
       "status": "passed",
-      "scope": "commit",
-      "summary": "必需文件、STATE契约、链接和Git校验通过；文档已统一Phase 6范围及能力限制",
-      "checked_at": "2026-09-14T15:02:26Z"
+      "scope": "working_tree",
+      "summary": "文档链接、STATE契约和Git校验通过；最终状态修改后重跑",
+      "checked_at": "2026-09-14T23:34:29Z"
+    },
+    {
+      "name": "compile",
+      "command": ".venv/bin/python -m compileall -q src tests scripts web/e2e",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "编译通过",
+      "checked_at": "2026-09-14T23:34:29Z"
     },
     {
       "name": "diff-check",
-      "command": "git show --format= --check 0175f44db8a913f5a477c88fec2b60c3629fb1e8",
+      "command": "git diff --check",
       "status": "passed",
-      "scope": "commit",
-      "summary": "功能提交无空白错误",
-      "checked_at": "2026-09-14T15:02:26Z"
+      "scope": "working_tree",
+      "summary": "无空白错误",
+      "checked_at": "2026-09-14T23:34:29Z"
     }
   ],
   "known_failures": [],
   "blockers": [],
   "important_files": [
+    {
+      "path": "docs/WEB.md",
+      "purpose": "Web运行、API、存储恢复与Tauri评估"
+    },
+    {
+      "path": "src/bookcast/web_api.py",
+      "purpose": "HTTP边界、上传、状态和音频"
+    },
+    {
+      "path": "src/bookcast/web_service.py",
+      "purpose": "持久提交、幂等派发、Core状态投影"
+    },
+    {
+      "path": "src/bookcast/web_worker.py",
+      "purpose": "独立持锁进程委托Core"
+    },
+    {
+      "path": "src/bookcast/composition.py",
+      "purpose": "CLI/worker共用配置与Provider组合"
+    },
+    {
+      "path": "web/app/page.tsx",
+      "purpose": "Next.js本地客户端"
+    },
+    {
+      "path": "web/e2e/app.spec.ts",
+      "purpose": "真实浏览器生成/播放/恢复"
+    },
+    {
+      "path": "tests/test_web.py",
+      "purpose": "API/Core边界及真实SIGKILL"
+    },
     {
       "path": "skills/bookcast/SKILL.md",
       "purpose": "可选Agent意图到CLI调用指令；不包含核心逻辑"
@@ -314,5 +362,5 @@
       "purpose": "强制终止测试和CLI恢复的实际证据"
     }
   ],
-  "updated_at": "2026-09-14T15:02:26Z"
+  "updated_at": "2026-09-15T04:12:21Z"
 }

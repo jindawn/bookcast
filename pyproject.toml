@@ -20,7 +20,8 @@ dependencies = [
 bookcast = "bookcast.cli:app"
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10"]
+dev = ["pytest>=8,<10", "httpx>=0.28,<1"]
+web = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bookcast"]

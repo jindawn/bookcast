@@ -55,6 +55,11 @@ htmlcov/
 
 # Common build output; application stack is still undecided
 node_modules/
+.next/
+/web/out/
+/web/test-results/
+/web/playwright-report/
+*.tsbuildinfo
 dist/
 build/
 coverage/
