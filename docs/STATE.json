@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-8",
-  "current_task": "创建Phase 8功能提交并执行提交验证",
-  "task_status": "in_progress",
+  "current_task": "Phase 8免费开源中文TTS已完成并验证，等待后续授权",
+  "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "82c49da946607a66a5ab1f5cbd59da4d27d81db7",
+  "last_verified_commit": "54c05adcc61d0023acfaaabf0dbd2648df2944a6",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -47,72 +47,71 @@
     "Phase 8 接入Kokoro/sherpa-onnx CPU中文双音色、可选依赖、显式模型安装与完整性检查",
     "实现Core逐语音单元任务/缓存/审计及CLI/Web音频类型与实际时长反馈",
     "真实中文三章demo完成：24次TTS、276.429秒MP3；resume后83个文件字节/mtime不变且无新增调用",
-    "Phase 8工作区全量262项测试和10个子测试通过，25项TTS/14项Web专项及3项浏览器E2E通过"
+    "Phase 8工作区全量262项测试和10个子测试通过，25项TTS/14项Web专项及3项浏览器E2E通过",
+    "创建并验证Phase 8功能提交54c05ad：262项测试/10子测试、3项浏览器、构建/类型/编译/项目校验通过；提交上实际中文合成与83文件无变化恢复再次通过"
   ],
-  "in_progress": [
-    {
-      "task": "创建Phase 8功能提交并执行提交验证",
-      "owner": "Codex",
-      "files": [
-        "docs/STATE.json",
-        "docs/HANDOFF.md",
-        "docs/WORKLOG.md"
-      ]
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
-    "运行最终全量回归和项目校验，检查原有Mock与逐句人声的兼容性",
-    "更新HANDOFF与WORKLOG，创建功能提交并实际验证，再提交D-006完成快照",
-    "人工试听中文样例后再决定发音/停顿优化；真实LLM内容验收、付费TTS和M4B仍未实施"
+    "接手核对Git/STATE和TTS指南；本阶段仅本地提交，按用户授权决定是否push",
+    "人工试听真实中文双音色样例，按反馈改进发音/停顿；当前样例LLM仍为Mock",
+    "后续独立验收真实中文LLM内容与跨平台运行；付费TTS、M4B、桌面发行尚未实施"
   ],
   "tests": [
     {
       "name": "phase8-tts",
-      "command": ".venv/bin/pytest tests/test_tts.py tests/test_web.py -q",
+      "command": ".venv/bin/pytest -q",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "25项TTS和14项Web专项共39 passed；含两个真实SIGKILL窗口、损坏单句修复和历史Mock保护",
-      "checked_at": "2026-09-15T09:15:23Z"
+      "scope": "commit",
+      "summary": "功能提交上的全量回归包含25项TTS及14项Web；两个真实SIGKILL窗口、单句修复、历史Mock保护通过",
+      "checked_at": "2026-09-15T09:19:31Z"
     },
     {
       "name": "full-suite",
       "command": ".venv/bin/pytest -q",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "262 passed、10 subtests passed；7个既有依赖弃用警告，无失败",
-      "checked_at": "2026-09-15T09:15:23Z"
+      "scope": "commit",
+      "summary": "功能提交54c05ad上262 passed、10 subtests passed，53.03秒；7个既有依赖弃用警告",
+      "checked_at": "2026-09-15T09:19:31Z"
     },
     {
       "name": "browser-e2e",
       "command": "npm --prefix web run test:e2e",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "3 passed；首次沙箱禁止绑定8877，获得运行权限后通过",
-      "checked_at": "2026-09-15T09:15:23Z"
+      "scope": "commit",
+      "summary": "功能提交上3 passed；上传/生成/播放/历史、quota恢复和候选交互",
+      "checked_at": "2026-09-15T09:19:31Z"
     },
     {
       "name": "web-build",
       "command": "npm --prefix web run build && npm --prefix web run typecheck",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "静态构建与类型检查通过",
-      "checked_at": "2026-09-15T09:15:23Z"
+      "checked_at": "2026-09-15T09:19:31Z"
     },
     {
       "name": "real-chinese-demo",
-      "command": ".venv/bin/bookcast generate examples/content-demo.txt --config data/tts-local.toml --output-dir output/chinese-tts-demo --mode two_host --minutes 3",
+      "command": ".venv/bin/bookcast resume output/chinese-tts-demo/5bdad5ca96f5e42cd019ff30",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "Kokoro CPU实际生成276.429秒中文双音色MP3；FFprobe及resume缓存校验通过；脚本为Mock需复核",
-      "checked_at": "2026-09-15T09:15:23Z"
+      "scope": "commit",
+      "summary": "工作区已生成276.429秒双音色MP3；54c05ad上再实际合成2.22秒云希样音，原demo恢复83文件字节/mtime和调用数保持不变",
+      "checked_at": "2026-09-15T09:19:31Z"
     },
     {
       "name": "project-validation",
-      "command": "python3 scripts/validate_project.py && git diff --check",
+      "command": "python3 scripts/validate_project.py && git show --format= --check 54c05adcc61d0023acfaaabf0dbd2648df2944a6",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "文档链接、状态契约、Git忽略和差异检查通过",
-      "checked_at": "2026-09-15T09:15:23Z"
+      "scope": "commit",
+      "summary": "功能提交文档链接/状态契约和Git差异检查通过；完成快照另做校验",
+      "checked_at": "2026-09-15T09:19:31Z"
+    },
+    {
+      "name": "compile",
+      "command": ".venv/bin/python -m compileall -q src tests scripts",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "功能提交编译检查通过",
+      "checked_at": "2026-09-15T09:19:31Z"
     }
   ],
   "known_failures": [],
@@ -383,5 +382,5 @@
       "purpose": "强制终止测试和CLI恢复的实际证据"
     }
   ],
-  "updated_at": "2026-09-15T09:15:23Z"
+  "updated_at": "2026-09-15T09:19:31Z"
 }

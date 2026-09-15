@@ -164,3 +164,10 @@
 - 工作区全量262 passed、10 subtests passed；3项Playwright、Next构建、TypeScript、编译、项目校验与Git忽略规则通过。模型及产物不进入Git。
 - 真实三章中文示例完成24次Kokoro合成，51步骤/37调用；MP3为276.429秒、3,318,093字节。resume检查83文件字节/mtime不变，无新增调用；内容仍为Mock且needs_review，未声称主观听感/真实LLM验收。
 - 更新TTS指南、D-016、术语、Skill、README及架构/产品/Provider/任务等文档；准备创建功能提交，之后按D-006实际验证提交并保存最终快照。本阶段未push。
+
+## 2026-09-15T09:19:31Z — Phase 8 提交验证与完成交接
+
+- 创建功能提交54c05adcc61d0023acfaaabf0dbd2648df2944a6，共34个文件。
+- 在该提交上运行完整pytest：262 passed、10 subtests passed；3项Playwright、Next构建、TypeScript、compileall、项目校验和提交差异检查通过。
+- 该提交实际合成2.22秒云希中文样音；原276.429秒demo再次resume，83个文件字节/mtime与调用数不变。固定安装器通过官方重定向的1字节网络探测成功。
+- STATE设为phase-8 completed，last_verified_commit记录54c05ad完整SHA；清空in_progress，更新HANDOFF/ROADMAP并准备D-006最终快照。没有推送远端；没有启用付费服务。

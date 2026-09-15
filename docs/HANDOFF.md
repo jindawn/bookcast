@@ -1,10 +1,10 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-15T09:12:55Z。
+更新时间：2026-09-15T09:19:31Z。
 
 ## 当前目标
 
-Phase 8 免费开源中文 TTS 已实现并完成真实样例；当前准备功能提交与提交后的最终验证。沿用 UI → Application API → Core，中立 Provider 接口和 D-014 缓存策略。用户本阶段未要求 push。
+Phase 8 免费开源中文 TTS 已完成并验证功能提交54c05ad；本快照按D-006单独提交。沿用 UI → Application API → Core，中立 Provider 接口和 D-014 缓存策略。用户本阶段未要求 push。
 
 ## 刚刚完成与关键文件
 
@@ -36,14 +36,16 @@ Web 需 npm --prefix web run build；用新配置启动服务才影响新任务�
 
 - 接手基线：236 passed、10 subtests passed。
 - 最终工作区全量：262 passed、10 subtests passed；7个既有依赖弃用警告，无失败。
+- 功能提交54c05ad上再次验证：262 passed、10 subtests passed（53.03秒）；3项Playwright、Next构建、类型/编译/项目及提交差异检查通过。
 - 当前专项：25项TTS +14项Web，共39 passed；两处真实SIGKILL为调用running和完成Attempt/Step提交间隙，验证已完成句子的字节/mtime不变。
 - 真实Kokoro CLI完整生成、FFprobe、resume通过；83个产物/状态文件完全不变、无新增调用，缓存检查约0.73秒。
+- 功能提交上实际合成2.22秒云希中文样音，重新恢复原demo，83文件与调用数再次保持不变；安装器官方HTTPS重定向也已用1字节探测验证，不重复下载完整模型。
 - Playwright 3 passed；Next静态构建、TypeScript、compileall、项目校验、diff检查与Git忽略规则通过。
 - 既有7个依赖弃用警告仍在。新增永久错误测试最初误断言底层异常类型，已按Core公开BookCastError契约修正后通过；浏览器首轮沙箱禁止端口绑定，授权本机测试端口后通过。上游漏依赖问题已通过显式core锁定修复。
 
 ## 未解决问题与下一步
 
-当前功能没有已知失败；仍需创建并验证功能提交，再按D-006提交完成快照。不要把当前尚待提交验证标成已完成。
+当前阶段已完成，没有已知失败或阻塞。接手先核对实际Git和STATE，按用户授权决定是否推送或开展下一步。
 
 后续先试听样例，再按授权改进多音字、停顿和长节目自然度。真实中文LLM内容质量未验收，本次脚本来自Mock；质量报告needs_review并提示脚本长度偏离预算。分钟预算不等于实际时长。没有主观听感评分、跨平台实机、M4B、声音克隆、付费TTS或桌面包验收。
 
@@ -58,5 +60,5 @@ Web 需 npm --prefix web run build；用新配置启动服务才影响新任务�
 ## 最近 Git commit
 
 接手HEAD：a41861a — docs: finalize Phase 7 verification and handoff。
-此前已验证功能提交：82c49da946607a66a5ab1f5cbd59da4d27d81db7。
-origin/main为892eb61（Phase 6交接）。本阶段功能提交尚待创建；快照自身的提交用git log -1查看，避免自引用。
+最近已验证功能提交：54c05adcc61d0023acfaaabf0dbd2648df2944a6 — feat: add free local Chinese TTS with resumable speech units（34个文件）。
+origin/main为892eb61（Phase 6交接）；Phase 7/8本地提交未push。快照自身的提交用git log -1查看，避免自引用。
