@@ -2,7 +2,7 @@
 
 BookCast 是一个以开源为目标的本地工具：从书名或用户提供的 EPUB、PDF、TXT 出发，确认正确书籍版本，获取合法来源，解析整本书，再用 AI 生成高质量中文音频、精读内容或双人播客，最终导出 MP3 / M4B。
 
-**当前阶段：Phase 9 真实 LLM 验收进行中。** 复用兼容适配器增加 DeepSeek 示例、强类型 thinking/effort、任务策略、usage 和缓存审计；离线实现已完成，真实生成因缺少 API Key 尚未验收，见 [实际验收记录](docs/PHASE9_REAL_LLM.md)。Phase 8 Kokoro CPU 中文双音色 TTS 已可用，历史样例脚本来自 Mock。默认仍为 Mock；外部 LLM 需显式配置且可能收费，本地 TTS 不调用付费 API。既有 Web、CLI、Skill 与分层 Core 保持可用。OCR、M4B、桌面包未实现。运行见 [TTS 指南](docs/TTS.md)、[Web 指南](docs/WEB.md)，交接见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)。
+**当前阶段：Phase 9 真实 LLM 技术验收已完成，内容仍需审读与试听。** 复用兼容适配器增加 DeepSeek 示例、强类型 thinking/effort、任务策略、usage 和缓存审计；自制三章文本已通过真实 DeepSeek 分层生成与 Kokoro 中文双人合成，保留两处来源归属警告，见 [实际验收记录](docs/PHASE9_REAL_LLM.md)。Phase 8 Kokoro CPU 中文双音色 TTS 已可用，历史样例脚本来自 Mock。默认仍为 Mock；外部 LLM 需显式配置且可能收费，本地 TTS 不调用付费 API。既有 Web、CLI、Skill 与分层 Core 保持可用。OCR、M4B、桌面包未实现。运行见 [TTS 指南](docs/TTS.md)、[Web 指南](docs/WEB.md)，交接见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)。
 
 ## 开始接手
 
@@ -63,7 +63,7 @@ git diff --check
 
 `--mode summary|deep_read|two_host` 选择模式，`--minutes` 设置脚本时间预算；同一本书比较不同模式时使用不同输出目录。质量报告包含重复率、实际章节覆盖、长度、角色比例、空泛表达和事实检查。阻断项会在 TTS 前停止；警告可以继续，Mock 的语义核验始终需人工复核。报告通过不代表内容已达到真实播客质量。
 
-用 `--resume --revise-segment 0002` 可重写指定片段，保留分析和规划，并按输入变化重建下游。旧任务保持原流水线；不会因升级代码重做整本书。规则、缓存和限制见 [CONTENT.md](docs/CONTENT.md)，实际运行样本见 [PHASE4_DEMO.md](docs/PHASE4_DEMO.md)。
+用 `--resume --revise-segment 0002` 可重写指定片段，保留分析和规划，并按输入变化重建下游。旧 pipeline_version=1 任务保持原流水线；分层任务的提示/schema升级会使相关缓存失效，下游按实际依赖传播。规则、缓存和限制见 [CONTENT.md](docs/CONTENT.md)，实际运行样本见 [PHASE4_DEMO.md](docs/PHASE4_DEMO.md)。
 
 `python3 scripts/validate_project.py` 校验项目文档/状态。安装 dev 和 web extras 后，`.venv/bin/python -m pytest -q` 运行 Core、CLI、Skill 与 API 全部测试，不需要互联网。仅使用 CLI 时 `uv sync` 即可，不需要 Node 或 Web extras。
 

@@ -12,7 +12,7 @@ model = "deepseek-flash"
 base_url = "https://api.deepseek.com"
 api_key_env = "DEEPSEEK_API_KEY"
 timeout_seconds = 120
-# Opt-in candidate policy; see PHASE9_REAL_LLM.md for actual validation status.
+# Opt-in task policy; see PHASE9_REAL_LLM.md for sample results and limits.
 reasoning_policy = "bookcast-v1"
 [providers.generation]
 max_tokens = 16384

@@ -159,6 +159,14 @@ Next.js 只静态导出页面，FastAPI 在 127.0.0.1 同源提供。Application
 
 状态：accepted；日期：2026-09-15。细化 D-014 的 Provider 配置摘要，不重建 Core 或厂商 Adapter。
 
-Phase 9 复用兼容协议。生成选项采用严格 thinking/effort/max_tokens 契约和显式中央任务策略，通过可选 for_task 调用视图交给 ProviderChain；拒绝任意 JSON/header 透传。为避免修改某项策略导致全书重算，摘要取该任务最终有效参数；策略名字只作审计。无配置时保留历史哈希。代价是策略必须明确维护任务映射，新任务默认不施加推理参数。候选强度尚待真实质量验收，不能视作质量结论。
+Phase 9 复用兼容协议。生成选项采用严格 thinking/effort/max_tokens 契约和显式中央任务策略，通过可选 for_task 调用视图交给 ProviderChain；拒绝任意 JSON/header 透传。为避免修改某项策略导致全书重算，摘要取该任务最终有效参数；策略名字只作审计。无配置时保留历史哈希。代价是策略必须明确维护任务映射，新任务默认不施加推理参数。任务强度已通过三章真实技术验收；尚无多强度对照，不能视作最优质量结论。
 
 Attempt 增加可选有效参数、响应模型标识和 provider_reported_usage，沿用 manifest v3，旧历史字段为空。只保留受限枚举/整数/模型标识，不记录原始响应、思考文本、Secret、HTTP headers 或错误正文。服务端 usage 与本地费用估算分开，本阶段只做前者；未返回保持未知，包括传输失败和崩溃窗口。即使 schema 校验失败也保存已收到的用量，不用 Mock 回退掩盖真实验收失败。
+
+## D-018 — 由 Core 定位证据，模型选择引用
+
+状态：accepted；日期：2026-09-16。细化 D-013 的证据生成方式，保留持久 RichAnalysis、质量门禁与现有分层 Core。
+
+真实模型反复返回精确引文配错误 Python 字符偏移；直接在提示中提供偏移仍未稳定。分析响应改为严格 EvidenceAnalysis，只返回转述和受限 evidence_id。Core 从输入中有界、连续且完整覆盖的证据表查出 quote/start/end，再执行原精确校验。重复原文靠 ID 区分位置，不猜测、不模糊定位；非法引用仍永久停止，不切模型。
+
+分析提示单独升到 content-analysis-v3，输入 hash 包含 evidence_spans 与响应 schema；其它内容提示版本保持不变。代价是证据跨度受预切边界约束、增加提示长度，不能证明语义支持或改善所有长书。真实 schema_error 仍显式失败并保留 usage，禁止自动重试掩盖不稳定。

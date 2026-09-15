@@ -28,7 +28,7 @@ class MockLLMProvider:
 
     def generate_structured(self, prompt: str, response_model: type[T]) -> T:
         payload = json.loads(prompt)
-        if payload.get("prompt_version") == "content-v1":
+        if payload.get("prompt_version") in {"content-v1", "content-analysis-v2", "content-analysis-v3"}:
             from .content_mock import generate
             return response_model.model_validate(generate(payload).model_dump())
         chapter = Chapter.model_validate(payload["chapter"])

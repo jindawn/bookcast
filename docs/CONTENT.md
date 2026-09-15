@@ -81,6 +81,10 @@ Phase 5 新任务 `manifest.schema_version=3`、`pipeline_version=2`，附带 `c
 
 验证命令和实际 demo 见 [PHASE4_DEMO.md](PHASE4_DEMO.md)。
 
-## Phase 9 补充：任务推理策略
+## Phase 9 补充：证据选择与任务推理策略
 
-现有分层流程不变；任务参数统一由 generation.py 的显式 `bookcast-v1` 候选策略解析，抽取 disabled、章节综合 low、整书综合 high、写作/复核 low。Planner 继续本地确定性计算。策略尚待真实质量实验，不能宣称已经优化；用户可通过 Provider generation 覆盖。参数参与每次任务的缓存与审计，详见 [PROVIDERS.md](PROVIDERS.md) 和 [真实验收记录](PHASE9_REAL_LLM.md)。
+现有分层流程不变；任务参数统一由 generation.py 的显式 `bookcast-v1` 任务策略解析，抽取 disabled、章节综合 low、整书综合 high、写作/复核 low。Planner 继续本地确定性计算。策略已跑通三章真实样例；未做强度对照或长书质量评估，不能宣称已经优化；用户可通过 Provider generation 覆盖。参数参与每次任务的缓存与审计，详见 [PROVIDERS.md](PROVIDERS.md) 和 [真实验收记录](PHASE9_REAL_LLM.md)。
+
+真实低推理分析曾返回正确引文但错误字符偏移，要求逐字复制预计算偏移仍不稳定。`content-analysis-v3` 改为 Core 预切连续、最多160字符的 evidence_spans；LLM 只返回转述和 evidence_id，Core 精确查表转换成原有 RichAnalysis。它不模糊匹配或修补模型生成的坐标；未知 ID、章节身份错误仍是永久业务错误。连续 span 覆盖整个块，包括 Unicode 与重复文本；证据定位正确不等于转述语义已验证。
+
+此分析提示/响应 schema 变更会使旧分层分析缓存失效，下游按输入与产物变化传播；其它提示仍为 content-v1。旧 pipeline_version=1 流程保持不变。正式样例无自动重试或 Mock 回退，但独立真实测试出现过一次 schema_error，人工检查后显式重试成功；失败历史仍保留。

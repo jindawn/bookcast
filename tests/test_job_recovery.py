@@ -194,11 +194,12 @@ def test_prompt_version_invalidates_and_is_recorded(tmp_path,monkeypatch):
     source=tmp_path/'b.txt';source.write_text('Chapter 1\nA point.')
     job=Pipeline(Recording(),MockTTSProvider(),tmp_path/'out').generate(source)
     monkeypatch.setattr(content,'CONTENT_VERSION','content-test-v2')
+    monkeypatch.setattr(content,'ANALYSIS_VERSION','content-test-v2')
     class Updated(Recording):
         def generate_structured(self,prompt,response_model):
             # Offline fixture understands the same operations under a new prompt version.
             data=json.loads(prompt);self.calls.append(data)
-            data['prompt_version']='content-v1'
+            data['prompt_version']='content-analysis-v3' if data['operation']=='analysis' else 'content-v1'
             return MockLLMProvider.generate_structured(self,json.dumps(data),response_model)
     updated=Updated();Pipeline(updated,MockTTSProvider(),tmp_path/'out').resume_job(job)
     assert len(updated.calls)==5

@@ -62,7 +62,7 @@ manifest v3 的 `ai_calls` 为逐次尝试日志。每个 attempt 在调用前�
 
 Phase 4 的文本块分析、综合节点、片段脚本、逐段一致性复核和 TTS 是最小任务；规划是本地确定性计算。完成步骤同时检查输入、提示、产物哈希和 Provider 配置摘要。同名实例配置变化会使该实例的旧调用失效；选择另一实例接管保留有效完成调用及其原始归属。具体规则见 D-014 和 [JOBS.md](JOBS.md)。进程在 attempt 完成后、步骤完成前退出时，可从 attempt 产物恢复；遗留 pending/running 标为 interrupted 后重新处理该最小任务。远端已完成但本地尚无完成记录的窗口无法保证不重复请求或计费。
 
-v1/v2 迁移分别保留原始 `manifest.v1.json` / `manifest.v2.json`；v1 使用原配置指纹验证旧产物，再标记步骤 `legacy=true`。不会伪造旧调用的 provider/model/time。旧 pipeline_version=1 保留原流程；新内容任务使用 pipeline_version=2、content-v1 提示。模式/预算和修订规则见 [CONTENT.md](CONTENT.md)。仓库开发状态 [STATE.json](STATE.json) 仍为独立的 v1 契约。
+v1/v2 迁移分别保留原始 `manifest.v1.json` / `manifest.v2.json`；v1 使用原配置指纹验证旧产物，再标记步骤 `legacy=true`。不会伪造旧调用的 provider/model/time。旧 pipeline_version=1 保留原流程；新内容任务使用 pipeline_version=2；分析使用 content-analysis-v3，其余提示为 content-v1。模式/预算和修订规则见 [CONTENT.md](CONTENT.md)。仓库开发状态 [STATE.json](STATE.json) 仍为独立的 v1 契约。
 
 ## 恢复配置
 
@@ -91,7 +91,7 @@ generation 只接受以下字段，拒绝额外字段、类型转换和矛盾参
 - reasoning_effort：low / high / max；显式设置时启用 thinking，不能与 disabled 同用。
 - max_tokens：严格整数1–65536，包含服务端推理/生成预算；示例16384，不是费用保证。截断为永久错误，需评估预算后显式 retry。
 
-`reasoning_policy="bookcast-v1"` 显式选择中央候选策略：抽取 disabled；章节综合 low；整书综合 high；对话和一致性 low。Planner 继续本地确定性计算；未识别任务不附加策略参数。尚未完成真实质量对比，不能称为最优策略。
+`reasoning_policy="bookcast-v1"` 显式选择中央任务策略：抽取 disabled；章节综合 low；整书综合 high；对话和一致性 low。Planner 继续本地确定性计算；未识别任务不附加策略参数。已通过自制三章真实样例；low 写作能产生追问和反例，low 复核报告了来源归属问题。尚未进行多强度对照，不能称为最优策略。
 
 显式 generation 字段优先于策略；thinking=disabled 清除策略中的 effort，reasoning_effort=low 为所有任务启用 low。仅设置 max_tokens 保留各任务差异。完全使用 Provider 级配置时省略 reasoning_policy。两者均省略不增加请求参数、不改变历史适配器 cache key。
 

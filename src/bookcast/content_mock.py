@@ -1,6 +1,6 @@
 """Offline contract demonstration. Rule-based paraphrases are not model understanding."""
 import re
-from .content_models import CATEGORIES, ConsistencyReview, ClaimReview, Finding, RichAnalysis, SegmentScript, Synthesis, Theme, ContentTurn
+from .content_models import CATEGORIES, ConsistencyReview, ClaimReview, Finding, RichAnalysis, EvidenceAnalysis, EvidenceFinding, SegmentScript, Synthesis, Theme, ContentTurn
 
 
 def generate(payload):
@@ -40,6 +40,11 @@ def generate(payload):
             if any(x in finding.quote for x in ('但是', '然而', '并不', '不代表')):
                 fields['counter_arguments'].append(finding)
         fields['key_passages'] = findings[:1]
+        if payload['prompt_version'] == 'content-analysis-v3':
+            selections = {cat: [EvidenceFinding(text=f.text, evidence_id=next(
+                span['evidence_id'] for span in payload['evidence_spans'] if span['start'] <= f.start < span['end']))
+                for f in items] for cat, items in fields.items()}
+            return EvidenceAnalysis(chapter_id=chapter['id'], chunk_id=payload['chunk_id'], is_mock=True, **selections)
         return RichAnalysis(chapter_id=chapter['id'], chunk_id=payload['chunk_id'], is_mock=True, **fields)
     if operation == 'synthesis':
         unique = {}

@@ -193,3 +193,14 @@
 - 用户授权读取Downloads中的bctest.txt；普通及提权执行均返回PermissionError/Operation not permitted，没有读取或输出密钥内容，未发起新API调用。
 - 已请用户在自己的终端复制到data/deepseek-key.txt；git check-ignore确认目标被忽略。不是自动审批拒绝，不绕过系统访问限制。
 - 接手62b849f，代码未改；Provider专项99 passed、5个既有警告（14.49秒）。更新STATE/HANDOFF/验收记录的真实阻塞，Phase 9仍未完成，不push。
+
+## 2026-09-15T23:39:53Z — Phase 9真实内容与本地音频验收
+
+- 用户复制凭证到忽略目录后可安全加载为环境变量；实际DeepSeek/Kokoro健康检查通过。期间自动审批服务曾因额度拒绝一次网络请求，恢复会话后获批执行；未绕过权限或输出Key。
+- 真实模型四次字符偏移业务失败保留在测试01。预提供偏移仍不稳定，改为content-analysis-v3证据ID选择，由Core精确查表还原既有RichAnalysis；非法ID仍永久失败，不新增厂商Adapter或改变质量门禁。
+- 测试02首个v3分析曾schema_error，人工显式诊断重试成功；已完成任务联网pytest复验1 passed，禁止网络的resume无新增调用。未保存原始响应，未推断具体坏字段。
+- 正式Job 7229d03765db4d1c860c7bd18d62b178的13次DeepSeek调用首次成功。Kokoro首版251.343秒，0.8语速重合成后320.283秒/3844557字节；调速禁网且LLM记录完全不变，最终MP3 SHA见验收记录。
+- 正式任务完成后禁止HTTP/TTS恢复，81文件SHA/mtime及59条调用不变。临时副本全局disabled仍复用分析、首个章节综合失效；请求前停止，原任务不变。
+- 三章覆盖、1182字符、B占44.33%；文本审读确认追问/假设反例，保留2项source归属警告、needs_review。没有真人试听，不声称内容优秀。
+- 三任务共48次LLM尝试（43成功/5失败），input56285/output79397；正式样例input16422/output24445。未报告的reasoning计数保留null，无费用估算。207文件秘密字面值扫描无匹配。
+- 专项142 passed；完整318 passed/10子测试/1联网默认跳过；project validator、compileall、diff检查通过。更新README/架构/Provider/内容/决策/路线图/交接，不push、不开始Phase 10。

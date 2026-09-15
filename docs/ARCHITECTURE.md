@@ -1,8 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 9 进行中）
+## 当前实际实现（Phase 9）
 
-Phase 9 复用 CompatibleLLMProvider，增加 generation.py 严格契约与集中任务策略、可选调用视图、服务端 usage 和有效配置哈希审计。ProviderChain 绑定任务后调用中立接口，Pipeline 只使用任务级配置校验；不新增厂商 SDK 或改写 Core。真实 LLM + Kokoro 验收等待有效凭证，见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。旧未配置推理选项的请求与缓存保持兼容。
+Phase 9 复用 CompatibleLLMProvider，增加 generation.py 严格契约与集中任务策略、可选调用视图、服务端 usage 和有效配置哈希审计。ProviderChain 绑定任务后调用中立接口，Pipeline 只使用任务级配置校验；不新增厂商 SDK 或改写 Core。真实 LLM + Kokoro 技术链路已验收；内容保留来源归属警告，尚未进行人工试听，见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。旧未配置推理选项的请求与缓存保持兼容。
 
 Phase 8 增加可选 Kokoro CPU 中文 TTS：显式安装模型，Registry 注入适配器，Core 通过中立语音单元接口保存逐句 Step/Attempt 和音频。默认仍为 Mock，业务代码不 import sherpa-onnx。UI → Application API → Core；CLI 与 worker 共用 composition.py 注入 Provider，原有解析、内容、质量与恢复流程保持可用。OCR、M4B 与桌面包未实现。语音细节见 [TTS.md](TTS.md)，Web 接口、进程与存储见 [WEB.md](WEB.md)。
 

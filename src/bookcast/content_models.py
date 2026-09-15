@@ -38,6 +38,27 @@ CATEGORIES = ('core_ideas', 'arguments', 'evidence', 'examples', 'people', 'conc
               'counter_arguments', 'connections', 'key_passages')
 
 
+class EvidenceFinding(Model):
+    text: ShortText
+    evidence_id: str = Field(pattern=r'^e[0-9]{4}$')
+
+
+class EvidenceAnalysis(Model):
+    """Wire contract: the model selects evidence, the Core owns coordinates."""
+    chapter_id: str
+    chunk_id: str
+    core_ideas: list[EvidenceFinding] = Field(min_length=1, max_length=6)
+    arguments: list[EvidenceFinding] = Field(max_length=6)
+    evidence: list[EvidenceFinding] = Field(max_length=6)
+    examples: list[EvidenceFinding] = Field(max_length=6)
+    people: list[EvidenceFinding] = Field(max_length=6)
+    concepts: list[EvidenceFinding] = Field(max_length=6)
+    counter_arguments: list[EvidenceFinding] = Field(max_length=6)
+    connections: list[EvidenceFinding] = Field(max_length=6)
+    key_passages: list[EvidenceFinding] = Field(max_length=6)
+    is_mock: bool = False
+
+
 class Theme(Model):
     title: ShortText
     summary: ShortText

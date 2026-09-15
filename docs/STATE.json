@@ -2,8 +2,8 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-9",
-  "current_task": "用户已提供凭证文件；读取被系统拒绝，等待复制到项目data目录后继续真实验收",
-  "task_status": "blocked",
+  "current_task": "Phase 9真实DeepSeek+Kokoro技术验收完成，整理可交接提交；内容仍需审读/试听",
+  "task_status": "completed",
   "branch": "main",
   "last_verified_commit": "ff3c48ac960e8435889dcc303665626e4438f186",
   "completed_tasks": [
@@ -53,84 +53,94 @@
     "复用兼容LLM实现强类型thinking/effort/token预算、中央任务策略、有效配置缓存与可选usage审计；无厂商SDK",
     "新增51项离线专项，完整313项测试和10子测试通过；真实LLM测试显式env开关默认跳过",
     "实际DeepSeek官方models无效凭证探测返回401并正确分类；有效生成尚未执行，未保存服务错误正文",
-    "创建并验证功能提交ff3c48a：313项测试、10子测试、1联网测试跳过；项目校验/compileall/提交差异通过。Phase 9真实验收仍缺凭证"
+    "创建并验证功能提交ff3c48a：313项测试、10子测试、1联网测试跳过；项目校验/compileall/提交差异通过。Phase 9真实验收仍缺凭证",
+    "用户复制凭证后安全注入环境；真实DeepSeek/Kokoro doctor可用，未输出或提交Key",
+    "真实分析暴露字符偏移错误；以EvidenceAnalysis选择证据ID、Core精确查表修复，保留严格校验和失败历史，分析提示content-analysis-v3",
+    "自制三章正式demo的13次DeepSeek调用首次成功，无Mock回退；分层分析/综合/脚本/一致性检查全部落盘",
+    "Kokoro 0.8语速正式MP3完成：320.283秒、3844557字节；23个语音单元，调速前后LLM记录未变",
+    "正式任务禁HTTP/TTS恢复通过：81文件SHA/mtime和59条历史调用完全不变；临时副本改thinking后保留分析、仅首个章节综合请求失效",
+    "工作区专项142 passed；全量318 passed/10子测试/1联网跳过；已恢复真实测试任务显式复验1 passed，无新增调用",
+    "真实用量记录：正式13调用input16422/output24445，48次总尝试input56285/output79397；null保留未知，未估算账单",
+    "逐段文本审读：三章覆盖、真实问答与假设反例；保留2项来源归属警告，未声称真人试听或优秀内容质量"
   ],
   "in_progress": [],
   "next_actions": [
-    "用户将已授权凭证文件复制到data/deepseek-key.txt后安全加载为DEEPSEEK_API_KEY，继续显式联网验收；不要打印内容或提交该文件",
-    "完成6分钟自制中文DeepSeek+Kokoro样例，基于真实质量评估/调整候选reasoning策略",
-    "记录真实usage、文本与听感检查、时长/产物SHA、无额外网络resume及D-014配置行为；完成Phase 9验收再更新状态提交，不push、不开始Phase 10"
+    "保持Phase 9范围；需要发布样例时先审读两处来源归属问题并人工试听5分20秒音频，使用既有片段修订机制处理",
+    "只有用户确认后再定义Phase 10；建议优先长文本/更多合法样本、来源归属与发音停顿质量，不扩写既有Core",
+    "交接时以git status/log核对实际提交；本轮不push，数据/密钥/音频继续留在忽略目录"
   ],
   "tests": [
     {
-      "name": "phase9-baseline",
-      "command": ".venv/bin/pytest tests/test_providers.py tests/test_job_recovery.py tests/test_content.py -q",
-      "status": "passed",
-      "scope": "commit",
-      "summary": "接手HEAD 4137d8550a7cf1c603248732e0be97710e217eb1：86 passed，5个既有警告",
-      "checked_at": "2026-09-15T09:42:13Z"
-    },
-    {
       "name": "phase9-special",
-      "command": ".venv/bin/pytest tests/test_generation.py tests/test_providers.py tests/test_live_deepseek.py -q",
+      "command": ".venv/bin/pytest tests/test_generation.py tests/test_providers.py tests/test_content.py tests/test_job_recovery.py -q",
       "status": "passed",
       "scope": "working_tree",
-      "summary": "99 passed，1联网测试跳过；包含51项新专项，5个既有警告",
-      "checked_at": "2026-09-15T14:25:01Z"
+      "summary": "142 passed，5个既有警告，28.93秒",
+      "checked_at": "2026-09-15T23:39:53Z"
     },
     {
       "name": "phase9-full",
       "command": ".venv/bin/pytest -q",
       "status": "passed",
-      "scope": "commit",
-      "summary": "功能提交ff3c48ac960e8435889dcc303665626e4438f186：313 passed，10 subtests passed，1联网测试跳过，7个既有警告（44.35秒）",
-      "checked_at": "2026-09-15T14:27:26Z"
+      "scope": "working_tree",
+      "summary": "318 passed、10 subtests passed、1联网测试默认跳过，7个既有警告，49.58秒",
+      "checked_at": "2026-09-15T23:39:53Z"
     },
     {
-      "name": "phase9-live-auth",
-      "command": "CompatibleLLMProvider.health_check: https://api.deepseek.com/models with fixed invalid probe credential",
+      "name": "phase9-live-recovered",
+      "command": "BOOKCAST_RUN_LIVE_LLM=1 BOOKCAST_LIVE_OUTPUT=<existing-test-root> .venv/bin/pytest tests/test_live_deepseek.py -q",
       "status": "passed",
       "scope": "working_tree",
-      "summary": "实际HTTP 401 → authentication_error；未调用收费生成，未持久化原始服务正文",
-      "checked_at": "2026-09-15T14:25:01Z"
+      "summary": "1 passed，0.56秒；真实测试02经一次schema失败和人工显式重试后完成；复验缓存不再次付费生成",
+      "checked_at": "2026-09-15T23:39:53Z"
     },
     {
-      "name": "phase9-live-generation",
-      "command": "BOOKCAST_RUN_LIVE_LLM=1 .venv/bin/pytest tests/test_live_deepseek.py -q",
-      "status": "blocked",
+      "name": "phase9-real-demo",
+      "command": "bookcast generate examples/content-demo.txt --config examples/deepseek-kokoro.toml --provider deepseek --mode two_host --minutes 6 --output-dir output/phase9-deepseek",
+      "status": "passed",
       "scope": "working_tree",
-      "summary": "当前进程缺少DEEPSEEK_API_KEY，未执行真实structured generation、usage及DeepSeek+Kokoro验收",
-      "checked_at": "2026-09-15T14:25:01Z"
+      "summary": "正式13次LLM首次成功，Kokoro MP3；语速从1.0改为0.8仅重做23单元TTS，最终320.283秒/3844557字节",
+      "checked_at": "2026-09-15T23:39:53Z"
+    },
+    {
+      "name": "phase9-real-cache",
+      "command": "completed resume with HTTP/TTS forbidden; reasoning override on isolated temporary copy",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "81文件SHA/mtime不变，调用59→59；改为全局disabled后已有分析命中、首个章节综合失效，在HTTP前停止，原任务未变",
+      "checked_at": "2026-09-15T23:39:53Z"
+    },
+    {
+      "name": "phase9-audio",
+      "command": "ffprobe and ffmpeg full MP3 decode with volumedetect",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "MP3 24kHz单声道，完整解码成功且非静音；SHA dc00547eb4a5a0e57fd02924a0a12463cef3d594a63cdc64a697240be83c0b93；没有真人试听",
+      "checked_at": "2026-09-15T23:39:53Z"
+    },
+    {
+      "name": "phase9-security",
+      "command": "in-memory key literal scan over tracked files and Phase 9 text artifacts",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "207文件扫描未发现Key字面值；只输出计数，不输出凭证",
+      "checked_at": "2026-09-15T23:39:53Z"
     },
     {
       "name": "phase9-static",
       "command": "python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; git diff --check",
       "status": "passed",
-      "scope": "commit",
-      "summary": "功能提交ff3c48a上的project validator、compileall、git diff HEAD^ HEAD --check通过",
-      "checked_at": "2026-09-15T14:27:26Z"
-    },
-    {
-      "name": "phase9-credential-access",
-      "command": "read user-authorized credential file (normal and escalated execution)",
-      "status": "blocked",
       "scope": "working_tree",
-      "summary": "两次均PermissionError/Operation not permitted；密钥内容未读取，未执行新API调用，等待用户复制到data目录",
-      "checked_at": "2026-09-15T14:41:34Z"
-    },
-    {
-      "name": "phase9-resume-baseline",
-      "command": ".venv/bin/pytest tests/test_generation.py tests/test_providers.py -q",
-      "status": "passed",
-      "scope": "working_tree",
-      "summary": "99 passed，5个既有依赖警告（14.49秒）；本轮仅更新权限阻塞记录，代码未改",
-      "checked_at": "2026-09-15T14:41:34Z"
+      "summary": "全部通过；交接文档完成后再次运行",
+      "checked_at": "2026-09-15T23:39:53Z"
     }
   ],
-  "known_failures": [],
-  "blockers": [
-    "用户指定的Downloads凭证文件在普通和提权执行中均返回PermissionError（Operation not permitted）；尚未读到密钥。等待用户复制到Git忽略的data/deepseek-key.txt。"
+  "known_failures": [
+    "正式demo质量needs_review：两处合理推论被归为source，未完成真人试听；不能以技术成功等同内容优秀",
+    "独立真实测试在证据ID契约下曾出现1次schema_error，人工显式重试成功；原始响应未保存，不能断言具体坏字段或100%稳定",
+    "真实402/限流/timeout/5xx未实际制造，仅官方协议及离线故障注入验证；小样本未比较推理强度或验收长书"
   ],
+  "blockers": [],
   "important_files": [
     {
       "path": "docs/TTS.md",
@@ -414,8 +424,8 @@
     },
     {
       "path": "docs/PHASE9_REAL_LLM.md",
-      "purpose": "Phase 9真实/离线证据、缺少凭证的验收阻塞及执行步骤"
+      "purpose": "真实DeepSeek/Kokoro样例、官方usage、失败、缓存恢复、文本审读与验收限制"
     }
   ],
-  "updated_at": "2026-09-15T14:41:34Z"
+  "updated_at": "2026-09-15T23:39:53Z"
 }

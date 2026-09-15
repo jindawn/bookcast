@@ -142,7 +142,7 @@ def test_chunk_interruption_resumes_next_chunk(tmp_path):
 def test_invalid_structured_data_is_permanent(tmp_path,bad):
     def mutation(data,value):
         if bad=='offset' and data['operation']=='analysis':
-            value.core_ideas[0].end+=1
+            value.core_ideas[0].evidence_id='e9999'
         if bad=='schema' and data['operation']=='analysis':
             return {'no':'contract'}
         if bad=='synthesis_ref' and data['operation']=='synthesis':
@@ -296,3 +296,42 @@ def test_prompt_and_script_bounds_are_enforced():
     with pytest.raises(ValidationError):
         SegmentScript(segment_id='0001',title='t',turns=[{'speaker':'主持人','intent':'explain',
             'attribution':'discussion','claim_ids':[],'text':'x'*2400} for _ in range(6)])
+
+
+@pytest.mark.parametrize('text', ['😀汉字\n混合Unicode。'*600, '。'*8001, 'x'*8001])
+def test_evidence_spans_are_bounded_exact_and_cover_every_character(text):
+    from bookcast.content import prompt
+    chapter=Chapter(id='0001',title='测试',text=text,source_locator='test')
+    for payload in chunks(chapter):
+        spans=payload['evidence_spans']
+        assert ''.join(s['quote'] for s in spans)==payload['chapter']['text']
+        assert all(1<=len(s['quote'])<=160 and text[s['start']:s['end']]==s['quote'] for s in spans)
+        assert len(prompt('analysis',**payload))<=MAX_PROMPT_CHARS
+
+
+def test_real_offset_counting_failure_remains_permanent():
+    from bookcast.content import validate_analysis
+    from bookcast.content_models import Finding
+    payload=next(chunks(Chapter(id='0001',title='测试',text='第一章 分工的收益\n分工能减少任务切换，却不代表每一种工作都应拆成更小的步骤。',source_locator='test')))
+    fields={cat:[] for cat in CATEGORIES}
+    fields['core_ideas']=[Finding(text='分工有边界',quote='分工能减少任务切换，却不代表每一种工作都应拆成更小的步骤。',start=12,end=45)]
+    result=RichAnalysis(chapter_id='0001',chunk_id='0001',**fields)
+    with pytest.raises(ProviderError) as exc: validate_analysis(result,payload)
+    assert exc.value.kind==ErrorKind.BUSINESS
+    assert result.core_ideas[0].start==12  # never silently realign model output
+
+
+def test_evidence_id_resolves_duplicate_text_without_guessing_position():
+    from bookcast.content import resolve_analysis, validate_analysis
+    from bookcast.content_models import EvidenceAnalysis, EvidenceFinding
+    payload=next(chunks(Chapter(id='0001',title='重复',text='相同的句子。'*80,source_locator='test')))
+    target=payload['evidence_spans'][1]
+    fields={cat:[] for cat in CATEGORIES}
+    fields['core_ideas']=[EvidenceFinding(text='重复出现的句子',evidence_id=target['evidence_id'])]
+    selection=EvidenceAnalysis(chapter_id='0001',chunk_id='0001',**fields)
+    resolved=resolve_analysis(selection,payload)
+    validate_analysis(resolved,payload)
+    assert resolved.core_ideas[0].start==target['start']>0
+    assert resolved.core_ideas[0].quote==target['quote']
+    selection.core_ideas[0].evidence_id='e9999'
+    with pytest.raises(ProviderError): resolve_analysis(selection,payload)

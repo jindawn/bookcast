@@ -49,9 +49,9 @@ Phase 1 接受用户自己的 EPUB、PDF、TXT，按 Parser → NormalizedBook �
 
 ## 后续候选：深度解析与真实服务验收
 
-**状态：规划中，未开始，阶段编号与范围待用户确认。**
+**状态：真实服务的小样本技术验收已分别纳入 Phase 8/9；下列深度解析项仍为候选。**
 
-用授权小样本验收真实兼容 LLM；独立评估真实 TTS 与成本边界。解析方向可补充 EPUB 目录层级、PDF 复杂排版、扫描页 OCR 策略及跨平台 FFmpeg 样本。协议兼容性测试不等同于中文内容质量验收。
+继续扩大合法样本和真实服务的质量评估。解析方向可补充 EPUB 目录层级、PDF 复杂排版、扫描页 OCR 策略及跨平台 FFmpeg 样本。协议兼容性测试不等同于中文内容质量验收。
 
 ## Phase 3：书名识别与合法 Source Resolver
 
@@ -130,12 +130,12 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 
 ## Phase 9：真实 LLM Provider 验收
 
-**状态：进行中；离线实现已完成，真实生成/质量验收等待 DEEPSEEK_API_KEY。不能以 Phase 8 Mock 脚本人声替代。**
+**状态：技术验收完成；真实 DeepSeek + Kokoro 样例、无网络恢复及配置缓存已验证。内容仍为 needs_review，人工试听未完成，不宣称质量优秀。**
 
 1. 核验官方 DeepSeek Flash 协议，复用兼容适配器及现有中立 Provider/Core。
 2. 严格 thinking/effort/token预算、中央任务策略、服务端 usage、有效配置缓存和审计。
 3. 离线错误与接管/恢复测试；收费测试仅在显式环境变量启用时执行。
-4. 自制中文文本→真实分层内容→Kokoro→约5–10分钟MP3；人工验收与 resume 核对待执行，见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。
+4. 自制中文文本→真实分层内容→Kokoro→约5–10分钟MP3；已完成文本审读和 resume 核对；两处来源归属警告及未试听限制，见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。
 5. 本阶段不主动 push，不开始 Phase 10。
 
 ## 后续候选：语音质量与 M4B 输出
