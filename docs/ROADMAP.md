@@ -110,7 +110,7 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 
 ## Phase 7：最小本地 Web App
 
-**状态：功能与全部工作区验证完成，待实际提交验证；236项测试、10个子测试和3项浏览器E2E通过。最新证据见 STATE/HANDOFF。**
+**状态：已完成并验证（功能提交82c49da）；236项测试、10个子测试和3项浏览器E2E在提交上通过。最新证据见 STATE/HANDOFF。**
 
 1. Next.js 静态客户端 → FastAPI Application API → 既有 Core；CLI/Skill 独立可用。
 2. 书名候选、文件上传、三模式/分钟预算、进度、Provider 状态、Web 历史、MP3 播放及恢复。

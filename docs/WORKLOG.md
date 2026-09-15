@@ -147,3 +147,10 @@
 - 最终236项pytest、10个子测试通过；7个依赖弃用警告。Next构建、TypeScript、编译、项目与差异校验通过。
 - 同步README/产品/架构/来源/内容/任务/Provider/路线图；新增WEB指南、D-015和Tauri评估。没有账户、支付、云同步或桌面包，真实音频仍为Mock音调。
 - 正在创建可交接功能提交；最后按D-006验证实际提交并单独保存完成快照。本阶段未push。
+
+## 2026-09-15T04:14:17Z — Phase 7 提交验证与演示
+
+- 创建功能提交82c49da946607a66a5ab1f5cbd59da4d27d81db7，33个文件。
+- 该提交上的236项测试和10个子测试通过；3项Playwright、Next静态构建、TypeScript、编译、项目校验及提交差异检查全部通过。
+- 启动本地8765预览，使用纯Mock示例配置。通过Application API导入自制content-demo并完成3章、27步骤、16调用；184077字节MP3保存在忽略的data/web，Web ID为4590ab11918d4751b00da9841dcbdc3f。
+- STATE标记phase-7 completed，清空in_progress，记录实际验证SHA；HANDOFF/ROADMAP同步。按D-006另存最终快照，未执行push或开始后续阶段。

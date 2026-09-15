@@ -1,10 +1,10 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-15T04:12:21Z。
+更新时间：2026-09-15T04:14:17Z。
 
 ## 当前目标
 
-Phase 7 最小本地 Web App 已实现，全部工作区验证通过；正在进行功能提交和实际提交验证。UI → Application API → Core，不能把业务逻辑移入页面。
+Phase 7 最小本地 Web App 已完成，功能提交及其全量/浏览器验证通过。UI → Application API → Core，不能把业务逻辑移入页面。本快照按 D-006 单独提交，不开始后续阶段。
 
 ## 刚刚完成与关键文件
 
@@ -20,18 +20,20 @@ Phase 7 最小本地 Web App 已实现，全部工作区验证通过；正在进
 
 Web 默认 data/web，历史仅含本工作空间提交。Core 目录在 jobs/{web_id}/output/{book_id}，可从面板展开并交给 CLI。关闭页面/API 不清空记录；worker 可继续，电脑重启后手动恢复。修改 Provider 参数需用 CLI 显式 --config，UI 重试沿用快照。
 
+本次已启动8765端口预览（纯Mock examples/providers.toml）；进程是否仍在运行以本机核对为准。通过本地API导入自制content-demo并生成：Web ID 4590ab11918d4751b00da9841dcbdc3f，Core ID bb28c7579f31432fba843ffe17dda0f9，3章/27步骤/16次调用，MP3为184077字节。文件在忽略的 data/web/jobs/4590ab11918d4751b00da9841dcbdc3f/output/5bdad5ca96f5e42cd019ff30，不随Git分发。
+
 ## 已运行测试
 
 - Phase 6 基线：223 passed、10 subtests passed。
 - Phase 7 API：13 passed；真实 SIGKILL 后保留完成章节字节/mtime/调用次数。
 - Playwright：3 passed，真实上传/生成/播放/刷新历史、quota恢复、候选交互及移动布局；候选交互为 HTTP fixture，来源资格在 pytest 中经 Core 验证。
 - Next 静态 build、TypeScript、compileall、项目校验及 diff 检查通过。
-- 最终全量回归：236 passed、10 subtests passed。
+- 已验证功能提交82c49da上的最终全量回归：236 passed、10 subtests passed；3项浏览器E2E和build/typecheck/compile/项目校验也在该提交上重跑通过。
 - 已知警告：既有5个PyMuPDF/SWIG，加Starlette TestClient/httpx与anyio的2个依赖弃用警告。浏览器首轮定位器与Next无障碍alert重名，已修复并重跑通过。
 
 ## 未解决问题与下一步
 
-完成当前功能提交及其验证，然后按 D-006 单独提交最终交接快照。功能完成后只按新授权开展后续阶段。
+当前阶段没有未完成任务或阻塞。下一位先核对本快照与实际Git，按新授权决定是否推送、做真实中文TTS/内容验收或扩展桌面发行。
 
 真实人声、OCR、M4B、桌面包未实现；默认音频是 Mock 测试音调。Provider 真实中文内容质量未验收。Tauri 仅评估，没有 Rust 或平台包。Web 轮询复用 Core 完整性哈希，大书库 I/O/分页优化、旧 CLI 任务导入、自动调度未做。无账户/支付/云同步。来源网络若需显式 --resolve，先用 CLI 获取再上传，不降低 Core 网络保护。
 
@@ -42,5 +44,5 @@ Web 默认 data/web，历史仅含本工作空间提交。Core 目录在 jobs/{w
 ## 最近 Git commit
 
 接手 HEAD：892eb61 — docs: finalize Phase 6 skill verification and handoff，已核对与 origin/main 同步。
-最近已验证 Phase 6 功能提交：0175f44db8a913f5a477c88fec2b60c3629fb1e8。
-Phase 7 功能尚待提交，不预写未知哈希。本阶段未执行 push。
+最近已验证 Phase 7 功能提交：82c49da946607a66a5ab1f5cbd59da4d27d81db7 — feat: add local Web client over BookCast Core。
+功能提交包含33个文件；最终交接快照通过 git log -1 查看，避免自引用。本阶段未执行 push，origin/main仍指向Phase 6交接提交892eb61。
