@@ -8,7 +8,7 @@ import socket
 import json
 from uuid import uuid4
 
-from .audio import merge_audio, validate_wav
+from .audio import merge_audio
 from .errors import BookCastError
 from .content_models import ContentOptions
 from .models import (AIAttempt, Artifact, BookMetadata, Chapter, ChapterAnalysis, Manifest,
@@ -435,7 +435,7 @@ class _Runner:
         for chapter_id in metadata.chapter_ids:
             chapter_name = f"chapters/{chapter_id}.json"
             chapter = Chapter.model_validate_json(self.path(chapter_name).read_text(encoding="utf-8"))
-            analysis_name, script_name, audio_name = (f"analysis/{chapter_id}.json", f"scripts/{chapter_id}.json", f"audio/{chapter_id}.wav")
+            analysis_name, script_name = f"analysis/{chapter_id}.json", f"scripts/{chapter_id}.json"
 
             prompt = analysis_prompt(chapter)
             analysis_inputs = {"prompt": prompt, "schema": ChapterAnalysis.model_json_schema()}
@@ -474,21 +474,9 @@ class _Runner:
             podcast = PodcastScript.model_validate_json(self.path(script_name).read_text(encoding="utf-8"))
 
             tts_inputs = {"script": sha256_file(self.path(script_name)), "prompt_version": TTS_VERSION}
-
-            def tts(provider) -> list[str]:
-                if not provider.capabilities().speech:
-                    raise ProviderError(ErrorKind.INPUT)
-                with atomic_target(self.path(audio_name)) as temporary:
-                    provider.synthesize(podcast, temporary)
-                    try:
-                        validate_wav(temporary)
-                    except BookCastError:
-                        raise ProviderError(ErrorKind.SCHEMA) from None
-                return [audio_name]
-
-            self.step(f"tts:{chapter_id}", tts_inputs,
-                      lambda: self.ai_operation(f"tts:{chapter_id}", "tts", TTS_VERSION, tts_inputs, tts),
-                      legacy_inputs={"script": sha256_file(self.path(script_name)), "tts": legacy_config.get("tts")})
+            from .speech import render_speech
+            render_speech(self, podcast, tts_inputs, TTS_VERSION,
+                          legacy_inputs={"script": sha256_file(self.path(script_name)), "tts": legacy_config.get("tts")})
 
         def merge() -> list[str]:
             with atomic_target(self.path("podcast.mp3")) as temporary:
@@ -499,15 +487,16 @@ class _Runner:
         self.step("merge", {"ordered_audio": list(audio_hashes.items()), "codec": "libmp3lame:96k"}, merge)
 
         def output() -> list[str]:
+            from .speech import audio_summary
             write_json(self.path("audio/export.json"), {
                 "book_id": manifest.book_id, "file": "podcast.mp3", "format": "mp3",
                 "sha256": sha256_file(self.path("podcast.mp3")), "chapters": metadata.chapter_ids,
                 "providers": manifest.config, "coverage": metadata.coverage, "warnings": metadata.warnings,
-                "note": "默认 Mock Provider 输出测试音调，不是真实人声播客。",
+                **audio_summary(self, metadata.chapter_ids),
             })
             return ["audio/export.json"]
 
-        self.step("output", {"mp3": sha256_file(self.path("podcast.mp3")), "metadata": sha256_file(self.path("metadata.json"))}, output)
+        self.step("output", {"mp3": sha256_file(self.path("podcast.mp3")), "metadata": sha256_file(self.path("metadata.json")), "audio_export": "v2"}, output)
         if manifest.status != "completed":
             manifest.status, manifest.error, manifest.error_kind = "completed", None, None
             self.save()

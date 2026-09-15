@@ -103,11 +103,15 @@ class WebService:
         if core and core['metadata_seed']:
             warnings.extend(core['metadata_seed'].get('warnings', []))
         quality = None
+        audio_info = {}
         if path:
             quality_path = artifact_path(path.parent, 'evaluation/quality.json')
             if quality_path.is_file():
                 quality = json.loads(quality_path.read_text())
                 warnings.extend(quality.get('warnings', []))
+            export_path = artifact_path(path.parent, 'audio/export.json')
+            if state == 'SUCCEEDED' and integrity == 'ok' and export_path.is_file():
+                audio_info = json.loads(export_path.read_text(encoding='utf-8'))
         return {'id': identifier, 'title': core['progress']['book'] if core else record.title,
                 'mode': record.request.mode, 'minutes': record.request.minutes, 'state': state,
                 'active': active, 'created_at': record.created_at, 'updated_at': core['updated_at'] if core else record.updated_at,
@@ -115,6 +119,8 @@ class WebService:
                 'directory': str(path.parent) if path else str(id_path(self.root, 'jobs', identifier)),
                 'error': None if state == 'SUCCEEDED' else (core['error'] if core else None) or record.error,
                 'warnings': list(dict.fromkeys(warnings)),
+                'audio_kind': audio_info.get('audio_kind', 'unknown'),
+                'audio_seconds': audio_info.get('duration_seconds'),
                 'audio_url': f'/api/jobs/{identifier}/audio' if state == 'SUCCEEDED' and integrity == 'ok' and audio and audio.is_file() else None,
                 'can_resume': not active and state == 'FAILED_RETRYABLE',
                 'can_retry': not active and state == 'FAILED_PERMANENT'}

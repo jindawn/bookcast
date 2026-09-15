@@ -1,7 +1,8 @@
 """Hierarchical orchestration; providers enter only through the shared runner journal."""
 import json
 
-from .audio import merge_audio, validate_wav
+from .audio import merge_audio
+from .speech import audio_summary, render_speech, speech_units, wants_units
 from .content_models import (CATEGORIES, ConsistencyReview, ContentOptions, EpisodePlan, RichAnalysis, Segment,
                              SegmentScript, Synthesis, Theme)
 from .errors import BookCastError
@@ -202,7 +203,8 @@ class ContentFlow:
                            'chapters': [(cid, [t.model_dump() for t in ts]) for cid, ts in chapter_themes]}, 'plans/episode.json',
                    lambda: planner(chapter_themes, root, claims, self.options))
         plan = self.read('plans/episode.json', EpisodePlan)
-        r.register([f'{stage}:{s.id}' for s in plan.segments for stage in ('script','consistency','tts')], final=True)
+        has_unit_tts = any(p.capabilities().speech_units and not p.capabilities().mock for p in r.tts.providers)
+        r.register([f'{stage}:{s.id}' for s in plan.segments for stage in ('script','consistency','tts')], final=not has_unit_tts)
         scripts = []
         for segment in plan.segments:
             evidence = {cid: claims[cid] for cid in segment.claim_ids}
@@ -236,24 +238,18 @@ class ContentFlow:
         report = json.loads(r.path('evaluation/quality.json').read_text(encoding='utf-8'))
         if report['blocking_issues']:
             raise BookCastError('内容质量检查未通过；请检查 evaluation/quality.json，未调用 TTS。')
+        speeches, unit_tasks = [], []
         for segment, script in zip(plan.segments, scripts, strict=True):
-            audio_name = f'audio/{segment.id}.wav'
             speech = PodcastScript(chapter_id=segment.id, title=script.title,
                 source_locator=','.join(segment.chapter_ids), is_mock=script.is_mock,
                 turns=[DialogueTurn(speaker=t.speaker, text=t.text) for t in script.turns])
             inputs = {'script': sha256_file(r.path(f'scripts/{segment.id}.json')), 'contract': 'pcm24k-v1'}
-            def tts(provider):
-                if not provider.capabilities().speech:
-                    raise ProviderError(ErrorKind.INPUT)
-                with atomic_target(r.path(audio_name)) as temporary:
-                    provider.synthesize(speech, temporary)
-                    try:
-                        validate_wav(temporary)
-                    except BookCastError:
-                        raise ProviderError(ErrorKind.SCHEMA) from None
-                return [audio_name]
-            r.step(f'tts:{segment.id}', inputs,
-                   lambda: r.ai_operation(f'tts:{segment.id}', 'tts', 'pcm24k-v1', inputs, tts))
+            speeches.append((speech, inputs))
+            if wants_units(r, speech, inputs):
+                unit_tasks.extend(f'tts:{segment.id}:{index}' for index, _ in speech_units(speech))
+        r.register(unit_tasks, final=True)
+        for speech, inputs in speeches:
+            render_speech(r, speech, inputs, 'pcm24k-v1')
         def merge():
             with atomic_target(r.path('podcast.mp3')) as temporary:
                 merge_audio(r.root, [s.id for s in plan.segments], temporary)
@@ -261,12 +257,13 @@ class ContentFlow:
         r.step('merge', {'audio': [(s.id, sha256_file(r.path(f'audio/{s.id}.wav'))) for s in plan.segments],
                          'codec': 'libmp3lame:96k'}, merge)
         self.local('output', {'mp3': sha256_file(r.path('podcast.mp3')),
+                             'audio_export': 'v2',
                              'quality': sha256_file(r.path('evaluation/quality.json')),
                              'metadata': sha256_file(r.path('metadata.json'))}, 'audio/export.json',
                    lambda: {'book_id': self.metadata.book_id, 'file': 'podcast.mp3', 'mode': plan.mode,
                             'coverage': report['chapter_coverage'], 'quality': 'evaluation/quality.json',
                             'estimated_seconds': report['estimated_seconds'], 'sha256': sha256_file(r.path('podcast.mp3')),
-                            'note': 'Mock TTS 是测试音调；脚本时长估计不等于音频实际时长。'})
+                            **audio_summary(r, [s.id for s in plan.segments])})
         if r.manifest.status != 'completed':
             r.manifest.status, r.manifest.error, r.manifest.error_kind = 'completed', None, None
             r.save()

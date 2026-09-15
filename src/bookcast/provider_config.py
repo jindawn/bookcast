@@ -22,6 +22,14 @@ def is_loopback(host: str | None) -> bool:
         return False
 
 
+class LocalTTSConfig(Model):
+    model_dir: str = Field(min_length=1)
+    host_voice: int = Field(default=45, ge=45, le=52)
+    guest_voice: int = Field(default=50, ge=45, le=52)
+    speed: float = Field(default=1.0, ge=0.5, le=2.0, allow_inf_nan=False)
+    threads: int = Field(default=2, ge=1, le=16)
+
+
 class ProviderSpec(Model):
     name: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
     kind: Literal["llm", "tts"]
@@ -30,9 +38,16 @@ class ProviderSpec(Model):
     base_url: str | None = None
     api_key_env: str | None = Field(default=None, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     timeout_seconds: float = Field(default=30, ge=0.1, le=120, allow_inf_nan=False)
+    local_tts: LocalTTSConfig | None = None
 
     @model_validator(mode="after")
     def validate_endpoint(self):
+        if self.type == "kokoro-local":
+            if (self.kind != "tts" or self.model != "kokoro-multi-lang-v1_0" or not self.local_tts
+                    or self.base_url or self.api_key_env):
+                raise ValueError("kokoro-local requires local TTS settings and the supported model")
+        elif self.local_tts is not None:
+            raise ValueError("local_tts is only valid for kokoro-local")
         if self.type in {"openai-compatible", "local"} and not self.base_url:
             raise ValueError("base_url required")
         if self.base_url:
@@ -79,7 +94,14 @@ def load_config(path: Path | None = None) -> ProvidersConfig:
             ProviderSpec(name="mock-tts", kind="tts", type="mock", model="mock-tones-v1"),
         ], llm_priority=["mock"], tts_priority=["mock-tts"])
     try:
-        return ProvidersConfig.model_validate(tomllib.loads(target.read_text(encoding="utf-8")))
+        config = ProvidersConfig.model_validate(tomllib.loads(target.read_text(encoding="utf-8")))
+        for spec in config.providers:
+            if spec.local_tts:
+                directory = Path(spec.local_tts.model_dir).expanduser()
+                if not directory.is_absolute():
+                    directory = target.resolve().parent / directory
+                spec.local_tts.model_dir = str(directory.resolve())
+        return config
     except (OSError, ValueError) as exc:
         # Pydantic errors may include field values, including an accidentally
         # pasted key. Do not expose those values in logs or CLI error messages.

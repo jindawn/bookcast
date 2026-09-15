@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Literal, Protocol, TypeVar
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from .errors import BookCastError
 from .models import Model, PodcastScript
@@ -76,6 +76,17 @@ class ProviderCapabilities(Model):
     speech: bool = False
     local: bool = False
     mock: bool = False
+    speech_units: bool = False
+
+
+class SpeechUnit(Model):
+    speaker: Literal["主持人", "嘉宾"]
+    text: str = Field(min_length=1, max_length=80)
+
+
+class SpeechInfo(Model):
+    audio_kind: Literal["speech", "mock"]
+    voice: str = Field(min_length=1, max_length=128)
 
 
 class Provider(Protocol):
@@ -99,4 +110,10 @@ class LLMProvider(Provider, Protocol):
 class TTSProvider(Provider, Protocol):
     def synthesize(self, script: PodcastScript, destination: Path) -> None:
         """Write 24 kHz mono PCM16 WAV; invalid audio is a permanent failure."""
+        ...
+
+
+class UnitTTSProvider(TTSProvider, Protocol):
+    def synthesize_unit(self, unit: SpeechUnit, destination: Path) -> SpeechInfo:
+        """One bounded inference; enabled only by capabilities.speech_units."""
         ...

@@ -1,8 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 7）
+## 当前实际实现（Phase 8）
 
-Phase 7 增加 Next.js 静态客户端、FastAPI Application API、持久化提交与独立 worker。UI → Application API → Core；CLI 与 worker 共用 composition.py 注入 Provider，不复制业务管线。既有任务恢复、缓存、分层内容、质量门禁、合法来源及解析保持原实现。内置 TTS 仍是测试音调；真实语音、OCR、M4B 与桌面包未实现。Web 接口、进程与存储见 [WEB.md](WEB.md)。
+Phase 8 增加可选 Kokoro CPU 中文 TTS：显式安装模型，Registry 注入适配器，Core 通过中立语音单元接口保存逐句 Step/Attempt 和音频。默认仍为 Mock，业务代码不 import sherpa-onnx。UI → Application API → Core；CLI 与 worker 共用 composition.py 注入 Provider，原有解析、内容、质量与恢复流程保持可用。OCR、M4B 与桌面包未实现。语音细节见 [TTS.md](TTS.md)，Web 接口、进程与存储见 [WEB.md](WEB.md)。
 
 ```text
 AGENTS.md / CLAUDE.md      Agent 统一入口
@@ -49,6 +49,9 @@ src/bookcast/
   provider_registry.py    类型工厂注册、组合与注入
   provider_chain.py       有界故障切换及调用状态回调
   providers.py            Mock 实现（兼容旧接口导入）
+  speech.py               中立语音单元、调用日志、音频汇总与类型记录
+  tts_setup.py            显式固定模型安装、限量安全展开和完整性收据
+  adapters/kokoro.py      可选 sherpa-onnx CPU 中文双音色适配器
   adapters/compatible.py  兼容远程/本地 LLM HTTP 适配器
   prompts.py              版本化领域提示词
   pipeline.py             原子检查点、旧任务兼容与新流程入口
@@ -95,7 +98,7 @@ examples/
 | 来源与导入 | SourceOffer → SourceAsset | 已实现官方 RDF 书籍版权判定、镜像 TXT、用户 URL/文件、安全下载和摘要 |
 | 整书解析 | SourceAsset → NormalizedBook | 已实现 TXT/EPUB/PDF；章节顺序、文本、源位置、警告 |
 | 内容生成 | Chapter → 分块分析 → 分层综合 → 全局规划 → 分段对话 → 一致性复核 | 九类 finding、证据定位、预算与去重、三种模式和质量门禁；详见 CONTENT |
-| 语音合成 | 脚本 → WAV 片段 | 已实现 Mock 测试音调；真实 TTS 待后续 Provider |
+| 语音合成 | 脚本 → 逐句 WAV → 片段 | Kokoro 本地中文双音色，独立缓存；Mock 整段兼容 |
 | 封装导出 | WAV 片段 → MP3 | 已实现 FFmpeg concat；M4B 待后续阶段 |
 | 任务编排 | 输入与配置 → manifest.json | 已实现 Job/Step/Artifact/Attempt、原子写入、六态恢复、缓存与任务命令 |
 
@@ -144,4 +147,6 @@ Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry /
 
 ## 下一步架构工作
 
-Phase 7 范围止于最小本地 Web；Core manifest/acquisition 契约不变。新增提交记录只处理 Core Job 创建之前的输入和进程派发。没有开机自动执行、账户、支付、云同步或桌面发行。Tauri 的后续复用与取舍见 WEB/D-015；真实中文写作和语音仍需授权样本及人工验收。
+Phase 8 复用 manifest v3，不增加第二套语音任务库。UnitTTSProvider 通过 capabilities.speech_units 协商；一次调用至多80字符，由 Core 记录最小任务和实际音色归属。已完成旧整段音频保留，新语音以 input hash/契约版本/模型资产与配置摘要验证缓存，汇总片段由单句文件哈希决定。详见 D-016。
+
+没有开机自动执行、账户、支付、云同步或桌面发行。Tauri 的后续复用与取舍见 WEB/D-015；真实中文写作尚未验收，人声自然度需在实际生成样例上人工试听。

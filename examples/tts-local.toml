@@ -1,0 +1,23 @@
+# First install: bookcast tts setup --config-output data/tts-local.toml
+# This example resolves paths relative to examples/, not the shell's working directory.
+schema_version = 1
+llm_priority = ["mock"]
+tts_priority = ["kokoro"]
+
+[[providers]]
+name = "mock"
+kind = "llm"
+type = "mock"
+model = "mock-llm-v1"
+
+[[providers]]
+name = "kokoro"
+kind = "tts"
+type = "kokoro-local"
+model = "kokoro-multi-lang-v1_0"
+[providers.local_tts]
+model_dir = "../data/models/kokoro-multi-lang-v1_0"
+host_voice = 45
+guest_voice = 50
+speed = 1.0
+threads = 2

@@ -19,6 +19,29 @@ from .jobs import list_jobs, resolve_job
 app = typer.Typer(no_args_is_help=True, help="BookCast：本地电子书 → 可恢复的双人播客流水线。")
 config_app = typer.Typer(help="查看 Provider 配置。")
 app.add_typer(config_app, name="config")
+tts_app = typer.Typer(help="安装免费开源本地中文 TTS；生成阶段完全离线。")
+app.add_typer(tts_app, name="tts")
+
+
+@tts_app.command("setup")
+def tts_setup(
+    model_dir: Annotated[Path, typer.Option(help="模型安装父目录（约需 1 GB 可用空间）")] = Path("data/models"),
+    archive: Annotated[Path | None, typer.Option(help="已下载的官方 tar.bz2，仍验证固定 SHA-256")] = None,
+    config_output: Annotated[Path, typer.Option(help="新建配置文件；不会覆盖已有文件")] = Path("bookcast.toml"),
+) -> None:
+    """显式下载 Kokoro 中文模型并创建配置；不启用付费服务。"""
+    from .tts_setup import install_model, write_local_config
+    try:
+        if config_output.exists():
+            raise BookCastError("配置已存在；请用 --config-output 指定新的文件，安装不会覆盖配置。")
+        typer.echo("安装 Kokoro 中文模型：下载约 350 MB，校验后本地合成，无 API 费用。")
+        directory = install_model(model_dir, archive)
+        write_local_config(config_output, directory)
+        typer.echo(f"模型：{directory}\n配置：{config_output.resolve()}\n依赖：uv sync --extra tts\n"
+                   "请使用 bookcast doctor --config <配置路径> 检查；LLM 仍为 Mock，可单独调整。")
+    except (BookCastError, OSError) as exc:
+        typer.echo(f"错误：{exc}", err=True)
+        raise typer.Exit(1) from None
 
 
 @app.command()
@@ -164,7 +187,8 @@ def generate(
     except (BookCastError, OSError, ValueError) as exc:
         typer.echo(f"错误：{exc}", err=True)
         raise typer.Exit(1) from exc
-    typer.echo(f"任务完成：{manifest.job_id or root.name}\n音频：{root / 'podcast.mp3'}\n内置 Mock TTS 生成测试音调（非人声）。")
+    export = json.loads((root / "audio/export.json").read_text(encoding="utf-8"))
+    typer.echo(f"任务完成：{manifest.job_id or root.name}\n音频：{root / 'podcast.mp3'}\n{export.get('note', '请检查音频来源记录。')}")
     if manifest.pipeline_version == "2":
         report = json.loads((root / "evaluation/quality.json").read_text(encoding="utf-8"))
         typer.echo(f"质量报告：{root / 'evaluation/quality.json'}（{report['status']}）")
@@ -207,6 +231,8 @@ def doctor(
             except Exception as exc:
                 report = ProviderStatus.from_error(spec.name, spec.model, classify_error(exc))
             reports.append({"kind": spec.kind, **report.model_dump(mode="json"),
+                            **({"action": "运行 uv sync --extra tts；用 bookcast tts setup 安装并校验模型，核对 local_tts.model_dir。"}
+                               if spec.type == "kokoro-local" and report.availability != "available" else {}),
                             "capabilities": instance.capabilities().model_dump()})
         ready = {kind: any(r["provider"] in priority and r["availability"] == "available"
                           and r["capabilities"][capability] for r in reports)

@@ -154,3 +154,13 @@
 - 该提交上的236项测试和10个子测试通过；3项Playwright、Next静态构建、TypeScript、编译、项目校验及提交差异检查全部通过。
 - 启动本地8765预览，使用纯Mock示例配置。通过Application API导入自制content-demo并完成3章、27步骤、16调用；184077字节MP3保存在忽略的data/web，Web ID为4590ab11918d4751b00da9841dcbdc3f。
 - STATE标记phase-7 completed，清空in_progress，记录实际验证SHA；HANDOFF/ROADMAP同步。按D-006另存最终快照，未执行push或开始后续阶段。
+
+## 2026-09-15T09:15:23Z — Phase 8 本地中文人声
+
+- 按用户免费开源、中文友好优先要求接入Kokoro多语言/sherpa-onnx CPU；依赖可选，无API Key。实测并显式锁定上游遗漏的sherpa-onnx-core动态库依赖。
+- 实现tts setup的固定官方包、大小/SHA、安全展开和收据核验；生成阶段离线。中文双音色、语速/线程可配置，不覆盖已有配置或模型。
+- Core新增中立语音单元能力，以现有Step/Attempt保存每次调用、逐句WAV/音色记录和片段汇总；旧Mock有效音频保留，CLI/Web显示实际类型/时长。
+- 25项TTS和14项Web专项通过；两个真实SIGKILL窗口、额度/超时接管、永久错误停止、配置失效、单句损坏修复、旧Mock保护和Web来源显示均验证。
+- 工作区全量262 passed、10 subtests passed；3项Playwright、Next构建、TypeScript、编译、项目校验与Git忽略规则通过。模型及产物不进入Git。
+- 真实三章中文示例完成24次Kokoro合成，51步骤/37调用；MP3为276.429秒、3,318,093字节。resume检查83文件字节/mtime不变，无新增调用；内容仍为Mock且needs_review，未声称主观听感/真实LLM验收。
+- 更新TTS指南、D-016、术语、Skill、README及架构/产品/Provider/任务等文档；准备创建功能提交，之后按D-006实际验证提交并保存最终快照。本阶段未push。

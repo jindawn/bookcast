@@ -9,6 +9,25 @@ import wave
 from .errors import BookCastError
 
 
+def wav_seconds(path: Path) -> float:
+    with wave.open(str(path), "rb") as audio:
+        return audio.getnframes() / audio.getframerate()
+
+
+def concat_wav(parts: list[Path], destination: Path, pause_seconds: float = 0.18) -> None:
+    if not parts:
+        raise BookCastError("没有可拼接的语音单元。")
+    with wave.open(str(destination), "wb") as output:
+        output.setparams((1, 2, 24000, 0, "NONE", "not compressed"))
+        for index, part in enumerate(parts):
+            validate_wav(part)
+            if index:
+                output.writeframes(b"\0\0" * round(24000 * pause_seconds))
+            with wave.open(str(part), "rb") as source:
+                while frames := source.readframes(24000):
+                    output.writeframes(frames)
+
+
 def validate_wav(path: Path) -> None:
     try:
         with wave.open(str(path), "rb") as audio:

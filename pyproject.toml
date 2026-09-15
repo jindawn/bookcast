@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "bookcast"
 version = "0.1.0"
-description = "Local ebooks to resumable mock podcasts"
+description = "Local ebooks to resumable Chinese podcasts"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -22,6 +22,7 @@ bookcast = "bookcast.cli:app"
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "httpx>=0.28,<1"]
 web = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1"]
+tts = ["sherpa-onnx==1.13.8", "sherpa-onnx-core==1.13.8", "numpy>=1.26,<3"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bookcast"]

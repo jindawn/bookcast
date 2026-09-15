@@ -37,6 +37,7 @@ class ProviderRegistry:
 
 def default_registry() -> ProviderRegistry:
     from .adapters.compatible import CompatibleLLMProvider
+    from .adapters.kokoro import KokoroTTSProvider
     from .providers import MockLLMProvider, MockTTSProvider
 
     def mock_factory(provider_class):
@@ -51,4 +52,5 @@ def default_registry() -> ProviderRegistry:
     registry.register("tts", "mock", mock_factory(MockTTSProvider))
     registry.register("llm", "openai-compatible", CompatibleLLMProvider)
     registry.register("llm", "local", CompatibleLLMProvider)
+    registry.register("tts", "kokoro-local", KokoroTTSProvider)
     return registry

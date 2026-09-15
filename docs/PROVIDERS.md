@@ -2,7 +2,7 @@
 
 Phase 7 的 [Web 界面](WEB.md) 只读显示 Registry 状态，配置仍在本地 TOML。CLI 与 worker 共用 composition.py；浏览器不接受密钥、端点配置，也不直接调用 Provider。恢复沿用任务快照，改配置须用 CLI 的显式 --config。
 
-Phase 2 提供统一契约、配置、注册表、调用状态和选择性切换。默认全部 Mock；远程服务和本地模型均需用户自行准备。未增加厂商 SDK 或 Python 依赖。
+统一契约、配置、注册表、调用状态和选择性切换始于 Phase 2。默认全部 Mock；Phase 8 新增可选本地中文 TTS、显式模型安装及 tts extra，详见 [TTS.md](TTS.md)。远程 LLM 仍需用户自行配置。
 
 ## 命令与配置
 
@@ -30,7 +30,7 @@ uv run bookcast status <job> --json
 | `api_key_env` | 可选密钥环境变量名；配置该字段但变量为空会报认证错误 |
 | `timeout_seconds` | 单次 HTTP 操作超时，默认 30，范围 0.1–120 秒 |
 
-注册组合：`llm/mock`、`tts/mock`、`llm/openai-compatible`、`llm/local`。兼容 LLM 使用 `/chat/completions`；结构化生成使用 JSON mode、提示中的 JSON Schema 和本地 Pydantic 校验，不自动降级为未校验文本。local 使用相同协议，仅允许 loopback 主机；远程地址要求 HTTPS，拒绝重定向。BookCast 不安装本地模型，不内置真实 TTS。
+注册组合：`llm/mock`、`tts/mock`、`llm/openai-compatible`、`llm/local`、`tts/kokoro-local`。兼容 LLM 使用 `/chat/completions`；结构化生成使用 JSON mode、提示中的 JSON Schema 和本地 Pydantic 校验，不自动降级为未校验文本。local LLM 使用相同协议，仅允许 loopback 主机；远程地址要求 HTTPS，拒绝重定向。kokoro-local 直接读取本地模型，不使用端点或密钥；仅显式 `tts setup` 下载模型，generate 不下载。配置见 [tts-local.toml](../examples/tts-local.toml)。
 
 启用外部端点意味着允许将当前文本块、精选证据、综合主题、片段脚本、提示和 schema 发给该端点及已配置备用端点。只保存环境变量名，环境变量值不会进入配置输出；HTTP 请求中的认证头、服务错误正文和原始异常消息不写入 manifest。配置中不要在模型名、名称或 URL 路径夹带 Secret。生成内容仍是本地用户数据，不加入 Git。
 
@@ -75,4 +75,4 @@ CLI 创建任务时保存通过严格 schema 校验的配置快照及 LLM/TTS �
 3. 使用 `ProviderRegistry.register(kind, type, factory)` 注册工厂，在组合入口配置注册表；不要改 Pipeline，也不要让业务代码 import 厂商 SDK。CLI 默认注册项集中在 [provider_registry.py](../src/bookcast/provider_registry.py)。
 4. 加入离线契约和故障注入测试；更新文档与决策后再启用真实服务验证。
 
-未知注册类型、错误优先级、重复名称、错误 kind 和永久错误切换策略均在启动时拒绝。当前运行串行、单本书加文件锁；并发调度、成本预算和真实语音尚未实现。Phase 4 的复核不新增 Provider，沿用相同错误分类，不因质量失败盲目换模型。
+未知注册类型、错误优先级、重复名称、错误 kind 和永久错误切换策略均在启动时拒绝。单本书串行执行并加文件锁；自动并发调度和成本预算尚未实现。Phase 8 本地中文人声沿用相同错误分类，内容质量或音频契约失败不盲目换模型。

@@ -100,4 +100,4 @@ Artifact 索引描述当前文件，Attempt 保留历史摘要；旧文件被重
 
 manifest v1/v2 首次恢复前分别原样备份为 `manifest.v1.json` / `manifest.v2.json`，升为 v3 并补充可核验的产物索引。保留旧 pipeline_version，不重做旧内容或伪造缺失的 Provider 摘要、时间和调用历史。没有快照的非默认旧配置要求显式 --config。仓库 STATE v1 和获取 acquisition v1 与运行 manifest v3 是独立契约。
 
-当前是串行本机执行，没有后台 worker、定时重试或开机自动启动。已在 macOS 用真实 SIGKILL 验证三个中断窗口；没有实际重启电脑、Windows 或网络共享盘验收。大量产物的只读状态查询仍逐个计算哈希，性能优化待后续范围。证据见 [PHASE5_VERIFICATION.md](PHASE5_VERIFICATION.md)。
+单个 Core 任务串行本机执行；Web 有独立 worker，没有定时重试或开机自动启动。Phase 8 人声将 TTS 拆成可恢复的语音单元，模型/音色配置与资产哈希参与缓存，见 [TTS.md](TTS.md)。已在 macOS 用真实 SIGKILL 验证解析、章节和逐句调用及完成提交间隙；没有实际重启电脑、Windows 或网络共享盘验收。大量产物的只读状态查询仍逐个计算哈希，性能优化待后续范围。旧阶段证据见 [PHASE5_VERIFICATION.md](PHASE5_VERIFICATION.md)。

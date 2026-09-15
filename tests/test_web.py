@@ -61,6 +61,7 @@ def test_upload_core_history_audio_and_idempotency(client, mode):
     assert pending['can_resume']  # persisted but intentionally not dispatched in this fixture
     job = run(client, identifier)
     assert job['state'] == 'SUCCEEDED', job
+    assert job['audio_kind'] == 'mock' and job['audio_seconds'] > 0
     assert job['progress']['remaining'] == 0 and job['progress']['chapters_completed'] == 2
     path = Path(job['directory'])
     manifest = load_manifest(path / 'manifest.json')
@@ -212,6 +213,23 @@ def test_real_detached_worker_survives_application_object_restart(tmp_path, monk
         finally:
             if process.poll() is None:
                 process.kill(); process.wait(timeout=5)
+
+
+def test_web_reads_actual_speech_kind_from_core(client, tmp_path, monkeypatch):
+    from bookcast.tts_setup import write_local_config
+    from test_tts import UnitFake
+    config = tmp_path / 'tts.toml'
+    write_local_config(config, tmp_path / 'models')
+    client.app.state.service.config = config
+    monkeypatch.setattr('bookcast.adapters.kokoro.KokoroTTSProvider', lambda spec: UnitFake(spec.name))
+    identifier, _ = submit(client, minutes=1)
+    job = run(client, identifier)
+    assert job['state'] == 'SUCCEEDED' and job['audio_kind'] == 'speech'
+    assert job['audio_seconds'] > 0
+    assert client.get(job['audio_url']).status_code == 200
+    # Historical audio type remains true even if the currently selected config changes.
+    client.app.state.service.config = None
+    assert client.get(f'/api/jobs/{identifier}').json()['audio_kind'] == 'speech'
 
 
 def test_frontend_has_no_core_implementation_or_vendor_sdk():

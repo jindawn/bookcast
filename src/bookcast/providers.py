@@ -9,7 +9,7 @@ import wave
 
 from .models import Chapter, ChapterAnalysis, DialogueTurn, PodcastScript
 from .provider_api import (LLMProvider, TTSProvider, ProviderCapabilities, ProviderStatus,
-                           ProviderError, ErrorKind, T)
+                           ProviderError, ErrorKind, SpeechInfo, T)
 
 
 class MockLLMProvider:
@@ -72,13 +72,20 @@ class MockTTSProvider:
         return ProviderStatus(provider=self.name, model=self.model, availability="available")
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(speech=True, local=True, mock=True)
+        return ProviderCapabilities(speech=True, speech_units=True, local=True, mock=True)
 
     def synthesize(self, script: PodcastScript, destination: Path) -> None:
+        self._synthesize_turns(script.turns, destination)
+
+    def synthesize_unit(self, unit, destination):
+        self._synthesize_turns([unit], destination)
+        return SpeechInfo(audio_kind="mock", voice="tone-440" if unit.speaker == "主持人" else "tone-660")
+
+    def _synthesize_turns(self, turns, destination):
         rate = 24_000
         with wave.open(str(destination), "wb") as audio:
             audio.setparams((1, 2, rate, 0, "NONE", "not compressed"))
-            for turn in script.turns:
+            for turn in turns:
                 frequency = 440 if turn.speaker == "主持人" else 660
                 length = int(rate * min(1.5, max(0.25, len(turn.text) * 0.01)))
                 samples = array("h", (

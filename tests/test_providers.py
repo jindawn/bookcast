@@ -77,7 +77,8 @@ def test_chapter_seven_failover_and_idempotence(book, failure):
         assert len(call.input_hash) == 64 and call.prompt_version and call.model
         assert datetime.fromisoformat(call.timestamp).utcoffset() == timedelta(0)
         if call.status == "completed":
-            assert call.output_hash in call.artifacts.values()
+            assert call.output_hash == (next(iter(call.artifacts.values())) if len(call.artifacts) == 1
+                                        else fingerprint(call.artifacts))
             assert all(sha256_file(job / path) == digest for path, digest in call.artifacts.items())
     if failure:
         report = manifest.provider_status["llm:A"]

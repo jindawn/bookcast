@@ -2,7 +2,7 @@
 
 BookCast 是一个以开源为目标的本地工具：从书名或用户提供的 EPUB、PDF、TXT 出发，确认正确书籍版本，获取合法来源，解析整本书，再用 AI 生成高质量中文音频、精读内容或双人播客，最终导出 MP3 / M4B。
 
-**当前阶段：Phase 7 本地 Web App。** Next.js 通过 FastAPI Application API 调用现有 Core，提供书名候选、文件上传、三种模式、时长预算、进度、Provider 状态、历史、播放和失败恢复。CLI 与可选 Skill 继续独立可用，没有重写解析、下载、AI 或音频管线。默认 Mock 无需密钥，TTS 仍是测试音调；真实人声、OCR、M4B 和桌面安装包尚未实现。运行与限制见 [Web 指南](docs/WEB.md)，验证见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)。
+**当前阶段：Phase 8 免费开源中文 TTS。** Kokoro + sherpa-onnx 可在 CPU 本地生成中文双音色人声，按语音单元保存并恢复，接入原有 Provider/Core。默认未配置环境仍使用 Mock；真实 TTS 需安装可选依赖和模型，不使用付费 API。既有 Web、CLI、Skill 与分层内容流程继续可用。OCR、M4B 和桌面安装包尚未实现。运行见 [TTS 指南](docs/TTS.md)、[Web 指南](docs/WEB.md)，验证见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)。
 
 ## 开始接手
 
@@ -16,6 +16,7 @@ BookCast 是一个以开源为目标的本地工具：从书名或用户提供�
 | [ROADMAP.md](docs/ROADMAP.md) | 分阶段范围及验收条件 |
 | [DECISIONS.md](docs/DECISIONS.md) | 已确定原则、原因和待选型事项 |
 | [PROVIDERS.md](docs/PROVIDERS.md) | Provider 配置、故障分类、调用审计与扩展方式 |
+| [TTS.md](docs/TTS.md) | 免费本地中文人声、模型安装、双音色、恢复及真实样例 |
 | [JOBS.md](docs/JOBS.md) | Job ID、崩溃恢复、缓存、日志与旧任务迁移 |
 | [BookCast Skill](skills/bookcast/SKILL.md) | 可选 Agent 入口：意图、命令参数、版权、失败与恢复 |
 | [CONTENT.md](docs/CONTENT.md) | 分层内容、三种模式、质量指标与定向修订 |
@@ -58,6 +59,17 @@ git diff --check
 
 Mock TTS 生成的是主持人/嘉宾可区分的测试音调，并在导出元数据中标注“非人声”；它用于验证音频管线，不是自然语言朗读。PDF 当前按页形成章节，扫描页会产生 OCR 警告；EPUB 按 spine 顺序提取 HTML 正文。联网获取只走明确的公开来源，不绕过 DRM 或访问控制。
 
+## 免费中文人声
+
+```sh
+uv sync --extra dev --extra web --extra tts
+.venv/bin/bookcast tts setup --config-output data/tts-local.toml
+.venv/bin/bookcast doctor --config data/tts-local.toml
+.venv/bin/bookcast generate examples/content-demo.txt --config data/tts-local.toml --mode two_host --minutes 3 --output-dir output/chinese-tts-demo
+```
+
+首次下载官方模型约350 MB，之后生成可完全离线，默认主持人小贝、嘉宾云希。安装不覆盖已有配置；LLM 保持 Mock，可独立更换。Web 用 `.venv/bin/bookcast serve --config data/tts-local.toml` 启用同一配置。配置、音色、实际音频时长、许可与恢复说明见 [TTS.md](docs/TTS.md)。从旧 Mock 整本改成人声请使用新的输出目录，避免按既定恢复策略复用旧音调。
+
 ## 本地 Web 界面
 
 需要 Node.js 20.9+（本机验证为 22.22.3）。在仓库根目录运行：
@@ -98,7 +110,7 @@ uv run bookcast acquire "The Wealth of Nations" --edition gutenberg:3300 --gener
 
 让支持 Skill 的 Agent 读取 [skills/bookcast/SKILL.md](skills/bookcast/SKILL.md)，或按宿主 Agent 的加载方式安装整个 `skills/bookcast` 目录。本仓库只提供可移植的 Skill 文档，不自动修改全局 Agent 配置，也不假设该目录会被所有工具自动发现。BookCast 本身仍需按上文安装；Skill 可调用 PATH 中的 bookcast，或明确仓库内的 CLI。
 
-用户可以说：“把《国富论》做成一个 40 分钟中文双人播客。”Skill 映射为 `two_host`、40 分钟预算，先通过 acquire 列出来源候选，确定版本后调用现有生成命令。中文输出不等于中文原版，`acquire --language` 只筛选源书语言；40 分钟也不保证实际音频等长。目前内置 TTS 为测试音调，Skill 必须如实说明，不能宣称已经生成 40 分钟人声。
+用户可以说：“把《国富论》做成一个 40 分钟中文双人播客。”Skill 映射为 `two_host`、40 分钟预算，先通过 acquire 列出来源候选，确定版本后调用现有生成命令。中文输出不等于中文原版，`acquire --language` 只筛选源书语言；40 分钟也不保证实际音频等长。Skill 必须核对实际 TTS 配置和导出信息，区分人声与测试音调，并如实报告播放时长。
 
 Skill 包含状态检查、有限恢复、永久错误处理和版权规则，不包含解析器、下载器、第二套 Pipeline 或音频脚本。[test_skill.py](tests/test_skill.py) 执行文档中的命令，验证它们委托 Core，并在无 Skill 的独立应用目录验证 CLI；可运行 `uv run pytest tests/test_skill.py -q`。这些测试不依赖外部 Agent 或 API key，也不等同于所有模型自然语言行为的验收。
 

@@ -26,6 +26,8 @@ type Job = {
   error: string | null;
   warnings: string[];
   audio_url: string | null;
+  audio_kind?: string;
+  audio_seconds?: number | null;
   can_resume: boolean;
   can_retry: boolean;
   progress: {
@@ -487,7 +489,7 @@ export default function Home() {
               </div>
             </div>
             <p className="hint">
-              这是脚本内容预算。Mock 音调的实际播放时长与预算不同。
+              这是脚本内容预算，实际播放时长由脚本长度、音色和语速决定。
             </p>
             <button
               className="primary generate"
@@ -587,6 +589,8 @@ export default function Home() {
                   )}
                   {current.audio_url && (
                     <div className="player">
+                      <p>{current.audio_kind === "speech" ? "合成人声" : current.audio_kind === "mock" ? "Mock 测试音调（非人声）" : "请核对音频来源记录"}
+                        {current.audio_seconds != null && ` · ${Math.round(current.audio_seconds)} 秒`}</p>
                       <audio
                         aria-label="播客音频"
                         controls
