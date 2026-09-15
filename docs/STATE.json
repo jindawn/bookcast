@@ -2,7 +2,7 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-9",
-  "current_task": "Phase 9离线增强已提交并验证；真实DeepSeek+Kokoro验收等待有效API Key",
+  "current_task": "用户已提供凭证文件；读取被系统拒绝，等待复制到项目data目录后继续真实验收",
   "task_status": "blocked",
   "branch": "main",
   "last_verified_commit": "ff3c48ac960e8435889dcc303665626e4438f186",
@@ -57,7 +57,7 @@
   ],
   "in_progress": [],
   "next_actions": [
-    "用户安全配置DEEPSEEK_API_KEY并提供本机读取方式后，执行显式联网内容测试；不在聊天或Git中传递密钥",
+    "用户将已授权凭证文件复制到data/deepseek-key.txt后安全加载为DEEPSEEK_API_KEY，继续显式联网验收；不要打印内容或提交该文件",
     "完成6分钟自制中文DeepSeek+Kokoro样例，基于真实质量评估/调整候选reasoning策略",
     "记录真实usage、文本与听感检查、时长/产物SHA、无额外网络resume及D-014配置行为；完成Phase 9验收再更新状态提交，不push、不开始Phase 10"
   ],
@@ -109,11 +109,27 @@
       "scope": "commit",
       "summary": "功能提交ff3c48a上的project validator、compileall、git diff HEAD^ HEAD --check通过",
       "checked_at": "2026-09-15T14:27:26Z"
+    },
+    {
+      "name": "phase9-credential-access",
+      "command": "read user-authorized credential file (normal and escalated execution)",
+      "status": "blocked",
+      "scope": "working_tree",
+      "summary": "两次均PermissionError/Operation not permitted；密钥内容未读取，未执行新API调用，等待用户复制到data目录",
+      "checked_at": "2026-09-15T14:41:34Z"
+    },
+    {
+      "name": "phase9-resume-baseline",
+      "command": ".venv/bin/pytest tests/test_generation.py tests/test_providers.py -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "99 passed，5个既有依赖警告（14.49秒）；本轮仅更新权限阻塞记录，代码未改",
+      "checked_at": "2026-09-15T14:41:34Z"
     }
   ],
   "known_failures": [],
   "blockers": [
-    "真实DeepSeek structured generation及Kokoro整链验收需要有效DEEPSEEK_API_KEY；已请用户在本机安全配置，当前未提供。"
+    "用户指定的Downloads凭证文件在普通和提权执行中均返回PermissionError（Operation not permitted）；尚未读到密钥。等待用户复制到Git忽略的data/deepseek-key.txt。"
   ],
   "important_files": [
     {
@@ -401,5 +417,5 @@
       "purpose": "Phase 9真实/离线证据、缺少凭证的验收阻塞及执行步骤"
     }
   ],
-  "updated_at": "2026-09-15T14:27:26Z"
+  "updated_at": "2026-09-15T14:41:34Z"
 }

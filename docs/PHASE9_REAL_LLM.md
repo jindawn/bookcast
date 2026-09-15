@@ -15,7 +15,7 @@
 
 功能提交 ff3c48ac960e8435889dcc303665626e4438f186 已验证：313 passed、10 subtests passed、1联网测试跳过；project validator、compileall、提交差异检查通过。新51项离线测试不等同于51次真实模型调用。
 
-本机进程尚未设置 `DEEPSEEK_API_KEY`，已请用户在本机安全配置。没有尝试读取其他应用凭证、没有将 key 放进聊天或仓库。
+用户已提供并授权读取本机Downloads中的凭证文件，但普通/提权执行均返回PermissionError（Operation not permitted），尚未读到内容或设置DEEPSEEK_API_KEY。已请用户复制到Git忽略的data/deepseek-key.txt，之后只加载为环境变量。没有读取其他应用凭证、没有将key打印或提交Git。
 
 | 项目 | 结果与证据性质 |
 | --- | --- |

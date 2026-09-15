@@ -1,10 +1,10 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-15T14:27:26Z。
+更新时间：2026-09-15T14:41:34Z。
 
 ## 当前目标
 
-Phase 9：真实 DeepSeek 分层内容 → Kokoro 中文双人播客。离线 Provider 增强已实现；**真实生成尚未验收，缺少有效 DEEPSEEK_API_KEY**。已请用户安全配置，不把 key 发到聊天。尚不能标记 Phase 9 完成，不开始 Phase 10，不主动 push。
+Phase 9：真实 DeepSeek 分层内容 → Kokoro 中文双人播客。离线增强已验证；**用户已授权读取Downloads凭证文件，但普通和提权执行都被系统拒绝（Operation not permitted），尚未读到Key**。已请用户复制到Git忽略的data/deepseek-key.txt，之后安全加载为DEEPSEEK_API_KEY，不打印内容。真实验收仍未完成，不开始Phase 10，不主动push。
 
 ## 刚刚完成与关键文件
 
@@ -39,11 +39,12 @@ BOOKCAST_RUN_LIVE_LLM=1 .venv/bin/pytest tests/test_live_deepseek.py -q
 - project validator、compileall、git diff --check通过。仅既有后端和CLI受影响，未重新运行浏览器E2E。
 - 实际向官方 /models 使用固定无效测试凭证探测：HTTP401 → authentication_error。402/429/timeout/5xx等为官方文档+离线fixtures验证，不能声称实际触发。
 - **有效生成没有执行，实际token数未知，尚无DeepSeek+Kokoro MP3或人工内容/听感结论。**
+- 凭证接续本轮重新验证Provider专项：99 passed，5个既有警告（14.49秒）。代码未改，尚未执行新的API请求。
 
 ## 未解决问题与下一步
 
 1. 功能提交已验证，STATE记为blocked且清空in_progress；只剩真实验收需凭证。接手核对Git，不相信易腐远端状态描述。
-2. 用户在本机安全配置有效DEEPSEEK_API_KEY后，执行有界联网测试；测试失败保留真实原因，不盲目换模型/修补schema掩盖问题。
+2. 用户已提供凭证文件但系统拒绝读取；等待复制到data/deepseek-key.txt后安全加载环境变量，执行有界联网测试。系统拒绝并非自动审批拒绝；不要绕过Downloads访问限制。失败保留真实原因，不盲目换模型/修补schema掩盖问题。
 3. 执行6分钟自制文本CLI样例；核验引文字符偏移、来源覆盖、A/B追问与回应、幻觉、复述、时长和真实音频；候选reasoning策略须据实际质量决定。
 4. 补记Job/产物SHA/官方usage与调用数、断网resume不新增调用、配置变化结果；更新状态再完成Phase 9提交。
 
@@ -57,3 +58,4 @@ BOOKCAST_RUN_LIVE_LLM=1 .venv/bin/pytest tests/test_live_deepseek.py -q
 
 2026-09-15接手核验：HEAD与本地origin/main均4137d8550a7cf1c603248732e0be97710e217eb1（Phase 8最终交接），此前Phase 7/8已推送。旧快照中的“未push”描述已纠正，这只是接手时观察。
 最近已验证功能提交：ff3c48ac960e8435889dcc303665626e4438f186 — feat: add task reasoning and usage audit for compatible LLMs（24个文件）。本阶段没有push；快照自身提交用git log -1获取，避免自引用。
+本轮接手HEAD为62b849f57f5397453fe68aeaa4b971e36f1c9265（交接快照），main比本地origin/main领先两个提交；此为本轮开始时观察。

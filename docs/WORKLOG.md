@@ -187,3 +187,9 @@
 - 在该提交上验证313 passed、10 subtests passed、1联网测试跳过（44.35秒）；7个既有警告，project validator、compileall和提交差异检查通过。
 - STATE.last_verified_commit记录该实际验证SHA，in_progress清空、task_status=blocked；唯一阻塞为真实生成验收缺少有效DEEPSEEK_API_KEY。Phase 9尚未完成，未生成真实DeepSeek脚本或MP3、无真实usage计数。
 - 保存D-006交接快照；不重复跑已通过功能测试，不开始Phase 10，等待用户安全配置凭证后继续剩余验收。
+
+## 2026-09-15T14:41:34Z — 已提供凭证文件但系统拒绝访问
+
+- 用户授权读取Downloads中的bctest.txt；普通及提权执行均返回PermissionError/Operation not permitted，没有读取或输出密钥内容，未发起新API调用。
+- 已请用户在自己的终端复制到data/deepseek-key.txt；git check-ignore确认目标被忽略。不是自动审批拒绝，不绕过系统访问限制。
+- 接手62b849f，代码未改；Provider专项99 passed、5个既有警告（14.49秒）。更新STATE/HANDOFF/验收记录的真实阻塞，Phase 9仍未完成，不push。
