@@ -1,64 +1,58 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-15T09:19:31Z。
+更新时间：2026-09-15T14:25:01Z。
 
 ## 当前目标
 
-Phase 8 免费开源中文 TTS 已完成并验证功能提交54c05ad；本快照按D-006单独提交。沿用 UI → Application API → Core，中立 Provider 接口和 D-014 缓存策略。用户本阶段未要求 push。
+Phase 9：真实 DeepSeek 分层内容 → Kokoro 中文双人播客。离线 Provider 增强已实现；**真实生成尚未验收，缺少有效 DEEPSEEK_API_KEY**。已请用户安全配置，不把 key 发到聊天。尚不能标记 Phase 9 完成，不开始 Phase 10，不主动 push。
 
 ## 刚刚完成与关键文件
 
-- adapters/kokoro.py：可选 Kokoro/sherpa-onnx CPU 适配器，中文双音色、语速/线程、非空 PCM 校验，无网络调用。
-- tts_setup.py：显式下载固定官方模型包、大小/SHA 校验、拒绝不安全展开、逐文件收据、安装复用；不覆盖用户配置/损坏模型。
-- provider_api/config/registry：speech_units 能力、SpeechUnit/SpeechInfo、local_tts 参数与 Registry；可选 tts extra 同时锁定 sherpa-onnx/core 1.13.8，修复本机动态库漏依赖。
-- speech.py：Core 逐语音单元 Step/Attempt、原子保存、配置缓存、片段拼接及实际音色/类型/时长。纯 Mock 保留整段接口，旧有效音频不重做。
-- CLI 的 tts setup/doctor/generate 和 Web 播放区：显示实际类型/时长；现有 Skill 只调用 Core，更新了能力说明。
-- tests/test_tts.py、tests/test_web.py：安装/参数/缓存/故障/真实SIGKILL与客户端音频类型；docs/TTS.md、examples/tts-local.toml、D-016 和术语说明。
+- generation.py：严格 thinking enabled/disabled、effort low/high/max、max_tokens；集中 bookcast-v1 候选策略，无任意JSON透传。
+- compatible.py：复用 Chat Completions，任务调用视图、usage/响应模型、402分类、截断/坏JSON/schema永久失败；不记录服务原文或思考内容。
+- provider_chain.py / pipeline.py / models.py：每次Attempt在调用前保存实际参数，结束时保存可选usage；以任务最终配置核验缓存，D-014替换Provider保留旧结果规则不变。
+- provider_api/config/cli：可选任务契约、向后兼容配置与 config providers 的 effective_generation 输出。
+- examples/deepseek-kokoro.toml：正式无密钥配置，仅DeepSeek+Kokoro，无Mock备用。
+- tests/test_generation.py / test_live_deepseek.py：51项离线新专项及显式环境开关联网内容测试；README、PROVIDERS、相关架构文档、D-017和PHASE9_REAL_LLM记录范围与验收边界。
 
-## 当前代码与运行
+## 当前代码状态与运行
 
-安装 `uv sync --extra dev --extra web --extra tts`。首次执行 `.venv/bin/bookcast tts setup --config-output data/tts-local.toml`，再执行 doctor --config 和 generate --config。模型约350 MB，安装推荐至少1 GB空间；如果配置已存在，setup 停止而不覆盖，可直接使用已有配置。
+未配置 reasoning 的旧调用保留原适配器哈希；same-name配置改变只使有效参数改变的AI任务失效。Provider key不入缓存；旧manifest v3可读，新增审计字段缺省null。Core/Skill/Web不重写，Planner仍本地确定性规划。
 
-本机模型已安装在 data/models/kokoro-multi-lang-v1_0，配置 data/tts-local.toml 已存在。可直接运行：
+本机已安装Phase 8模型 data/models/kokoro-multi-lang-v1_0；不要重复下载。模型/本地配置/书籍/音频均被Git忽略。已有Phase 8人声示例见TTS.md，其脚本为Mock，不是本次真实LLM证据。
 
 ```sh
-.venv/bin/bookcast doctor --config data/tts-local.toml
-.venv/bin/bookcast generate examples/content-demo.txt --config data/tts-local.toml --mode two_host --minutes 3 --output-dir output/chinese-tts-demo
-.venv/bin/bookcast resume output/chinese-tts-demo/5bdad5ca96f5e42cd019ff30
-.venv/bin/bookcast serve --config data/tts-local.toml
+.venv/bin/bookcast config providers --config examples/deepseek-kokoro.toml
+.venv/bin/bookcast doctor --config examples/deepseek-kokoro.toml
+BOOKCAST_RUN_LIVE_LLM=1 .venv/bin/pytest tests/test_live_deepseek.py -q
+.venv/bin/bookcast generate examples/content-demo.txt --config examples/deepseek-kokoro.toml --provider deepseek --mode two_host --minutes 6 --output-dir output/phase9-deepseek
 ```
 
-Web 需 npm --prefix web run build；用新配置启动服务才影响新任务，已存在的任务继续使用快照。旧8765预览曾使用纯Mock，是否仍在运行以进程核验为准，不假设其已切到Kokoro。本机数据与模型不随Git分发。
+联网测试同时要求环境Key和开关，默认pytest跳过；只验收真实内容，测试语音为Mock音调。正式CLI样例才使用Kokoro。永久错误修复后retry；resume沿用配置快照，修改同名Provider需显式--config。完整操作和人工检查清单见PHASE9_REAL_LLM.md。
 
-真实样例 Job：8b3f9a9a16fb4cfeb0b8efe99205764e，Core目录 output/chinese-tts-demo/5bdad5ca96f5e42cd019ff30。MP3约4分36秒、3,318,093字节、24kHz/mono；SHA-256为9a803a13a0977f5a403d69242163383b715c9b5064df8d693e09eb149183f2ae。两个中文声音为小贝45/云希50；51步、37次调用，其中24次真实TTS。完整证据见TTS.md。
+## 已运行测试与实际网络观察
 
-## 已运行测试
-
-- 接手基线：236 passed、10 subtests passed。
-- 最终工作区全量：262 passed、10 subtests passed；7个既有依赖弃用警告，无失败。
-- 功能提交54c05ad上再次验证：262 passed、10 subtests passed（53.03秒）；3项Playwright、Next构建、类型/编译/项目及提交差异检查通过。
-- 当前专项：25项TTS +14项Web，共39 passed；两处真实SIGKILL为调用running和完成Attempt/Step提交间隙，验证已完成句子的字节/mtime不变。
-- 真实Kokoro CLI完整生成、FFprobe、resume通过；83个产物/状态文件完全不变、无新增调用，缓存检查约0.73秒。
-- 功能提交上实际合成2.22秒云希中文样音，重新恢复原demo，83文件与调用数再次保持不变；安装器官方HTTPS重定向也已用1字节探测验证，不重复下载完整模型。
-- Playwright 3 passed；Next静态构建、TypeScript、compileall、项目校验、diff检查与Git忽略规则通过。
-- 既有7个依赖弃用警告仍在。新增永久错误测试最初误断言底层异常类型，已按Core公开BookCastError契约修正后通过；浏览器首轮沙箱禁止端口绑定，授权本机测试端口后通过。上游漏依赖问题已通过显式core锁定修复。
+- 接手HEAD 4137d85的关键基线86 passed。
+- 工作区专项99 passed，1联网测试跳过；包括新51项参数/HTTP/usage/缓存/中断测试。
+- 工作区全量313 passed、10 subtests passed、1联网测试跳过；7个既有依赖弃用警告，43.73秒。
+- project validator、compileall、git diff --check通过。仅既有后端和CLI受影响，未重新运行浏览器E2E。
+- 实际向官方 /models 使用固定无效测试凭证探测：HTTP401 → authentication_error。402/429/timeout/5xx等为官方文档+离线fixtures验证，不能声称实际触发。
+- **有效生成没有执行，实际token数未知，尚无DeepSeek+Kokoro MP3或人工内容/听感结论。**
 
 ## 未解决问题与下一步
 
-当前阶段已完成，没有已知失败或阻塞。接手先核对实际Git和STATE，按用户授权决定是否推送或开展下一步。
-
-后续先试听样例，再按授权改进多音字、停顿和长节目自然度。真实中文LLM内容质量未验收，本次脚本来自Mock；质量报告needs_review并提示脚本长度偏离预算。分钟预算不等于实际时长。没有主观听感评分、跨平台实机、M4B、声音克隆、付费TTS或桌面包验收。
-
-本地CPU运行不按HTTP timeout_seconds自动取消；用户终止后手动resume。模型完整性每实例核验后复用摘要，运行中不要修改模型。BookCast自身许可证仍未选择；模型和第三方运行时许可不能混同，见TTS.md。模型下载包不支持Range续传。
+1. 验证功能提交并保存D-006交接快照；检查git实际状态，不相信旧“尚未push”语句。
+2. 用户在本机安全配置有效DEEPSEEK_API_KEY后，执行有界联网测试；测试失败保留真实原因，不盲目换模型/修补schema掩盖问题。
+3. 执行6分钟自制文本CLI样例；核验引文字符偏移、来源覆盖、A/B追问与回应、幻觉、复述、时长和真实音频；候选reasoning策略须据实际质量决定。
+4. 补记Job/产物SHA/官方usage与调用数、断网resume不新增调用、配置变化结果；更新状态再完成Phase 9提交。
 
 ## 不要重复做
 
-不要重新下载/生成已验证且完整的本地样例。不要将模型、书籍、音频、配置或密钥提交Git。不要重写Core或把合成/下载放入Skill/UI。不要为永久错误盲目换模型、自动回退付费服务或Mock音调。
+不要重写Provider/Pipeline/Job/Skill/Web或新增DeepSeek SDK。不要将Mock内容或既有Kokoro样例冒称真实LLM验收；不要为通过验收关闭质量门禁。不要提交模型/密钥/源书/音频。不自动push，不开始Phase 10。
 
-从旧Mock整本改成人声应选新的输出目录；按D-014替换Provider会保留已完成音频。改同名Provider音色/语速则用显式--config恢复，仅重建相应语音。不要删除用户旧产物或伪造历史音色归属。
+无API Key不应继续制造收费测试失败或读取别的应用凭证。真实usage缺失保留null，不能估算为官方计费。已完成记录的resume不重复调用；远端已处理但本地未记录成功的崩溃窗口无法保证不重复计费（D-014）。
 
 ## 最近 Git commit
 
-接手HEAD：a41861a — docs: finalize Phase 7 verification and handoff。
-最近已验证功能提交：54c05adcc61d0023acfaaabf0dbd2648df2944a6 — feat: add free local Chinese TTS with resumable speech units（34个文件）。
-origin/main为892eb61（Phase 6交接）；Phase 7/8本地提交未push。快照自身的提交用git log -1查看，避免自引用。
+2026-09-15接手核验：HEAD与本地origin/main均4137d8550a7cf1c603248732e0be97710e217eb1（Phase 8最终交接），此前Phase 7/8已推送。旧快照中的“未push”描述已纠正，这只是接手时观察。
+最近既有功能验证提交54c05adcc61d0023acfaaabf0dbd2648df2944a6。本次功能提交尚待创建并验证；快照自身提交用git log -1获取，避免自引用。

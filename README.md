@@ -2,7 +2,7 @@
 
 BookCast 是一个以开源为目标的本地工具：从书名或用户提供的 EPUB、PDF、TXT 出发，确认正确书籍版本，获取合法来源，解析整本书，再用 AI 生成高质量中文音频、精读内容或双人播客，最终导出 MP3 / M4B。
 
-**当前阶段：Phase 8 免费开源中文 TTS。** Kokoro + sherpa-onnx 可在 CPU 本地生成中文双音色人声，按语音单元保存并恢复，接入原有 Provider/Core。默认未配置环境仍使用 Mock；真实 TTS 需安装可选依赖和模型，不使用付费 API。既有 Web、CLI、Skill 与分层内容流程继续可用。OCR、M4B 和桌面安装包尚未实现。运行见 [TTS 指南](docs/TTS.md)、[Web 指南](docs/WEB.md)，验证见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)。
+**当前阶段：Phase 9 真实 LLM 验收进行中。** 复用兼容适配器增加 DeepSeek 示例、强类型 thinking/effort、任务策略、usage 和缓存审计；离线实现已完成，真实生成因缺少 API Key 尚未验收，见 [实际验收记录](docs/PHASE9_REAL_LLM.md)。Phase 8 Kokoro CPU 中文双音色 TTS 已可用，历史样例脚本来自 Mock。默认仍为 Mock；外部 LLM 需显式配置且可能收费，本地 TTS 不调用付费 API。既有 Web、CLI、Skill 与分层 Core 保持可用。OCR、M4B、桌面包未实现。运行见 [TTS 指南](docs/TTS.md)、[Web 指南](docs/WEB.md)，交接见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)。
 
 ## 开始接手
 
@@ -26,6 +26,16 @@ BookCast 是一个以开源为目标的本地工具：从书名或用户提供�
 | [STATE.json](docs/STATE.json) / [STATE.schema.json](docs/STATE.schema.json) | 机器可读工作状态及版本化契约 |
 
 ## 如何运行与测试
+
+真实 DeepSeek + Kokoro 使用 [无密钥示例](examples/deepseek-kokoro.toml)。先安装本地 TTS，安全注入 `DEEPSEEK_API_KEY`，再执行：
+
+```sh
+.venv/bin/bookcast config providers --config examples/deepseek-kokoro.toml
+.venv/bin/bookcast doctor --config examples/deepseek-kokoro.toml
+.venv/bin/bookcast generate examples/content-demo.txt --config examples/deepseek-kokoro.toml --mode two_host --minutes 6 --output-dir output/phase9-deepseek
+```
+
+`config providers` 显示各任务有效 reasoning 配置。普通 pytest 不调用收费 LLM；仅 `BOOKCAST_RUN_LIVE_LLM=1 .venv/bin/pytest tests/test_live_deepseek.py -q` 且 key 存在时启用联网内容测试。完整音频/人工验收步骤见上述实际验收记录。
 
 在仓库根目录运行；需要 **Python 3.12+、FFmpeg、Git**。依赖由 `uv` 管理，也可以使用兼容 PEP 621 的工具安装 `pyproject.toml`。Mock 模式无需 API key 或网络。
 

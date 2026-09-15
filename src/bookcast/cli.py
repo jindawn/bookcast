@@ -208,7 +208,14 @@ def config_providers(
         # Validate factories as well as the TOML contract; constructors do no I/O.
         for spec in settings.providers:
             registry.create(spec)
-        typer.echo(json.dumps({**settings.model_dump(mode="json"), "registered_types": registry.types()},
+        from .generation import resolve_generation
+        task_examples = ('analysis:0001:0001', 'synthesis/chapters/0001/00-0000',
+                         'synthesis/book/00-0000', 'script:0001', 'consistency:0001')
+        effective = {spec.name: [resolve_generation(task, spec.reasoning_policy, spec.generation).model_dump(mode='json')
+                                for task in task_examples] for spec in settings.providers
+                     if spec.generation is not None or spec.reasoning_policy is not None}
+        typer.echo(json.dumps({**settings.model_dump(mode="json"), "registered_types": registry.types(),
+                              "effective_generation": effective},
                               ensure_ascii=False, indent=2))
     except BookCastError as exc:
         typer.echo(f"错误：{exc}", err=True)

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from .errors import BookCastError
 from .models import Model, PodcastScript
+from .generation import GenerationAudit, ProviderUsage
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -105,6 +106,19 @@ class LLMProvider(Provider, Protocol):
     def generate(self, prompt: str) -> str: ...
 
     def generate_structured(self, prompt: str, response_model: type[T]) -> T: ...
+
+
+class TaskLLMProvider(LLMProvider, Protocol):
+    generation_audit: GenerationAudit | None
+    last_usage: ProviderUsage | None
+    reported_model: str | None
+
+    def for_task(self, task: str) -> LLMProvider:
+        """Optional call-scoped view with effective config/cache key and response audit.
+
+        Chains bind once per attempt. Providers without task settings need not implement it.
+        """
+        ...
 
 
 class TTSProvider(Provider, Protocol):

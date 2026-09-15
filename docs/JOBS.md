@@ -1,5 +1,7 @@
 # 任务、恢复与缓存（Phase 5）
 
+Phase 9 沿用 manifest v3，为 Attempt 增加可选 generation、reported_model、provider_reported_usage；旧数据缺省 null。缓存按任务最终生成参数而非整个策略对象判断，同名 Provider 的有效 thinking/effort/max_tokens 改变才使相关 AI 检查点失效，再按产物哈希传播。显式换 Provider 保留旧有效结果的 D-014 规则不变。详细配置与用量语义见 [PROVIDERS.md](PROVIDERS.md)，实际验收边界见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。
+
 Phase 7 的 [Web 客户端](WEB.md) 复用此处 Core 语义。Web 提交 ID 与 Core Job ID 不同；任务面板可展开 Core 目录，供 CLI status/resume/retry 使用。Web 历史仅显示当前工作空间提交。
 
 每本书的运行状态保存在产物目录的 `manifest.json`。终端关闭、进程崩溃或重启后，用任务 ID 或目录继续；不依赖聊天、原终端、PID 存活记录或当前工作目录的配置文件。

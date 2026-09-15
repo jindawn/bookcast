@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from urllib import error, request
 from urllib.parse import urlsplit
 
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 from ..provider_api import ErrorKind, ProviderError, ProviderStatus, ProviderCapabilities, T
 from ..provider_config import ProviderSpec, is_loopback
 from ..storage import fingerprint
+from ..generation import GenerationAudit, ProviderUsage, resolve_generation
 
 
 QUOTA_CODES = {"insufficient_quota", "quota_exceeded", "quota_exhausted", "credit_balance_exhausted",
@@ -24,7 +26,7 @@ def classify_http(status: int, body: bytes) -> ProviderError:
         code, kind = None, None
     if status in {401, 403}:
         return ProviderError(ErrorKind.AUTH)
-    if status in {402, 429} and any(isinstance(value, str) and value in QUOTA_CODES for value in (code, kind)):
+    if status == 402 or (status == 429 and any(isinstance(value, str) and value in QUOTA_CODES for value in (code, kind))):
         return ProviderError(ErrorKind.QUOTA)
     if status == 429:
         return ProviderError(ErrorKind.RATE_LIMIT)
@@ -92,24 +94,58 @@ class CompatibleBase:
 
 
 class CompatibleLLMProvider(CompatibleBase):
+    def __init__(self, spec: ProviderSpec):
+        super().__init__(spec)
+        self.generation_audit: GenerationAudit | None = None
+        self.last_usage: ProviderUsage | None = None
+        self.reported_model: str | None = None
+
+    def for_task(self, task: str) -> 'CompatibleLLMProvider':
+        # A call-scoped view prevents response metadata leaking between attempts.
+        bound = type(self)(self.spec)
+        if self.spec.generation is not None or self.spec.reasoning_policy is not None:
+            bound.generation_audit = resolve_generation(task, self.spec.reasoning_policy, self.spec.generation)
+        return bound
+
+    @property
+    def cache_key(self) -> str:
+        base = super().cache_key
+        if self.generation_audit is not None:
+            fields = self.generation_audit.options.model_dump(exclude_none=True)
+            return fingerprint({'base': base, 'generation': fields}) if fields else base
+        if self.spec.generation is not None or self.spec.reasoning_policy is not None:
+            return fingerprint({'base': base, 'generation': self.spec.generation.model_dump(exclude_none=True)
+                                if self.spec.generation else {}, 'reasoning_policy': self.spec.reasoning_policy})
+        return base
+
     def capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(text=True, structured=True, local=is_loopback(urlsplit(self.spec.base_url).hostname))
 
     def _chat(self, prompt: str, schema: dict | None = None) -> str:
+        self.last_usage, self.reported_model = None, None
         messages = [{"role": "user", "content": prompt}]
         payload = {"model": self.model, "messages": messages, "stream": False}
+        audit = self.generation_audit or resolve_generation('', self.spec.reasoning_policy, self.spec.generation)
+        payload.update(audit.options.request_fields())
         if schema:
             messages.insert(0, {"role": "system", "content": "Return only JSON matching this schema: " + json.dumps(schema)})
             payload["response_format"] = {"type": "json_object"}
         try:
             response = json.loads(self._request("chat/completions", payload))
-            text = response["choices"][0]["message"]["content"]
+            self.last_usage = ProviderUsage.from_response(response.get('usage'))
+            reported = response.get('model')
+            if isinstance(reported, str) and re.fullmatch(r'[a-zA-Z0-9_.:/-]{1,128}', reported):
+                self.reported_model = reported
+            choice = response['choices'][0]
+            if choice.get('finish_reason') not in {None, 'stop'}:
+                raise ValueError('incomplete response')
+            text = choice['message']['content']
             if not isinstance(text, str) or not text.strip():
                 raise ValueError("invalid response")
             return text
         except ProviderError:
             raise
-        except (ValueError, KeyError, IndexError, TypeError):
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             failure = ProviderError(ErrorKind.SCHEMA)
             self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
             raise failure from None

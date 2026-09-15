@@ -29,6 +29,8 @@ uv run bookcast status <job> --json
 | `base_url` | 兼容 API 根地址，通常含 `/v1`，不含密钥、账号、query 或 fragment |
 | `api_key_env` | 可选密钥环境变量名；配置该字段但变量为空会报认证错误 |
 | `timeout_seconds` | 单次 HTTP 操作超时，默认 30，范围 0.1–120 秒 |
+| `generation` | 可选严格对象：thinking、reasoning_effort、max_tokens，仅用于兼容 LLM |
+| `reasoning_policy` | 可选 bookcast-v1 任务策略；省略保持旧行为 |
 
 注册组合：`llm/mock`、`tts/mock`、`llm/openai-compatible`、`llm/local`、`tts/kokoro-local`。兼容 LLM 使用 `/chat/completions`；结构化生成使用 JSON mode、提示中的 JSON Schema 和本地 Pydantic 校验，不自动降级为未校验文本。local LLM 使用相同协议，仅允许 loopback 主机；远程地址要求 HTTPS，拒绝重定向。kokoro-local 直接读取本地模型，不使用端点或密钥；仅显式 `tts setup` 下载模型，generate 不下载。配置见 [tts-local.toml](../examples/tts-local.toml)。
 
@@ -46,7 +48,7 @@ uv run bookcast status <job> --json
 | `input_error` / `schema_error` / `business_error` | false | 禁止，修复原因后显式 retry |
 | `interrupted` | true | 本次进程停止；下一次 resume 处理 |
 
-429 根据错误 code/type 区分额度耗尽和限流；401/403 为认证错误，408/504 为超时，其余 5xx 为临时不可用，其余 HTTP 错误为输入错误。额度分类依据 [OpenAI 错误码文档](https://developers.openai.com/api/docs/guides/error-codes)，兼容厂商若返回不同代码需在适配器补充映射。异常消息不参与分类；未识别的异常归为业务错误，避免切模型隐藏程序缺陷。
+402 为余额/额度不足，无需依赖错误正文；429 根据已知 code/type 区分额度耗尽和限流；401/403 为认证错误，408/504 为超时，其余 5xx 为临时不可用，其余 HTTP 错误（含400/422）为输入错误。参考 [DeepSeek 官方错误码](https://api-docs.deepseek.com/quick_start/error_codes/) 和 [OpenAI 错误码文档](https://developers.openai.com/api/docs/guides/error-codes)。异常消息不参与分类；未识别异常归为业务错误。无效 JSON、schema 不匹配、空输出或非 stop 完成原因（如 length 截断）为永久 schema_error，不切 Provider；兼容旧服务省略 finish_reason 的响应。
 
 同一次运行，每个失效 Provider 最多尝试一次后禁用，成功接管者继续后续任务；没有后台重试、无限轮询或隐式 Mock 回退。重启从最近可匹配调用位置恢复；新的运行可重新尝试先前失效的服务。链全部耗尽则保存失败并退出，用户修复配置或额度后用 `--resume` 继续。`retryable` 描述故障性质，实际切换还受 `failover_on` 限制。
 
@@ -70,9 +72,40 @@ CLI 创建任务时保存通过严格 schema 校验的配置快照及 LLM/TTS �
 
 ## 增加 Provider
 
+可选 TaskLLMProvider.for_task 返回一次调用视图，暴露最终 cache_key、generation_audit、last_usage、reported_model；未实现者仍使用原接口。绑定与缓存校验在 ProviderChain 统一进行，业务 Pipeline 不判断厂商。
+
 1. 实现 [provider_api.py](../src/bookcast/provider_api.py) 契约：公共 name/model/cache_key、health_check、capabilities；LLM 实现 generate 和 generate_structured，TTS 实现 synthesize（24 kHz 单声道 PCM16 WAV）。
 2. 在适配器内将故障转换成安全的 ProviderError；单个生成方法对应一个被追踪的服务调用，不在内部隐藏重试或多个付费子调用。
 3. 使用 `ProviderRegistry.register(kind, type, factory)` 注册工厂，在组合入口配置注册表；不要改 Pipeline，也不要让业务代码 import 厂商 SDK。CLI 默认注册项集中在 [provider_registry.py](../src/bookcast/provider_registry.py)。
 4. 加入离线契约和故障注入测试；更新文档与决策后再启用真实服务验证。
 
 未知注册类型、错误优先级、重复名称、错误 kind 和永久错误切换策略均在启动时拒绝。单本书串行执行并加文件锁；自动并发调度和成本预算尚未实现。Phase 8 本地中文人声沿用相同错误分类，内容质量或音频契约失败不盲目换模型。
+
+## DeepSeek 与任务级生成配置（Phase 9）
+
+[deepseek-kokoro.toml](../examples/deepseek-kokoro.toml) 复用 openai-compatible，模型为核验时官方的 deepseek-flash，端点 https://api.deepseek.com，密钥仅从 DEEPSEEK_API_KEY 读取；链不含 Mock。官方来源和实际验收状态见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。没有独立厂商 Adapter 或 SDK。
+
+generation 只接受以下字段，拒绝额外字段、类型转换和矛盾参数；不支持任意请求 JSON、headers 或 secrets：
+
+- thinking：enabled / disabled；缺省不发送。
+- reasoning_effort：low / high / max；显式设置时启用 thinking，不能与 disabled 同用。
+- max_tokens：严格整数1–65536，包含服务端推理/生成预算；示例16384，不是费用保证。截断为永久错误，需评估预算后显式 retry。
+
+`reasoning_policy="bookcast-v1"` 显式选择中央候选策略：抽取 disabled；章节综合 low；整书综合 high；对话和一致性 low。Planner 继续本地确定性计算；未识别任务不附加策略参数。尚未完成真实质量对比，不能称为最优策略。
+
+显式 generation 字段优先于策略；thinking=disabled 清除策略中的 effort，reasoning_effort=low 为所有任务启用 low。仅设置 max_tokens 保留各任务差异。完全使用 Provider 级配置时省略 reasoning_policy。两者均省略不增加请求参数、不改变历史适配器 cache key。
+
+config providers 的 effective_generation 展示各任务实际参数；Attempt.generation 保存策略名、任务类别、最终 options，调用前即落盘。配置和任务映射集中在 generation.py，Pipeline 无厂商分支。
+
+同名 Provider 的缓存摘要覆盖实际模型、端点和该任务最终 generation 参数。例：候选策略改成全局 disabled，已是 disabled 的抽取不失效，综合/脚本/复核失效；下游依据实际产物哈希传播。配置来源不同但有效请求相同不重做。max_tokens 改变也失效；更换环境变量名/值不触发内容重算。移除/替换 Provider 仍遵守 D-014，保留有效旧结果；全书换模型比较应选新输出目录。
+
+manifest v3 的 Attempt 增加可选 generation、reported_model、provider_reported_usage，旧文件缺省 null，不捏造历史。model 保留请求名称；reported_model 为响应提供的受限模型标识，可反映别名路由，未知为空。兼容响应 usage 映射：
+
+| 保存字段 | 服务响应字段 |
+| --- | --- |
+| input_tokens | usage.prompt_tokens |
+| output_tokens | usage.completion_tokens |
+| reasoning_tokens | usage.completion_tokens_details.reasoning_tokens |
+| cache_hit_tokens | usage.prompt_cache_hit_tokens，或 prompt_tokens_details.cached_tokens |
+
+仅接受非负整数；未返回或非法值为 null。服务完全未返回 usage 时整项为 null。响应后的 schema/业务验证失败仍可能收费，保存已收到的 usage；HTTP/传输失败无 usage 不猜测。每次调用清空响应元数据，避免继承上次用量。不保存 reasoning_content、完整响应或错误正文；不使用本地 tokenizer 冒充计费数据、不实现 estimated_cost、不硬编码价格。reasoning_tokens 通常是 output_tokens 的子集，不能重复相加。

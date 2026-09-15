@@ -30,3 +30,4 @@ packages = ["src/bookcast"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = ["live_llm: explicit environment opt-in required; may call a paid LLM API"]

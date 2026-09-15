@@ -128,6 +128,16 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 4. CLI/Web 如实区分人声、音调和历史类型；实际 MP3 中文样例及恢复证据见 [TTS.md](TTS.md)。
 5. 付费 TTS 仅保留为未来显式配置的选项，本阶段未实现；真实 LLM 中文内容、主观听感与跨平台仍需独立验收。
 
+## Phase 9：真实 LLM Provider 验收
+
+**状态：进行中；离线实现已完成，真实生成/质量验收等待 DEEPSEEK_API_KEY。不能以 Phase 8 Mock 脚本人声替代。**
+
+1. 核验官方 DeepSeek Flash 协议，复用兼容适配器及现有中立 Provider/Core。
+2. 严格 thinking/effort/token预算、中央任务策略、服务端 usage、有效配置缓存和审计。
+3. 离线错误与接管/恢复测试；收费测试仅在显式环境变量启用时执行。
+4. 自制中文文本→真实分层内容→Kokoro→约5–10分钟MP3；人工验收与 resume 核对待执行，见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。
+5. 本阶段不主动 push，不开始 Phase 10。
+
 ## 后续候选：语音质量与 M4B 输出
 
 **状态：规划中。**

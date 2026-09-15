@@ -80,3 +80,7 @@ Phase 5 新任务 `manifest.schema_version=3`、`pipeline_version=2`，附带 `c
 如果质量失败或需要改写，可执行 `bookcast retry JOB_ID --revise-segment 0002`，也兼容原 `generate 源文件 --resume --revise-segment 0002`。片段修订号先持久化，重新生成该片段；其来源分析和全局规划保持不变。若新的结尾变化，后续依赖它的脚本会重新生成；复核与 TTS 仅在输入变化时重做。调用审计保留，当前产物文件更新。修订后再次崩溃只需普通 `--resume`，不要重复增加修订号。没有自动重写循环；若证据提取本身错误，应修复相应实现/提示版本，或用新输出目录重新验证。
 
 验证命令和实际 demo 见 [PHASE4_DEMO.md](PHASE4_DEMO.md)。
+
+## Phase 9 补充：任务推理策略
+
+现有分层流程不变；任务参数统一由 generation.py 的显式 `bookcast-v1` 候选策略解析，抽取 disabled、章节综合 low、整书综合 high、写作/复核 low。Planner 继续本地确定性计算。策略尚待真实质量实验，不能宣称已经优化；用户可通过 Provider generation 覆盖。参数参与每次任务的缓存与审计，详见 [PROVIDERS.md](PROVIDERS.md) 和 [真实验收记录](PHASE9_REAL_LLM.md)。

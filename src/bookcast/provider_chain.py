@@ -8,7 +8,14 @@ from .provider_api import Provider, ProviderError, ProviderStatus, ErrorKind, FA
 from .storage import fingerprint
 
 
-def provider_config_hash(provider: Provider) -> str:
+def provider_for_task(provider: Provider, task: str) -> Provider:
+    bind = getattr(provider, 'for_task', None)
+    return bind(task) if bind else provider
+
+
+def provider_config_hash(provider: Provider, task: str | None = None) -> str:
+    if task is not None:
+        provider = provider_for_task(provider, task)
     return fingerprint({'name': provider.name, 'model': provider.model, 'configuration': provider.cache_key})
 
 
@@ -38,7 +45,7 @@ class ProviderChain:
                 continue
             for index, provider in enumerate(self.providers):
                 if ((provider.name, provider.model) == (call.provider, call.model)
-                        and (call.provider_config_hash is None or call.provider_config_hash == provider_config_hash(provider))):
+                        and (call.provider_config_hash is None or call.provider_config_hash == provider_config_hash(provider, call.task))):
                     self.index = index
                     if call.status == "failed_retryable" and call.error in self.failover_on:
                         self.index = (index + 1) % len(self.providers)
@@ -51,10 +58,11 @@ class ProviderChain:
         for index in order:
             if index in self.disabled:
                 continue
-            provider = self.providers[index]
+            provider = provider_for_task(self.providers[index], task)
             attempt = AIAttempt(id=uuid4().hex, task=task, kind=kind, provider=provider.name,
                                 model=provider.model, prompt_version=prompt_version, input_hash=input_hash,
-                                provider_config_hash=provider_config_hash(provider))
+                                provider_config_hash=provider_config_hash(provider),
+                                generation=getattr(provider, 'generation_audit', None))
             observe(attempt)
             attempt.status, attempt.timestamp = "running", utc_now()
             observe(attempt)
@@ -65,6 +73,8 @@ class ProviderChain:
                 # Validation and durable output happen before completion is recorded.
                 artifacts = persist(result)
             except (Exception, KeyboardInterrupt, SystemExit) as exc:
+                attempt.provider_reported_usage = getattr(provider, 'last_usage', None)
+                attempt.reported_model = getattr(provider, 'reported_model', None)
                 failure = classify_error(exc)
                 if invoked and not isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     failure = ProviderError(ErrorKind.BUSINESS)
@@ -80,6 +90,8 @@ class ProviderChain:
                 last_error = failure
                 continue
             attempt.status, attempt.artifacts = "completed", artifacts
+            attempt.provider_reported_usage = getattr(provider, 'last_usage', None)
+            attempt.reported_model = getattr(provider, 'reported_model', None)
             attempt.output_hash = next(iter(artifacts.values())) if len(artifacts) == 1 else fingerprint(artifacts)
             attempt.timestamp = utc_now()
             observe(attempt)

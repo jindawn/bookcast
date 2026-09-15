@@ -271,7 +271,7 @@ class _Runner:
         chain = self.llm if call.kind == 'llm' else self.tts
         same_name = [p for p in chain.providers if p.name == call.provider]
         # Explicit replacement/failover may retain old results; an in-place configuration edit cannot.
-        return not same_name or any(provider_config_hash(p) == call.provider_config_hash for p in same_name)
+        return not same_name or any(provider_config_hash(p, call.task) == call.provider_config_hash for p in same_name)
 
     def step_config_valid(self, name, record):
         for call in reversed(self.manifest.ai_calls):

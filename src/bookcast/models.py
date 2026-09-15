@@ -5,6 +5,7 @@ from typing import Literal
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from .generation import GenerationAudit, ProviderUsage
 
 
 def utc_now() -> str:
@@ -140,6 +141,9 @@ class Attempt(ExecutionModel):
     prompt_version: str
     input_hash: str
     provider_config_hash: str | None = None
+    generation: GenerationAudit | None = None
+    provider_reported_usage: ProviderUsage | None = None
+    reported_model: str | None = Field(default=None, pattern=r'^[a-zA-Z0-9_.:/-]{1,128}$')
     output_hash: str | None = None
     artifacts: dict[str, str] = Field(default_factory=dict)
     timestamp: str = Field(default_factory=utc_now)

@@ -1,0 +1,32 @@
+# Official Chat Completions protocol checked 2026-09-15; no SDK or embedded key.
+# Install local voices first: bookcast tts setup
+schema_version = 1
+llm_priority = ["deepseek"]
+tts_priority = ["kokoro"]
+
+[[providers]]
+name = "deepseek"
+kind = "llm"
+type = "openai-compatible"
+model = "deepseek-flash"
+base_url = "https://api.deepseek.com"
+api_key_env = "DEEPSEEK_API_KEY"
+timeout_seconds = 120
+# Opt-in candidate policy; see PHASE9_REAL_LLM.md for actual validation status.
+reasoning_policy = "bookcast-v1"
+[providers.generation]
+max_tokens = 16384
+# Explicit overrides win over the task policy, e.g. thinking = "disabled".
+# Or reasoning_effort = "low" (enables thinking for every task).
+
+[[providers]]
+name = "kokoro"
+kind = "tts"
+type = "kokoro-local"
+model = "kokoro-multi-lang-v1_0"
+[providers.local_tts]
+model_dir = "../data/models/kokoro-multi-lang-v1_0"
+host_voice = 45
+guest_voice = 50
+speed = 1.0
+threads = 2

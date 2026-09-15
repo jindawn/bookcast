@@ -10,6 +10,7 @@ from pydantic import Field, model_validator
 
 from .errors import BookCastError
 from .models import Model
+from .generation import GenerationConfig, PolicyName
 from .provider_api import ErrorKind, FAILOVER_ERRORS
 
 
@@ -39,9 +40,14 @@ class ProviderSpec(Model):
     api_key_env: str | None = Field(default=None, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     timeout_seconds: float = Field(default=30, ge=0.1, le=120, allow_inf_nan=False)
     local_tts: LocalTTSConfig | None = None
+    generation: GenerationConfig | None = None
+    reasoning_policy: PolicyName | None = None
 
     @model_validator(mode="after")
     def validate_endpoint(self):
+        if (self.generation is not None or self.reasoning_policy is not None) and (
+                self.kind != 'llm' or self.type not in {'openai-compatible', 'local'}):
+            raise ValueError('generation options require a compatible LLM adapter')
         if self.type == "kokoro-local":
             if (self.kind != "tts" or self.model != "kokoro-multi-lang-v1_0" or not self.local_tts
                     or self.base_url or self.api_key_env):

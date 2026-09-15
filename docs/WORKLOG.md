@@ -171,3 +171,12 @@
 - 在该提交上运行完整pytest：262 passed、10 subtests passed；3项Playwright、Next构建、TypeScript、compileall、项目校验和提交差异检查通过。
 - 该提交实际合成2.22秒云希中文样音；原276.429秒demo再次resume，83个文件字节/mtime与调用数不变。固定安装器通过官方重定向的1字节网络探测成功。
 - STATE设为phase-8 completed，last_verified_commit记录54c05ad完整SHA；清空in_progress，更新HANDOFF/ROADMAP并准备D-006最终快照。没有推送远端；没有启用付费服务。
+
+## 2026-09-15T14:25:01Z — Phase 9 离线实现与真实验收边界
+
+- 接手核对HEAD与origin/main同为4137d85；历史Phase 7/8已经推送，修正文档中过时的未push描述。关键基线86项通过。
+- 编码前查官方DeepSeek发布说明、Chat Completions、thinking、usage和错误协议；使用deepseek-flash，复用CompatibleLLMProvider，无SDK/Core重写。
+- 实现严格生成选项、中央候选任务策略、实际配置缓存、可选响应模型/usage、HTTP402与截断分类、无密钥配置示例和CLI配置检查。
+- 新51项专项离线通过；组合专项99 passed，完整313 passed/10子测试，1项联网测试默认跳过。project validator、compileall和diff检查通过。
+- 实际官方models无效凭证探测返回401并正确分类；未持久化错误正文。没有有效DEEPSEEK_API_KEY，尚未调用收费生成，没有真实usage或DeepSeek+Kokoro音频验收。
+- PHASE9_REAL_LLM明确列出未验收项及执行步骤，reasoning策略尚待真实质量实验。准备创建功能提交并按D-006验证；不push、不开始Phase 10。
