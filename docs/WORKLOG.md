@@ -211,3 +211,12 @@
 - 提交上完整318 passed、10 subtests passed、1联网测试默认跳过，7个既有警告（42.66秒）；project validator、compileall和提交差异检查通过。
 - 实际已完成音频再次禁HTTP/TTS恢复：81文件集合/SHA/mtime及59次历史调用不变；配置变更副本验证通过，未新增收费调用。
 - STATE记录实际验证SHA并完成交接，in_progress和blockers为空；保留真实schema不稳定、两处来源归属及未试听限制。按D-006提交最终文档快照，不push、不开始Phase 10。
+
+## 2026-09-16T12:17:19Z — Phase 10双模式TTS与真实A/B
+
+- 接手HEAD/origin/main同为91b4bcb，Phase 9已推送；135项关键基线通过。核验Google官方TTS/模型/免费层/计费/数据条款；新增显式云端配置和Gemini REST Adapter，无SDK依赖、无Core厂商绑定，Kokoro Adapter未修改。
+- SpeechSegment按主题最多600字符/24发言；每段独立Step/Attempt，音色/style/model/契约参与缓存。永久权限/schema错误不切换，云端链禁止Mock及跨语音模式混链。
+- Phase 9真实脚本独立重渲染，未新增LLM调用，原manifest复验不变。Kokoro23单元成功、320.267208秒；Gemini3段成功、251.440秒，模型gemini-3.1-flash-tts-preview、Kore/Puck。第三段一次schema失败经受控显式重试完成，前两段未重做；用量含失败input1428/output12018。
+- 真实模型查询和无效Key鉴权分类通过；两份MP3完整解码/非静音通过。禁Provider恢复两份任务83/43文件SHA/mtime不变；实际API免费/付费层级和人工试听尚无反馈，不编造验收。
+- Gemini专项48通过；完整367通过/10子测试/2联网默认跳过，49.78秒；显式真实任务测试1通过。validator/compileall/diff通过，196文件秘密字面值扫描无匹配。新增第6段quota接管、真实SIGKILL、单段修复和A/B只调用Core的测试。
+- 更新D-019、术语、运行/架构/Provider/TTS/Job/产品/路线图、PHASE10_TTS_AB及交接状态。技术收尾完成，STATE仅保留待用户反馈的验收阻塞；不push、不开始大型本地TTS阶段。

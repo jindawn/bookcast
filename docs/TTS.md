@@ -64,7 +64,29 @@ Core 按角色发言拆成不超过 80 字符的语音单元，优先在标点/�
 
 [Kokoro 模型卡](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/README.md) 标注模型权重为 Apache-2.0；[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) 主项目使用 Apache-2.0。本适配器采用其[中文/英语多语言发布包](https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/kokoro.html)，固定 SHA-256 为 `c5f7e2d2caf082bc1d20fb70334a61d99d20b484500aad32e7cf84c128ea3298`。运行栈包含第三方组件，例如 [eSpeak NG 的 GPLv3 许可](https://github.com/espeak-ng/espeak-ng/blob/master/COPYING)；不能把整个桌面发行包一概标成 Apache-2.0，分发打包前需整理依赖许可及来源。当前模型与运行数据不进 Git，BookCast 自身发行许可证仍待选定。
 
-本地使用没有按字符或分钟收取的 API 费用，算力与电力由自己的电脑承担。付费 TTS 以后可以按相同 Provider 契约增加，只有用户明确配置才启用；本阶段未实现付费适配器。书籍版权及输出转述约束继续适用，模型许可不授予书籍使用权。
+本地使用没有按字符或分钟收取的 API 费用，算力与电力由自己的电脑承担。Phase 10 增加显式配置的 Gemini 云端 TTS，见下文；Kokoro 仍为免费离线底座。书籍版权及输出转述约束继续适用，模型许可不授予书籍使用权。
+
+## 可选 Gemini 多说话者
+
+`examples/gemini-tts.toml` 是不含密钥的示例，LLM 为 Mock、TTS 为真实云服务。安全注入 `GEMINI_API_KEY` 后运行：
+
+```sh
+.venv/bin/bookcast doctor --config examples/gemini-tts.toml
+.venv/bin/bookcast generate examples/content-demo.txt --config examples/gemini-tts.toml --minutes 6 --output-dir output/gemini-demo
+.venv/bin/bookcast resume JOB_ID --output-dir output/gemini-demo
+```
+
+将示例中的 TTS 配置合并到已有 DeepSeek 配置可生成真实内容；不要将 Mock LLM 样例称为真实内容验收。无需 Google SDK/extra，也不会影响未配置 Key 的 Kokoro 安装和生成。`cloud_tts.send_text_to_cloud=true` 必填且仅接受布尔值；`data_tier=free|paid|unknown` 是人工声明，不查询或改变实际账户。双角色映射 `host_voice=Kore`、`guest_voice=Puck`，可更换不同官方 voice；可选 style_instruction 最多512字符。
+
+文本将发送给 Google Developer API。免费/未付费服务通常可能将输入与输出用于产品改进和人工审核；付费服务不用于该产品改进用途，仍有其他保留/安全条款及地区例外。敏感脚本优先选本地 Kokoro。AI Pro/Gemini App 订阅对话额度不是 API 额度；部分 Developer Program 权益需领取并满足地区、账单资格，BookCast 不推断用户拥有 credit。API 免费层是否可用由模型、项目和实际配额决定，不保证任何固定 RPM；Paid 需按官方计费流程启用。
+
+核验日期2026-09-16：当前实验模型 `gemini-3.1-flash-tts-preview`，输入8192 tokens、输出16384 tokens，原生最多两位说话者。Core 使用更小的每段600字符/24发言边界，Adapter 限制完整提示 UTF-8 不超过6000字节；这不是精确 token 计数。官方返回24kHz单声道 PCM s16le，Adapter 严格校验 MIME/长度/完成状态并封装 WAV，Core 校验后拼接 MP3。单请求最长120秒，失败不隐式重试。Preview 名称可配置，API 行为需随官方变化复核。
+
+片段保存于 `audio/segments/`，步骤为 `tts_segment:节目片段ID:序号`。每段成功立即落盘；quota 后恢复仅继续未完成段。完成后的无网络恢复不产生额外 API 调用。同名 Provider 改音色/style/model 仅失效相关 TTS；更换 Provider 名称保留有效历史归属，不清理 LLM 或旧音频。逐句与逐段链不能混用，也不允许云端→Mock 掩盖失败。已完成旧任务保留原产物；未完成跨模式切换需回原链恢复，或另建任务。
+
+429 使用结构化 quota violation 区分按日/额度为零与速率限制；未知429保守记 rate_limit。401或无效Key原因→authentication_error，403→permission_denied（永久），402/明确额度原因→quota_exhausted，408/504→timeout，其他5xx→temporary_unavailable，其余非法请求→input_error，坏JSON/音频契约→schema_error。只保存枚举，不保存响应正文。usageMetadata 的 promptTokenCount/candidatesTokenCount 映射 input/output tokens，未提供值保持null，不估算账单。
+
+官方依据：[模型](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-tts-preview)、[当前 TTS 指南](https://ai.google.dev/gemini-api/docs/speech-generation)、[本 Adapter 使用的 generateContent TTS（Legacy）](https://ai.google.dev/gemini-api/docs/generate-content/speech-generation)、[价格与免费层](https://ai.google.dev/gemini-api/docs/pricing)、[配额](https://ai.google.dev/gemini-api/docs/rate-limits)、[计费](https://ai.google.dev/gemini-api/docs/billing)、[数据条款](https://ai.google.dev/gemini-api/terms)、[API Key](https://ai.google.dev/gemini-api/docs/api-key)、[错误](https://ai.google.dev/gemini-api/docs/troubleshooting)、[Developer Program 权益](https://developers.google.com/program/plans-and-pricing)。同脚本 A/B、实际账户证据及试听限制见 [PHASE10_TTS_AB.md](PHASE10_TTS_AB.md)。
 
 ## 本次真实验证
 

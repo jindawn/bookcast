@@ -109,3 +109,9 @@ manifest v3 的 Attempt 增加可选 generation、reported_model、provider_repo
 | cache_hit_tokens | usage.prompt_cache_hit_tokens，或 prompt_tokens_details.cached_tokens |
 
 仅接受非负整数；未返回或非法值为 null。服务完全未返回 usage 时整项为 null。响应后的 schema/业务验证失败仍可能收费，保存已收到的 usage；HTTP/传输失败无 usage 不猜测。每次调用清空响应元数据，避免继承上次用量。不保存 reasoning_content、完整响应或错误正文；不使用本地 tokenizer 冒充计费数据、不实现 estimated_cost、不硬编码价格。reasoning_tokens 通常是 output_tokens 的子集，不能重复相加。
+
+## Gemini TTS 与能力选择
+
+Registry 新增 `tts/gemini-tts`；详见 [TTS](TTS.md) 与 `examples/gemini-tts.toml`。speech_units 表示单句接口，speech_segments/multi_speaker 表示有界对话接口，cloud 标识第三方文本发送。新字段默认false，旧 Provider/manifest 保持可读。配置中的 model、双音色、style_instruction、cloud_tts 与音频契约版本参与 Provider 摘要；文本进入 Step 输入 hash。Gemini 原生多说话者只在 Adapter 内表达，Pipeline 不 import Google SDK。
+
+配置必须明确允许云发送，云端链禁止 Mock，逐句/逐段能力不能混链；不发生 Kokoro 失败后的自动云上传。新增 permission_denied 永久错误，不允许加入 failover_on。既有 quota/rate_limit/timeout/temporary_unavailable 策略继续生效，真实服务错误与离线注入须在验收记录中区分。

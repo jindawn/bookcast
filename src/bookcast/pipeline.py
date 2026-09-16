@@ -42,6 +42,8 @@ class Pipeline:
                  provider_settings: dict | None = None, progress: Callable[[dict], None] | None = None):
         self.llm = llm if isinstance(llm, ProviderChain) else ProviderChain([llm])
         self.tts = tts if isinstance(tts, ProviderChain) else ProviderChain([tts])
+        from .speech import validate_tts_chain
+        validate_tts_chain(self.tts)
         self.output_dir = output_dir.resolve()
         self.provider_settings, self.progress = provider_settings, progress
 

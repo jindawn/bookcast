@@ -1,6 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 9）
+## 当前实际实现（Phase 10）
+
+Phase 10 在中立 TTS 契约增加 SpeechTurn/SpeechSegment/SegmentSpeechInfo 与 speech_segments/multi_speaker/cloud 能力。speech_segments.py 按主题将对话拆为最多600字符、24次发言的最小 Step/Attempt；speech.py 按能力及历史检查点选择逐句或逐段路径。Gemini 只在 Registry 注册的 Adapter 中调用官方 REST，标准库实现，不新增安装依赖。Kokoro 代码和既有 SpeechUnit 契约不变。配置、隐私、缓存和验收见 [TTS.md](TTS.md)、[PHASE10_TTS_AB.md](PHASE10_TTS_AB.md)、D-019。
 
 Phase 9 复用 CompatibleLLMProvider，增加 generation.py 严格契约与集中任务策略、可选调用视图、服务端 usage 和有效配置哈希审计。ProviderChain 绑定任务后调用中立接口，Pipeline 只使用任务级配置校验；不新增厂商 SDK 或改写 Core。真实 LLM + Kokoro 技术链路已验收；内容保留来源归属警告，尚未进行人工试听，见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。旧未配置推理选项的请求与缓存保持兼容。
 

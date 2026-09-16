@@ -1,6 +1,7 @@
 """Strict TOML configuration; only names of environment variables, never keys."""
 
 import ipaddress
+import re
 from pathlib import Path
 import tomllib
 from typing import Literal
@@ -31,6 +32,23 @@ class LocalTTSConfig(Model):
     threads: int = Field(default=2, ge=1, le=16)
 
 
+class CloudTTSConfig(Model):
+    # Required acknowledgement; a key or an App subscription alone never opts in.
+    send_text_to_cloud: bool = Field(strict=True)
+    data_tier: Literal["free", "paid", "unknown"] = "unknown"
+    host_voice: str = Field(default="Kore", pattern=r"^[A-Za-z]{1,32}$")
+    guest_voice: str = Field(default="Puck", pattern=r"^[A-Za-z]{1,32}$")
+    style_instruction: str | None = Field(default=None, max_length=512)
+
+    @model_validator(mode="after")
+    def distinct_voices(self):
+        if not self.send_text_to_cloud:
+            raise ValueError('cloud text transmission must be explicitly enabled')
+        if self.host_voice == self.guest_voice:
+            raise ValueError("two hosts require different voices")
+        return self
+
+
 class ProviderSpec(Model):
     name: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
     kind: Literal["llm", "tts"]
@@ -40,11 +58,18 @@ class ProviderSpec(Model):
     api_key_env: str | None = Field(default=None, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     timeout_seconds: float = Field(default=30, ge=0.1, le=120, allow_inf_nan=False)
     local_tts: LocalTTSConfig | None = None
+    cloud_tts: CloudTTSConfig | None = None
     generation: GenerationConfig | None = None
     reasoning_policy: PolicyName | None = None
 
     @model_validator(mode="after")
     def validate_endpoint(self):
+        if self.type == "gemini-tts":
+            if (self.kind != 'tts' or self.cloud_tts is None or not self.api_key_env
+                    or self.base_url is not None or not re.fullmatch(r'[A-Za-z0-9._-]{1,128}', self.model)):
+                raise ValueError('Gemini TTS requires explicit cloud consent, environment key and model; endpoint is official only')
+        elif self.cloud_tts is not None:
+            raise ValueError('cloud_tts is only valid for gemini-tts')
         if (self.generation is not None or self.reasoning_policy is not None) and (
                 self.kind != 'llm' or self.type not in {'openai-compatible', 'local'}):
             raise ValueError('generation options require a compatible LLM adapter')

@@ -1,0 +1,27 @@
+# Explicit cloud opt-in: podcast text goes to Google's official Developer API.
+# Free/unknown API tiers may use inputs/outputs for product improvement.
+# Paid API projects have different data terms. App/AI Pro quotas are separate.
+# This example declares no billing knowledge; it does not configure billing.
+schema_version = 1
+llm_priority = ["mock"]
+tts_priority = ["gemini"]
+
+[[providers]]
+name = "mock"
+kind = "llm"
+type = "mock"
+model = "mock-llm-v1"
+
+[[providers]]
+name = "gemini"
+kind = "tts"
+type = "gemini-tts"
+model = "gemini-3.1-flash-tts-preview"
+api_key_env = "GEMINI_API_KEY"
+timeout_seconds = 120
+[providers.cloud_tts]
+send_text_to_cloud = true
+data_tier = "unknown" # User declaration only; API success does not prove free billing.
+host_voice = "Kore"
+guest_voice = "Puck"
+style_instruction = "自然的中文双人读书播客。HostA清晰平稳，HostB好奇、有追问感。严格朗读文本，不增加语气词或删改文字。"

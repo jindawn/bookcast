@@ -3,7 +3,7 @@ import json
 import re
 
 from .audio import merge_audio
-from .speech import audio_summary, render_speech, speech_units, wants_units
+from .speech import audio_summary, render_speech, speech_tasks
 from .content_models import (CATEGORIES, ConsistencyReview, ContentOptions, EpisodePlan, EvidenceAnalysis, RichAnalysis, Segment,
                              SegmentScript, Synthesis, Theme)
 from .errors import BookCastError
@@ -243,7 +243,8 @@ class ContentFlow:
                            'chapters': [(cid, [t.model_dump() for t in ts]) for cid, ts in chapter_themes]}, 'plans/episode.json',
                    lambda: planner(chapter_themes, root, claims, self.options))
         plan = self.read('plans/episode.json', EpisodePlan)
-        has_unit_tts = any(p.capabilities().speech_units and not p.capabilities().mock for p in r.tts.providers)
+        has_unit_tts = any((p.capabilities().speech_units or p.capabilities().speech_segments)
+                           and not p.capabilities().mock for p in r.tts.providers)
         r.register([f'{stage}:{s.id}' for s in plan.segments for stage in ('script','consistency','tts')], final=not has_unit_tts)
         scripts = []
         for segment in plan.segments:
@@ -285,8 +286,7 @@ class ContentFlow:
                 turns=[DialogueTurn(speaker=t.speaker, text=t.text) for t in script.turns])
             inputs = {'script': sha256_file(r.path(f'scripts/{segment.id}.json')), 'contract': 'pcm24k-v1'}
             speeches.append((speech, inputs))
-            if wants_units(r, speech, inputs):
-                unit_tasks.extend(f'tts:{segment.id}:{index}' for index, _ in speech_units(speech))
+            unit_tasks.extend(speech_tasks(r, speech, inputs))
         r.register(unit_tasks, final=True)
         for speech, inputs in speeches:
             render_speech(r, speech, inputs, 'pcm24k-v1')

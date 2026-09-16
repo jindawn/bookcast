@@ -170,3 +170,15 @@ Attempt 增加可选有效参数、响应模型标识和 provider_reported_usage
 真实模型反复返回精确引文配错误 Python 字符偏移；直接在提示中提供偏移仍未稳定。分析响应改为严格 EvidenceAnalysis，只返回转述和受限 evidence_id。Core 从输入中有界、连续且完整覆盖的证据表查出 quote/start/end，再执行原精确校验。重复原文靠 ID 区分位置，不猜测、不模糊定位；非法引用仍永久停止，不切模型。
 
 分析提示单独升到 content-analysis-v3，输入 hash 包含 evidence_spans 与响应 schema；其它内容提示版本保持不变。代价是证据跨度受预切边界约束、增加提示长度，不能证明语义支持或改善所有长书。真实 schema_error 仍显式失败并保留 usage，禁止自动重试掩盖不稳定。
+
+## D-019 — 双模式 TTS、显式云端授权与有界对话合成
+
+状态：accepted；日期：2026-09-16。扩展 D-016，保留 D-014 的缓存归属、manifest v3 和 Kokoro 逐句恢复。
+
+Core 新增中立 SpeechTurn/SpeechSegment 与多说话者能力；每个主题内部按600字符/24发言切分，保持文本与角色顺序，只有超长发言才优先按标点拆开。一次片段对应一次 Adapter 调用和独立 Step/Attempt。切分规则不依赖服务商配置；style、model、双音色、音频契约及无密钥配置参与缓存。WAV 统一24kHz/单声道/PCM16，片段拼接复用既有音频模块。代价是短段间语气可能不连续、语速不能精确锁定，需人工试听。
+
+Gemini 使用标准库调用官方、仍有文档的 generateContent REST TTS；该文档现标为 Legacy，新文档推荐 Interactions。选择单次无状态请求以复用已有 Attempt 审计并避免 SDK 隐式重试和安装依赖；未来迁移限于 Adapter。模型只在配置指定，API Key 仅来自环境变量，拒绝自定义端点/重定向，不保存原始错误正文。服务端 usage 和 reported_model 沿用既有可选字段。
+
+云端配置必须 send_text_to_cloud=true，运行时提示第三方文本发送。data_tier 是用户声明，不是实际计费证明。App/AI Pro 对话额度与 Developer API 配额分离；外部 credit 不改变官方凭证及请求方式。禁止任何 Cookie/内部接口或隐式 Kokoro→云端回退；云端链不得包含 Mock。链内只允许一致的逐句/逐段能力，配额与临时错误按既有策略接管，鉴权/权限/schema/input 不切换。
+
+已有检查点决定任务语音模式，完成产物继续遵循 D-014；跨模式接续未完成任务会明确失败，应恢复原能力链或用独立输出目录。A/B 客户端仅导入经过哈希校验的内容检查点、保留导入尝试来源并委托原 Pipeline，禁止重新调用 LLM，不复制任何合成/拼接逻辑。对已完成请求未本地落盘的崩溃窗口，仍不能保证免重复计费。

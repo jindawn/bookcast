@@ -138,6 +138,16 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 4. 自制中文文本→真实分层内容→Kokoro→约5–10分钟MP3；已完成文本审读和 resume 核对；两处来源归属警告及未试听限制，见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。
 5. 本阶段不主动 push，不开始 Phase 10。
 
+## Phase 10：TTS Provider 2.0 与 Gemini 多说话者
+
+**状态：技术实现及真实双路音频生成完成；人工 A/B 试听和实际 API 免费层资格待确认。**
+
+1. 保留 Kokoro SpeechUnit；新增中立 SpeechTurn/SpeechSegment 与按能力选择的语音路径，无 Google SDK 或 Core 厂商依赖。
+2. Gemini 官方 REST、双角色音色、有界主题分段、显式云端同意、严格音频与安全错误处理。
+3. 每段独立 Step/Attempt，D-014 缓存、额度接管、真实 SIGKILL、损坏修复和旧任务兼容。
+4. 同一 Phase 9 脚本分别生成 Kokoro/Gemini MP3，无新增 LLM 请求；Gemini 第三段一次 schema 失败经受控重试成功。记录见 [PHASE10_TTS_AB.md](PHASE10_TTS_AB.md)。
+5. 离线测试默认不调用 Google；尚未人工评分，不把双 voice 配置等同已听出角色差异。不主动 push，不开始大型本地 TTS 模型阶段。
+
 ## 后续候选：语音质量与 M4B 输出
 
 **状态：规划中。**

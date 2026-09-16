@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-9",
-  "current_task": "Phase 9真实DeepSeek+Kokoro技术验收与提交验证完成；内容审读/真人试听限制已记录",
-  "task_status": "completed",
+  "current_phase": "phase-10",
+  "current_task": "Phase 10技术实现与真实同脚本双路生成完成；待人工试听和API项目层级确认",
+  "task_status": "blocked",
   "branch": "main",
   "last_verified_commit": "17fc1f1f9bac7f31aa1f9ab4c539fa625811421a",
   "completed_tasks": [
@@ -62,15 +62,58 @@
     "工作区专项142 passed；全量318 passed/10子测试/1联网跳过；已恢复真实测试任务显式复验1 passed，无新增调用",
     "真实用量记录：正式13调用input16422/output24445，48次总尝试input56285/output79397；null保留未知，未估算账单",
     "逐段文本审读：三章覆盖、真实问答与假设反例；保留2项来源归属警告，未声称真人试听或优秀内容质量",
-    "创建并验证真实验收修复提交17fc1f1f9bac7f31aa1f9ab4c539fa625811421a：318项/10子测试通过，静态检查与正式81文件无网络恢复再次通过；按D-006保存交接快照，未push"
+    "创建并验证真实验收修复提交17fc1f1f9bac7f31aa1f9ab4c539fa625811421a：318项/10子测试通过，静态检查与正式81文件无网络恢复再次通过；按D-006保存交接快照，未push",
+    "Phase 10：中立双模式TTS、显式云端Gemini Adapter、600字符/24发言片段及D-014缓存，Kokoro实现未修改",
+    "Phase 10：真实同脚本Kokoro/Gemini MP3分别320.267208/251.440秒，新增LLM调用为0；Gemini3段成功、1次schema失败经受控显式重试恢复",
+    "Phase 10：第6段额度接管、真实SIGKILL、单段损坏修复及旧任务兼容测试；两份真实任务禁Provider恢复83/43文件不变"
   ],
   "in_progress": [],
   "next_actions": [
-    "保持Phase 9范围；需要发布样例时先审读两处来源归属问题并人工试听5分20秒音频，使用既有片段修订机制处理",
-    "只有用户确认后再定义Phase 10；建议优先长文本/更多合法样本、来源归属与发音停顿质量，不扩写既有Core",
-    "交接时以git status/log核对实际提交；本轮不push，数据/密钥/音频继续留在忽略目录"
+    "收集A/B试听及API项目层级反馈，补充PHASE10_TTS_AB.md和状态，不重新生成有效产物",
+    "如需处理preview schema失败，保留失败记录并检查契约；禁止无限自动重试或Mock回退",
+    "只完成Phase 10收尾，不push、不开始大型本地TTS模型阶段"
   ],
   "tests": [
+    {
+      "name": "phase10-full",
+      "command": ".venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "367 passed、10 subtests passed、2联网测试默认跳过，7个既有警告，49.78秒",
+      "checked_at": "2026-09-16T12:17:19Z"
+    },
+    {
+      "name": "phase10-static-security",
+      "command": "python3 scripts/validate_project.py; compileall; git diff --check; in-memory secret scan",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "validator/compileall/diff通过；196文件未发现环境Secret字面值；两份MP3完整解码/非静音；Kokoro与Gemini禁Provider恢复83/43文件SHA/mtime不变",
+      "checked_at": "2026-09-16T12:17:19Z"
+    },
+    {
+      "name": "phase10-baseline",
+      "command": ".venv/bin/pytest tests/test_tts.py tests/test_providers.py tests/test_generation.py tests/test_job_recovery.py -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "接手91b4bcb干净工作区，135 passed，60.75秒",
+      "checked_at": "2026-09-16T06:33:34Z"
+    },
+    {
+      "name": "phase10-special",
+      "command": ".venv/bin/pytest tests/test_gemini_tts.py tests/test_tts.py tests/test_content.py -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "接手后专项103 passed；最终新增Gemini专项48 passed，3.21秒，覆盖第6段quota/真实SIGKILL/损坏修复",
+      "checked_at": "2026-09-16T12:17:19Z"
+    },
+    {
+      "name": "phase10-live",
+      "command": "BOOKCAST_RUN_LIVE_GEMINI=1 BOOKCAST_LIVE_GEMINI_OUTPUT=output/phase10-gemini .venv/bin/pytest tests/test_live_gemini.py -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "1 passed，0.28秒；真实Gemini已成功3段，第三段此前schema失败一次，受控重试后完成；禁网resume保持43文件SHA/mtime及调用数不变",
+      "checked_at": "2026-09-16T12:14:00Z"
+    },
     {
       "name": "phase9-special",
       "command": ".venv/bin/pytest tests/test_generation.py tests/test_providers.py tests/test_content.py tests/test_job_recovery.py -q",
@@ -137,12 +180,45 @@
     }
   ],
   "known_failures": [
+    "Gemini preview第三段首轮schema_error，已保留失败usage并经一次受控重试完成；原始响应未保存，具体字段原因未知",
+    "Phase 10无真人试听评分，API层级未知；真实限流/额度/403/timeout/5xx仅离线注入，未声称触发真实服务故障",
     "正式demo质量needs_review：两处合理推论被归为source，未完成真人试听；不能以技术成功等同内容优秀",
     "独立真实测试在证据ID契约下曾出现1次schema_error，人工显式重试成功；原始响应未保存，不能断言具体坏字段或100%稳定",
     "真实402/限流/timeout/5xx未实际制造，仅官方协议及离线故障注入验证；小样本未比较推理强度或验收长书"
   ],
-  "blockers": [],
+  "blockers": [
+    "人工A/B试听尚无反馈：不能确认主观角色区分、自然度或无漏字；技术实现和真实生成均已完成",
+    "Gemini API项目free/paid层级尚未知，不能声称免费层实测通过"
+  ],
   "important_files": [
+    {
+      "path": "src/bookcast/adapters/gemini.py",
+      "purpose": "官方云端TTS协议、严格PCM校验、安全错误与usage"
+    },
+    {
+      "path": "src/bookcast/speech_segments.py",
+      "purpose": "中立对话分段及独立Step/Attempt恢复"
+    },
+    {
+      "path": "scripts/tts_ab.py",
+      "purpose": "已有脚本独立音频对照，禁止重调LLM"
+    },
+    {
+      "path": "tests/test_gemini_tts.py",
+      "purpose": "离线协议/隐私/缓存/故障及真实SIGKILL"
+    },
+    {
+      "path": "tests/test_live_gemini.py",
+      "purpose": "显式环境变量启用的真实任务及禁网恢复测试"
+    },
+    {
+      "path": "docs/PHASE10_TTS_AB.md",
+      "purpose": "实际双路音频、用量、失败、恢复与待试听记录"
+    },
+    {
+      "path": "examples/gemini-tts.toml",
+      "purpose": "无密钥、显式云端同意的多说话者配置"
+    },
     {
       "path": "docs/TTS.md",
       "purpose": "免费中文TTS安装、恢复、许可与真实样例证据"
@@ -428,5 +504,5 @@
       "purpose": "真实DeepSeek/Kokoro样例、官方usage、失败、缓存恢复、文本审读与验收限制"
     }
   ],
-  "updated_at": "2026-09-16T06:11:34Z"
+  "updated_at": "2026-09-16T12:17:19Z"
 }

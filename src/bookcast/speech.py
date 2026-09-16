@@ -41,6 +41,8 @@ def speech_units(script):
 
 
 def wants_units(r, script, inputs):
+    if any(name.startswith(f"tts_segment:{script.chapter_id}:") for name in r.manifest.steps):
+        return False
     prefix = f"tts:{script.chapter_id}:"
     if any(name.startswith(prefix) for name in r.manifest.steps):
         return True
@@ -53,7 +55,40 @@ def wants_units(r, script, inputs):
     return any(p.capabilities().speech_units and not p.capabilities().mock for p in r.tts.providers)
 
 
+def wants_segments(r, script, inputs):
+    if any(name.startswith(f"tts_segment:{script.chapter_id}:") for name in r.manifest.steps):
+        return True
+    if any(name.startswith(f"tts:{script.chapter_id}:") for name in r.manifest.steps):
+        return False  # Existing Kokoro work keeps its unit checkpoints.
+    old = r.manifest.steps.get(f"tts:{script.chapter_id}")
+    if (old and old.status == "completed" and old.input_hash == fingerprint(inputs)
+            and r.step_config_valid(f"tts:{script.chapter_id}", old)
+            and all(r.path(p).is_file() and sha256_file(r.path(p)) == h for p, h in old.artifacts.items())):
+        return False
+    return any(p.capabilities().speech_segments for p in r.tts.providers)
+
+
+def speech_tasks(r, script, inputs):
+    if wants_segments(r, script, inputs):
+        from .speech_segments import speech_segments
+        return [f"tts_segment:{script.chapter_id}:{index}" for index, _ in speech_segments(script)]
+    if wants_units(r, script, inputs):
+        return [f"tts:{script.chapter_id}:{index}" for index, _ in speech_units(script)]
+    return []
+
+
+def validate_tts_chain(chain):
+    capabilities = [p.capabilities() for p in chain.providers]
+    if any(c.cloud for c in capabilities) and any(c.mock for c in capabilities):
+        raise BookCastError("云端 TTS 链禁止回退 Mock 音调；请配置真实语音 Provider。")
+    if any(c.speech_segments for c in capabilities) and not all(c.speech_segments for c in capabilities):
+        raise BookCastError("片段 TTS 链要求所有成员支持 speech_segments；逐句和片段链请分别配置。")
+
+
 def render_speech(r, script, inputs, version, legacy_inputs=None):
+    if wants_segments(r, script, inputs):
+        from .speech_segments import render_segments
+        return render_segments(r, script)
     segment = script.chapter_id
     audio_name = f"audio/{segment}.wav"
     if not wants_units(r, script, inputs):
@@ -71,8 +106,6 @@ def render_speech(r, script, inputs, version, legacy_inputs=None):
                lambda: r.ai_operation(f"tts:{segment}", "tts", version, inputs, whole), legacy_inputs=legacy_inputs)
         return
 
-    if not all(p.capabilities().speech_units for p in r.tts.providers):
-        raise BookCastError("逐句 TTS 恢复要求链中所有 Provider 支持 speech_units；请调整 TTS 配置。")
     units = list(speech_units(script))
     r.register([f"tts:{segment}:{index}" for index, _ in units])
     audio, reports = [], []
@@ -83,6 +116,8 @@ def render_speech(r, script, inputs, version, legacy_inputs=None):
         # Changes to other sentences do not invalidate an already completed unit.
         unit_inputs = {"unit": unit.model_dump(), "contract": UNIT_VERSION}
         def invoke(provider):
+            if not provider.capabilities().speech_units:
+                raise ProviderError(ErrorKind.INPUT)
             with atomic_target(r.path(name)) as temporary:
                 info = SpeechInfo.model_validate(provider.synthesize_unit(unit, temporary))
                 if (info.audio_kind == "mock") != provider.capabilities().mock:

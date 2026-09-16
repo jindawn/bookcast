@@ -107,3 +107,7 @@ manifest v1/v2 首次恢复前分别原样备份为 `manifest.v1.json` / `manife
 ## Phase 9 实测恢复
 
 真实 DeepSeek + Kokoro 完成样例已在禁止 HTTP 和 TTS 推理时恢复，所有文件字节、mtime 与调用数保持不变。单独降低同名 Kokoro 的语速只重做语音，不重做13次 LLM 调用。对完成任务的临时副本将 thinking 全局改为 disabled，已为 disabled 的分析继续命中，首个章节综合失效；在发送网络请求前停止，原任务不变。命令、调用计数和限制见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。
+
+## Phase 10 分段恢复
+
+Gemini 的 `tts_segment:主题ID:序号` 是独立 Step/Attempt，成功音频与音色报告保存到 audio/segments；沿用原内核锁、stale 恢复和 D-014。逐句 Kokoro 与逐段链分别配置；不能把未完成逐句任务隐式迁移为云端任务。真实 SIGKILL 测试覆盖分段调用中和 Attempt 完成/Step 未提交窗口；额度接管保留之前各段归属。`scripts/tts_ab.py` 创建新的任务，导入有效内容检查点并只重渲染语音，不修改源任务，详见 [A/B 记录](PHASE10_TTS_AB.md)。

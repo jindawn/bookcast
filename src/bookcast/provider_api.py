@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Literal, Protocol, TypeVar
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from .errors import BookCastError
 from .models import Model, PodcastScript
@@ -20,6 +20,7 @@ class ErrorKind(StrEnum):
     UNAVAILABLE = "temporary_unavailable"
     TIMEOUT = "timeout"
     AUTH = "authentication_error"
+    PERMISSION = "permission_denied"
     INPUT = "input_error"
     SCHEMA = "schema_error"
     BUSINESS = "business_error"
@@ -63,12 +64,14 @@ class ProviderStatus(Model):
     rate_limited: bool = False
     quota_exhausted: bool = False
     authentication_error: bool = False
+    permission_denied: bool = False
 
     @classmethod
     def from_error(cls, provider: str, model: str, error: ProviderError) -> "ProviderStatus":
         return cls(provider=provider, model=model, availability="unavailable", last_error=error.kind,
                    retryable=error.retryable, rate_limited=error.kind == ErrorKind.RATE_LIMIT,
-                   quota_exhausted=error.kind == ErrorKind.QUOTA, authentication_error=error.kind == ErrorKind.AUTH)
+                   quota_exhausted=error.kind == ErrorKind.QUOTA, authentication_error=error.kind == ErrorKind.AUTH,
+                   permission_denied=error.kind == ErrorKind.PERMISSION)
 
 
 class ProviderCapabilities(Model):
@@ -78,6 +81,9 @@ class ProviderCapabilities(Model):
     local: bool = False
     mock: bool = False
     speech_units: bool = False
+    speech_segments: bool = False
+    multi_speaker: bool = False
+    cloud: bool = False
 
 
 class SpeechUnit(Model):
@@ -88,6 +94,33 @@ class SpeechUnit(Model):
 class SpeechInfo(Model):
     audio_kind: Literal["speech", "mock"]
     voice: str = Field(min_length=1, max_length=128)
+
+
+class SpeechTurn(Model):
+    speaker: Literal["主持人", "嘉宾"]
+    text: str = Field(min_length=1, max_length=600)
+
+
+class SpeechSegment(Model):
+    turns: list[SpeechTurn] = Field(min_length=1, max_length=24)
+    instruction: str | None = Field(default=None, max_length=512)
+
+    @model_validator(mode="after")
+    def bounded(self):
+        if sum(len(t.text) for t in self.turns) > 600 or not any(t.text.strip() for t in self.turns):
+            raise ValueError("speech segment exceeds text bounds or is empty")
+        return self
+
+
+class SegmentSpeechInfo(Model):
+    audio_kind: Literal["speech"] = "speech"
+    voices: dict[Literal["主持人", "嘉宾"], str] = Field(min_length=1, max_length=2)
+
+    @model_validator(mode="after")
+    def bounded_voices(self):
+        if any(not 1 <= len(v) <= 128 for v in self.voices.values()):
+            raise ValueError("invalid voice identity")
+        return self
 
 
 class Provider(Protocol):
@@ -130,4 +163,10 @@ class TTSProvider(Provider, Protocol):
 class UnitTTSProvider(TTSProvider, Protocol):
     def synthesize_unit(self, unit: SpeechUnit, destination: Path) -> SpeechInfo:
         """One bounded inference; enabled only by capabilities.speech_units."""
+        ...
+
+
+class SegmentTTSProvider(TTSProvider, Protocol):
+    def synthesize_segment(self, segment: SpeechSegment, destination: Path) -> SegmentSpeechInfo:
+        """One bounded request; Core owns segmentation, checkpoints and concatenation."""
         ...
