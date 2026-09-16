@@ -5,7 +5,7 @@
   "current_task": "Phase 10技术实现与真实同脚本双路生成完成；待人工试听和API项目层级确认",
   "task_status": "blocked",
   "branch": "main",
-  "last_verified_commit": "17fc1f1f9bac7f31aa1f9ab4c539fa625811421a",
+  "last_verified_commit": "8761c3911b5e9e43d272671b4b613c1f2c67b0dd",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -65,7 +65,8 @@
     "创建并验证真实验收修复提交17fc1f1f9bac7f31aa1f9ab4c539fa625811421a：318项/10子测试通过，静态检查与正式81文件无网络恢复再次通过；按D-006保存交接快照，未push",
     "Phase 10：中立双模式TTS、显式云端Gemini Adapter、600字符/24发言片段及D-014缓存，Kokoro实现未修改",
     "Phase 10：真实同脚本Kokoro/Gemini MP3分别320.267208/251.440秒，新增LLM调用为0；Gemini3段成功、1次schema失败经受控显式重试恢复",
-    "Phase 10：第6段额度接管、真实SIGKILL、单段损坏修复及旧任务兼容测试；两份真实任务禁Provider恢复83/43文件不变"
+    "Phase 10：第6段额度接管、真实SIGKILL、单段损坏修复及旧任务兼容测试；两份真实任务禁Provider恢复83/43文件不变",
+    "创建并验证Phase 10功能提交8761c3911b5e9e43d272671b4b613c1f2c67b0dd：完整367项/10子测试及真实任务禁HTTP恢复通过；按D-006保存最终交接，未push"
   ],
   "in_progress": [],
   "next_actions": [
@@ -75,12 +76,20 @@
   ],
   "tests": [
     {
+      "name": "phase10-commit-static",
+      "command": "python3 scripts/validate_project.py; compileall; git diff HEAD^ HEAD --check",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "实际功能提交8761c3911b5e9e43d272671b4b613c1f2c67b0dd上validator/compileall/提交diff通过；全部文档本地链接通过；验证结束工作区干净",
+      "checked_at": "2026-09-16T12:20:49Z"
+    },
+    {
       "name": "phase10-full",
       "command": ".venv/bin/pytest -q",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "367 passed、10 subtests passed、2联网测试默认跳过，7个既有警告，49.78秒",
-      "checked_at": "2026-09-16T12:17:19Z"
+      "scope": "commit",
+      "summary": "功能提交8761c3911b5e9e43d272671b4b613c1f2c67b0dd：367 passed、10 subtests passed、2联网默认跳过，7个既有警告，49.53秒",
+      "checked_at": "2026-09-16T12:20:49Z"
     },
     {
       "name": "phase10-static-security",
@@ -110,9 +119,9 @@
       "name": "phase10-live",
       "command": "BOOKCAST_RUN_LIVE_GEMINI=1 BOOKCAST_LIVE_GEMINI_OUTPUT=output/phase10-gemini .venv/bin/pytest tests/test_live_gemini.py -q",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "1 passed，0.28秒；真实Gemini已成功3段，第三段此前schema失败一次，受控重试后完成；禁网resume保持43文件SHA/mtime及调用数不变",
-      "checked_at": "2026-09-16T12:14:00Z"
+      "scope": "commit",
+      "summary": "功能提交上显式验收1 passed（0.27秒）；完成真实任务禁HTTP恢复43文件SHA/mtime不变，无新增请求",
+      "checked_at": "2026-09-16T12:20:49Z"
     },
     {
       "name": "phase9-special",
@@ -504,5 +513,5 @@
       "purpose": "真实DeepSeek/Kokoro样例、官方usage、失败、缓存恢复、文本审读与验收限制"
     }
   ],
-  "updated_at": "2026-09-16T12:17:19Z"
+  "updated_at": "2026-09-16T22:40:29Z"
 }

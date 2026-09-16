@@ -75,3 +75,5 @@ Gemini 首轮前两段成功，第三段永久 schema_error。未保存原始响
 ## 测试状态
 
 新增 Gemini 专项48 passed；完整离线367 passed、10 subtests passed、2联网默认跳过、7个既有弃用警告（49.78秒）。Project validator、compileall、diff检查通过；196个受检源码/文本产物/日志无环境Secret字面值。额外同时禁止所有 LLM/TTS 调用恢复两份真实任务，Kokoro83文件和Gemini43文件均保持SHA/mtime不变。前端没有修改，未重跑浏览器E2E；Python全量含Web后端。
+
+功能提交8761c3911b5e9e43d272671b4b613c1f2c67b0dd上再次完整复验367通过/10子测试/2跳过（49.53秒）；实际任务显式恢复1通过（0.27秒），未新增API请求。validator、compileall、提交diff通过。

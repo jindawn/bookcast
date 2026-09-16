@@ -1,6 +1,6 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-16T12:15:32Z。实际代码与 Git 优先；不要依据旧快照推断远端状态。
+更新时间：2026-09-16T22:40:29Z。实际代码与 Git 优先；不要依据旧快照推断远端状态。
 
 ## 当前目标
 
@@ -28,7 +28,7 @@ Phase 9 来源目录 output/phase9-deepseek/5bdad5ca96f5e42cd019ff30，Job 7229d
 ## 已运行测试
 
 - 接手基线135 passed；TTS/内容专项103 passed；新增 Gemini 专项48 passed（包含第6段quota恢复与单段损坏修复）。
-- A/B客户端与联网隔离专项47 passed、1 skipped（该次早于新增两个恢复用例）。最终完整367 passed、10子测试、2联网默认跳过，7个既有警告，49.78秒。
+- A/B客户端与联网隔离专项47 passed、1 skipped（该次早于新增两个恢复用例）。最终完整367 passed、10子测试、2联网默认跳过，7个既有警告；工作区49.78秒，功能提交上复验49.53秒。
 - 真实 Gemini 任务显式联网验收测试1 passed、0.28秒；完成后禁HTTP恢复43个文件 SHA/mtime 和 Attempt 数完全不变。额外同时禁止LLM/Kokoro/Gemini调用恢复两份真实任务，Kokoro83文件、Gemini43文件完全不变。
 - 官方模型查询可用；故意无效Key的实际请求正确归为 authentication_error。其他服务故障是离线注入，未实际耗尽额度或制造5xx。
 - 两份MP3通过FFprobe、FFmpeg完整解码和非静音检查，24kHz单声道。
@@ -63,4 +63,4 @@ git diff --check
 
 ## 最近 Git commit
 
-本阶段接手 HEAD 与本地 origin/main 均为 91b4bcb43d35acf43fe2c40a8bfd19aa3e836914（Phase 9交接），当时工作区干净，Phase 9已推送。此阶段尚待创建功能提交；此前last_verified_commit仍为17fc1f1f9bac7f31aa1f9ab4c539fa625811421a。按D-006在实际功能提交上验证后再保存最终SHA；快照自身通过git log -1获取。
+本阶段接手 HEAD 与本地 origin/main 均为 91b4bcb43d35acf43fe2c40a8bfd19aa3e836914（Phase 9交接），当时工作区干净，Phase 9已推送。功能提交8761c3911b5e9e43d272671b4b613c1f2c67b0dd — feat: add resumable Gemini multi-speaker TTS alongside Kokoro。该提交上367测试/10子测试通过，2联网默认跳过；显式真实任务恢复1通过、0.27秒，无新增请求；validator、compileall、提交diff通过。STATE.last_verified_commit指向此已验证SHA。当前会话未push；远端状态后续应以Git重查。快照自身通过git log -1获取，避免自引用。
