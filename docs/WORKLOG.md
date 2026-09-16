@@ -204,3 +204,10 @@
 - 三章覆盖、1182字符、B占44.33%；文本审读确认追问/假设反例，保留2项source归属警告、needs_review。没有真人试听，不声称内容优秀。
 - 三任务共48次LLM尝试（43成功/5失败），input56285/output79397；正式样例input16422/output24445。未报告的reasoning计数保留null，无费用估算。207文件秘密字面值扫描无匹配。
 - 专项142 passed；完整318 passed/10子测试/1联网默认跳过；project validator、compileall、diff检查通过。更新README/架构/Provider/内容/决策/路线图/交接，不push、不开始Phase 10。
+
+## 2026-09-16T06:11:34Z — Phase 9提交验证与最终交接
+
+- 创建功能提交17fc1f1f9bac7f31aa1f9ab4c539fa625811421a，21个文件，包含证据选择修复与真实验收记录。
+- 提交上完整318 passed、10 subtests passed、1联网测试默认跳过，7个既有警告（42.66秒）；project validator、compileall和提交差异检查通过。
+- 实际已完成音频再次禁HTTP/TTS恢复：81文件集合/SHA/mtime及59次历史调用不变；配置变更副本验证通过，未新增收费调用。
+- STATE记录实际验证SHA并完成交接，in_progress和blockers为空；保留真实schema不稳定、两处来源归属及未试听限制。按D-006提交最终文档快照，不push、不开始Phase 10。

@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-9",
-  "current_task": "Phase 9真实DeepSeek+Kokoro技术验收完成，整理可交接提交；内容仍需审读/试听",
+  "current_task": "Phase 9真实DeepSeek+Kokoro技术验收与提交验证完成；内容审读/真人试听限制已记录",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "ff3c48ac960e8435889dcc303665626e4438f186",
+  "last_verified_commit": "17fc1f1f9bac7f31aa1f9ab4c539fa625811421a",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -61,7 +61,8 @@
     "正式任务禁HTTP/TTS恢复通过：81文件SHA/mtime和59条历史调用完全不变；临时副本改thinking后保留分析、仅首个章节综合请求失效",
     "工作区专项142 passed；全量318 passed/10子测试/1联网跳过；已恢复真实测试任务显式复验1 passed，无新增调用",
     "真实用量记录：正式13调用input16422/output24445，48次总尝试input56285/output79397；null保留未知，未估算账单",
-    "逐段文本审读：三章覆盖、真实问答与假设反例；保留2项来源归属警告，未声称真人试听或优秀内容质量"
+    "逐段文本审读：三章覆盖、真实问答与假设反例；保留2项来源归属警告，未声称真人试听或优秀内容质量",
+    "创建并验证真实验收修复提交17fc1f1f9bac7f31aa1f9ab4c539fa625811421a：318项/10子测试通过，静态检查与正式81文件无网络恢复再次通过；按D-006保存交接快照，未push"
   ],
   "in_progress": [],
   "next_actions": [
@@ -82,9 +83,9 @@
       "name": "phase9-full",
       "command": ".venv/bin/pytest -q",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "318 passed、10 subtests passed、1联网测试默认跳过，7个既有警告，49.58秒",
-      "checked_at": "2026-09-15T23:39:53Z"
+      "scope": "commit",
+      "summary": "提交17fc1f1f9bac7f31aa1f9ab4c539fa625811421a：318 passed、10 subtests passed、1联网测试默认跳过，7个既有警告，42.66秒",
+      "checked_at": "2026-09-16T06:11:34Z"
     },
     {
       "name": "phase9-live-recovered",
@@ -106,9 +107,9 @@
       "name": "phase9-real-cache",
       "command": "completed resume with HTTP/TTS forbidden; reasoning override on isolated temporary copy",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "81文件SHA/mtime不变，调用59→59；改为全局disabled后已有分析命中、首个章节综合失效，在HTTP前停止，原任务未变",
-      "checked_at": "2026-09-15T23:39:53Z"
+      "checked_at": "2026-09-16T06:11:34Z"
     },
     {
       "name": "phase9-audio",
@@ -130,9 +131,9 @@
       "name": "phase9-static",
       "command": "python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; git diff --check",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "全部通过；交接文档完成后再次运行",
-      "checked_at": "2026-09-15T23:39:53Z"
+      "scope": "commit",
+      "summary": "实际功能提交上的project validator、compileall、git diff HEAD^ HEAD --check均通过；工作区干净",
+      "checked_at": "2026-09-16T06:11:34Z"
     }
   ],
   "known_failures": [
@@ -427,5 +428,5 @@
       "purpose": "真实DeepSeek/Kokoro样例、官方usage、失败、缓存恢复、文本审读与验收限制"
     }
   ],
-  "updated_at": "2026-09-15T23:39:53Z"
+  "updated_at": "2026-09-16T06:11:34Z"
 }

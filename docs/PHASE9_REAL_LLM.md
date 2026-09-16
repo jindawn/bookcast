@@ -109,3 +109,5 @@ BOOKCAST_RUN_LIVE_LLM=1 .venv/bin/pytest tests/test_live_deepseek.py -q
 | 静态检查 | project validator、compileall、git diff --check通过 |
 
 不重跑浏览器E2E：本轮未修改Web界面/API/构建配置，完整Python套件覆盖原有Web后端。最新提交上的验证和交接状态见STATE/HANDOFF。
+
+功能提交 `17fc1f1f9bac7f31aa1f9ab4c539fa625811421a` 上再次验证：318 passed、10 subtests passed、1联网测试默认跳过（42.66秒）；静态检查和正式任务81文件禁网恢复均通过。没有新增收费调用。

@@ -1,6 +1,6 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-16（Asia/Shanghai）。实际代码与Git优先；不要依据旧快照推断远端状态。
+更新时间：2026-09-16T06:11:34Z。实际代码与Git优先；不要依据旧快照推断远端状态。
 
 ## 当前目标与结果
 
@@ -61,4 +61,4 @@ python3 scripts/validate_project.py
 
 ## 最近 Git commit
 
-本轮接手HEAD：48eb78b（凭证访问阻塞快照）。此前已验证功能提交：ff3c48ac960e8435889dcc303665626e4438f186；本地origin/main在接手时为4137d8550a7cf1c603248732e0be97710e217eb1。以上只是接手观察；本轮未fetch/push。当前修复与真实验收将独立提交，验证后按D-006写入last_verified_commit；快照自身使用git log -1获取，避免自引用。
+本轮接手HEAD：48eb78b（凭证访问阻塞快照）。此前已验证功能提交：ff3c48ac960e8435889dcc303665626e4438f186；本地origin/main在接手时为4137d8550a7cf1c603248732e0be97710e217eb1。以上只是接手观察；本轮未fetch/push。最新修复提交：17fc1f1f9bac7f31aa1f9ab4c539fa625811421a — fix: ground real LLM analysis in verified evidence spans。该提交上318 passed、10 subtests passed、1联网跳过（42.66秒），project validator、compileall、提交差异和81文件禁网恢复再次通过。STATE.last_verified_commit指向此实际验证提交；最终快照自身使用git log -1获取，避免自引用。
