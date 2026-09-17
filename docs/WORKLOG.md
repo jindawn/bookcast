@@ -231,3 +231,12 @@
 
 - 用户继续后复核：HEAD仍为8761c39，仅5份本阶段交接文档未提交，没有新增代码变更；project validator与diff检查通过。
 - 保存最终文档提交，保留原测试证据时间与人工验收待确认状态；未重复联网生成、未push。
+
+## 2026-09-17T11:06:11Z — Phase 11官方选型与FP32真实实验
+
+- 接手HEAD/origin均639e1bc4fc600ba1b7d385a60f1cac321b5ed02a，85项TTS/恢复基线通过。Phase 10已推送；旧快照“未push”为历史信息。
+- 核对Qwen/CosyVoice官方仓库、无GitHub正式Release、源码Apache-2.0、模型卡许可、MPS未合并PR及固定修订版/体积。只选Qwen 1.7B CustomVoice下载和实验，没有安装CosyVoice。
+- Qwen官方固定修订版约4.52GB，两项safetensors官方SHA一致；数据/模型/隔离环境全部忽略。PyTorch最初2.8预检后更新为匹配2.11.0组合；宿主禁止网络配置下MPS可用。
+- FP32/eager五类文本全部生成：91.36秒音频/392.63秒合成；加载11.39秒，加权RTF4.30；全部WAV完整解码。仅技术实测，未给主观音质分数。
+- 新增隔离spike、冻结依赖及2项离线安全检查；全量369通过/10子测试/2联网跳过，56.66秒。后续脚本记录小改的2项专项、validator/compileall/diff检查通过。
+- BF16+SDPA同候选实验继续中，尚未决定接入或No-Go；Core/Kokoro/Gemini/Registry未修改。先保存可接手的研究阶段，不push。

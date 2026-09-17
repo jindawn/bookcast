@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-10",
-  "current_task": "Phase 10技术实现与真实同脚本双路生成完成；待人工试听和API项目层级确认",
-  "task_status": "blocked",
+  "current_phase": "phase-11",
+  "current_task": "Qwen FP32五项真实spike完成，加权RTF4.30；继续BF16+SDPA成本/稳定性验证，尚未注册Provider",
+  "task_status": "in_progress",
   "branch": "main",
   "last_verified_commit": "8761c3911b5e9e43d272671b4b613c1f2c67b0dd",
   "completed_tasks": [
@@ -66,15 +66,32 @@
     "Phase 10：中立双模式TTS、显式云端Gemini Adapter、600字符/24发言片段及D-014缓存，Kokoro实现未修改",
     "Phase 10：真实同脚本Kokoro/Gemini MP3分别320.267208/251.440秒，新增LLM调用为0；Gemini3段成功、1次schema失败经受控显式重试恢复",
     "Phase 10：第6段额度接管、真实SIGKILL、单段损坏修复及旧任务兼容测试；两份真实任务禁Provider恢复83/43文件不变",
-    "创建并验证Phase 10功能提交8761c3911b5e9e43d272671b4b613c1f2c67b0dd：完整367项/10子测试及真实任务禁HTTP恢复通过；按D-006保存最终交接，未push"
+    "创建并验证Phase 10功能提交8761c3911b5e9e43d272671b4b613c1f2c67b0dd：完整367项/10子测试及真实任务禁HTTP恢复通过；按D-006保存最终交接，未push",
+    "Phase 11核验Qwen/CosyVoice官方源码/模型/许可/设备路径，仅安装Qwen官方固定权重，两个safetensors SHA通过；Core未改",
+    "Qwen FP32/eager五类中文真实生成全部完成：91.36秒音频，392.63秒生成，加权RTF4.30；两声线、207字长段、中英、日期数字WAV完整解码通过，未人工听校"
   ],
-  "in_progress": [],
+  "in_progress": [{"task": "Qwen MPS五类文本真实spike及Go/No-Go", "owner": "Codex", "files": ["scripts/spikes/qwen_native.py", "scripts/spikes/qwen-macos-requirements.txt", "tests/test_qwen_spike.py", "docs/TTS_PROVIDER_EVALUATION.md", "docs/STATE.json", "docs/HANDOFF.md"]}],
   "next_actions": [
-    "收集A/B试听及API项目层级反馈，补充PHASE10_TTS_AB.md和状态，不重新生成有效产物",
-    "如需处理preview schema失败，保留失败记录并检查契约；禁止无限自动重试或Mock回退",
-    "只完成Phase 10收尾，不push、不开始大型本地TTS模型阶段"
+    "检查BF16+SDPA实际运行与产物，完成同一Qwen候选的成本/稳定性验证，禁止重复下载或覆盖结果",
+    "依据spike决定最多一个正式Adapter或明确No-Go；复用Phase 10脚本和Core，测试、文档、提交，不push"
   ],
   "tests": [
+    {
+      "name": "phase11-offline",
+      "command": ".venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "369 passed、10子测试、2联网默认跳过；7个既有警告，56.66秒。后续实验脚本小改后专项2 passed；最终验证待完成",
+      "checked_at": "2026-09-16T23:02:00Z"
+    },
+    {
+      "name": "phase11-baseline",
+      "command": ".venv/bin/pytest tests/test_tts.py tests/test_gemini_tts.py tests/test_tts_ab.py tests/test_job_recovery.py -q",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "接手639e1bc4fc600ba1b7d385a60f1cac321b5ed02a：85 passed，15.64秒",
+      "checked_at": "2026-09-16T22:45:00Z"
+    },
     {
       "name": "phase10-commit-static",
       "command": "python3 scripts/validate_project.py; compileall; git diff HEAD^ HEAD --check",
@@ -195,10 +212,7 @@
     "独立真实测试在证据ID契约下曾出现1次schema_error，人工显式重试成功；原始响应未保存，不能断言具体坏字段或100%稳定",
     "真实402/限流/timeout/5xx未实际制造，仅官方协议及离线故障注入验证；小样本未比较推理强度或验收长书"
   ],
-  "blockers": [
-    "人工A/B试听尚无反馈：不能确认主观角色区分、自然度或无漏字；技术实现和真实生成均已完成",
-    "Gemini API项目free/paid层级尚未知，不能声称免费层实测通过"
-  ],
+  "blockers": [],
   "important_files": [
     {
       "path": "src/bookcast/adapters/gemini.py",
@@ -513,5 +527,5 @@
       "purpose": "真实DeepSeek/Kokoro样例、官方usage、失败、缓存恢复、文本审读与验收限制"
     }
   ],
-  "updated_at": "2026-09-16T22:40:29Z"
+  "updated_at": "2026-09-17T11:06:11Z"
 }

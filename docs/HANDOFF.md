@@ -1,66 +1,64 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-16T22:40:29Z。实际代码与 Git 优先；不要依据旧快照推断远端状态。
+更新时间：2026-09-17T11:03:27Z。实际代码、Git和实验产物优先；不要依据旧快照推断进程或远端状态。
 
 ## 当前目标
 
-Phase 10：保持 Kokoro 逐句恢复，扩展 Gemini 原生多说话者片段 TTS。技术实现和真实同脚本双路生成已完成；人工试听及 API 项目 free/paid 层级仍待用户确认，不能宣布全部主观验收通过。不 push，不开始大型本地 TTS 模型阶段。
+Phase 11：Research → 单候选真实 Spike → Go/No-Go → 最多一个正式 Adapter。当前尚未完成决定或接入。用户明确允许本机资源/稳定性不合格时 No-Go；不得强行加入半成品，不主动 push。
 
 ## 刚刚完成与关键文件
 
-- provider_api.py / provider_config.py：中立 SpeechTurn、SpeechSegment、SegmentSpeechInfo 与 speech_segments/multi_speaker/cloud 能力，严格显式云发送配置、音色/style、永久 permission_denied。
-- adapters/gemini.py / provider_registry.py：官方 generateContent REST，标准库无新增依赖，环境 Key，安全错误枚举、usage/model 审计、PCM s16le→标准 WAV。模型来自配置，Core 无 Google SDK。
-- speech_segments.py / speech.py / content.py / pipeline.py：同主题最多600字符/24发言，一段一个 Step/Attempt，沿用缓存、锁、故障接管、WAV/MP3 合并；Kokoro Adapter 未修改。
-- scripts/tts_ab.py：只导入已校验的内容检查点，在独立输出目录委托现有 Pipeline 重渲染音频；阻止任何 LLM 请求，来源记录标明导入 Attempt，不篡改历史归属。
-- test_gemini_tts.py / test_tts_ab.py / test_live_gemini.py：离线协议/错误/缓存/额度/真实 SIGKILL、A/B不重算内容、环境变量显式启用的实际任务恢复验收。
-- examples/gemini-tts.toml、TTS/PROVIDERS/JOBS/ARCHITECTURE/CONTEXT、D-019、PHASE10_TTS_AB、README/ROADMAP/PRODUCT 同步实现与边界。
+- 已读取入口、架构/决策/产品/Provider/任务/内容及状态文档；接手HEAD和origin/main均639e1bc4fc600ba1b7d385a60f1cac321b5ed02a，Phase 10已推送。历史快照中的“未push”不是当前远端状态。
+- docs/TTS_PROVIDER_EVALUATION.md：官方Qwen/CosyVoice版本、许可、设备/能力/体积对照、单候选选择、固定权重及实验方法和数据。
+- scripts/spikes/qwen_native.py：仅实验用，五类自制文本、权重SHA、离线门禁、耗时/RSS/MPS记录、超时、独立输出；不注册Provider，不创建Core任务。
+- scripts/spikes/qwen-macos-requirements.txt：独立实验环境的冻结依赖；Core安装和pyproject未改。
+- tests/test_qwen_spike.py：损坏权重拒绝、联网环境在import/写文件前拒绝；CI不需要Qwen、模型或网络。
+- README/ARCHITECTURE/PROVIDERS/ROADMAP/TTS同步研究边界，并修正两处滞后描述：实际已有Gemini注册和Phase 9真实内容技术验收。
 
-## 当前代码与真实产物
+## 当前实际代码与实验状态
 
-Phase 9 来源目录 output/phase9-deepseek/5bdad5ca96f5e42cd019ff30，Job 7229d03765db4d1c860c7bd18d62b178；原 manifest 摘要复验未变，不要重调13次真实 LLM。两份新任务脚本逐字及 SHA 一致，均继承已有两处来源归属警告。
+Core、Kokoro、Gemini、Registry和Job格式未修改。只选择Qwen官方1.7B CustomVoice；没有安装CosyVoice、第三方Mac fork或第二套Pipeline。
 
-- Kokoro：output/phase10-kokoro/podcast.mp3，Job 9bc80d198c7e467c9c812ce7701d1313。23单元成功，音色45/50、speed=0.8，320.267208秒，3,844,269字节。
-- Gemini：output/phase10-gemini/podcast.mp3，Job 73d55e8127b04176af60545146de5240。实际模型 gemini-3.1-flash-tts-preview，Kore/Puck，3段成功，251.440秒，3,018,285字节。第三段曾一次 schema_error，受控显式重试后成功；前两段产物不变。
-- Gemini 全部4尝试服务端 input/output tokens 为1428/12018；成功3次为1055/8048，reasoning/cache-hit 未返回保持null，无费用估算。失败也可能计费。
-- 文件哈希、生成时间、复现命令与未试听表在 PHASE10_TTS_AB.md。音频/模型/Key/运行日志均在忽略目录，不随 Git 分发。
-- 环境 GEMINI_API_KEY 已可用，不打印值、不读取浏览器凭证。不要由模型调用成功推断免费层或 AI Pro credit。云端声明 data_tier=unknown。
+本机M2 Pro/10核/32 GiB、macOS26.5.1。隔离环境data/phase11/qwen-env：Python3.12.14、qwen-tts0.1.1、torch/torchaudio2.11.0。早期2.8.0仅做import/MPS预检；已核查并升级匹配的官方arm64 wheel。受限沙箱MPS不可见，宿主的禁止网络sandbox-exec配置可以使用MPS，不能把前者误判成模型不支持。
+
+data/phase11/model的官方固定修订版0c0e3051f131929182e2c023b9537f8b1c68adfe已下载；约4.52GB，两项safetensors SHA与官方匹配。许可证/模型卡/元数据/逐文件hash/安装日志保存在data/phase11/research。不要重新下载有效文件。实验均env -i、HF离线开关、系统拒绝网络，未传API密钥或发送文本。
+
+FP32/eager真实五项全部生成：中文7.12秒/耗时41.45秒；第二声线10.72/44.22；207字长段47.04/202.61；中英11.60/46.82；数字日期14.88/57.52。合计91.36秒音频/392.63秒合成，加权RTF4.30。模型加载11.39秒；RSS约4.38GB，MPS driver最大采样约13.23GB，不相加。产物output/phase11-qwen-mps，全部WAV完整解码通过。尚未人工听校或证明优于Kokoro。
+
+截至此快照，BF16+SDPA同模型实验已启动：output/phase11-qwen-bf16-sdpa/events.jsonl，日志data/phase11/research/mps-bf16-sdpa.log。先检查实际产物/进程状态再继续，禁止重复启动相同目标或覆盖结果。
 
 ## 已运行测试
 
-- 接手基线135 passed；TTS/内容专项103 passed；新增 Gemini 专项48 passed（包含第6段quota恢复与单段损坏修复）。
-- A/B客户端与联网隔离专项47 passed、1 skipped（该次早于新增两个恢复用例）。最终完整367 passed、10子测试、2联网默认跳过，7个既有警告；工作区49.78秒，功能提交上复验49.53秒。
-- 真实 Gemini 任务显式联网验收测试1 passed、0.28秒；完成后禁HTTP恢复43个文件 SHA/mtime 和 Attempt 数完全不变。额外同时禁止LLM/Kokoro/Gemini调用恢复两份真实任务，Kokoro83文件、Gemini43文件完全不变。
-- 官方模型查询可用；故意无效Key的实际请求正确归为 authentication_error。其他服务故障是离线注入，未实际耗尽额度或制造5xx。
-- 两份MP3通过FFprobe、FFmpeg完整解码和非静音检查，24kHz单声道。
-- project validator、compileall、diff检查已通过；196个源码/文本产物/日志秘密字面值扫描无匹配。前端未修改，未重跑浏览器E2E；Python全量含Web后端。
+- 接手TTS/恢复专项：85 passed，15.64秒。
+- 本阶段全量离线：369 passed、10子测试、2联网默认跳过、7个既有警告，56.66秒；之后实验记录字段/工作目录/attention参数有小改，专项2 passed。
+- Project validator、compileall、git diff --check通过。
+- FP32五份WAV由FFmpeg完整解码；技术检查不等同实际发音/音质验收。
+- 阶段最终完整测试及提交后验证仍待完成。
 
-## 未解决问题与下一步
+## 未解决问题
 
-1. 用户已收到A/B音频和试听问题，尚未评分。自然度、停顿、多音字、英文缩写、数字日期、双角色听感、漏字/增字和长段稳定性均不得编造；约4–5分钟样本不等于长节目验收。
-2. API项目实际free/paid未知，已询问用户；不能声称免费层实际可用。免费层与付费层的数据使用政策不同，见TTS官方链接。
-3. Gemini preview第三段首轮schema失败，未保存原始响应，具体坏字段无法确认；不是100%稳定。无自动schema重试，不清理失败记录。
-4. 同能力链内failover；未完成逐句任务不能直接改用分段链。完成历史仍按D-014保留；另建音频对照用tts_ab客户端。
-5. 远端已处理但本地未保存的窗口可能重复计费；跨平台/重启整机/长书暂无实机验收。当前REST官方页已标Legacy，未来如需迁移Interactions只改Adapter。
-6. 收到人工反馈后补 PHASE10_TTS_AB/STATE；未授权不要推进新阶段或push。
+- FP32实测RTF高于实验前设定的≤3目标；低精度是否更快且稳定尚未验证。
+- 没有五类文本的人工逐字听校，也没有新模型与Phase 10完整相同脚本的三方试听。
+- Phase 10主观试听/API项目free或paid资格仍未知；保留在原验收记录，不阻塞本次研究。
+- 一次自动审批曾因额度不足拒绝查询PyTorch最新版本；恢复时间后用户继续，查询与后续实验均已成功，不是当前阻塞。
 
-## 如何运行
+## 下一步
 
-```sh
-.venv/bin/bookcast doctor --config examples/gemini-tts.toml
-.venv/bin/bookcast status output/phase10-gemini --json
-.venv/bin/bookcast resume output/phase10-gemini
-.venv/bin/pytest -q
-python3 scripts/validate_project.py
-.venv/bin/python -m compileall -q src tests scripts
-git diff --check
-```
-
-普通pytest不调用网络；真实测试需 BOOKCAST_RUN_LIVE_GEMINI=1、GEMINI_API_KEY 和 BOOKCAST_LIVE_GEMINI_OUTPUT。永久错误修复后retry。A/B继续只渲染音频使用scripts/tts_ab.py --resume，完整命令见验收记录；常规resume依旧使用正常Core缓存规则。
+1. 读取BF16+SDPA结果；如有必要，仅对同一模型做有界精度诊断，不能同时再接CosyVoice。
+2. 根据五类文本、资源与速度决定是否接入；通过后复用UnitTTSProvider/Core Step/Attempt/Artifact/cache/resume，并用scripts/tts_ab.py复用Phase 10内容；不得重调DeepSeek。
+3. 如未达成本/稳定性门槛，明确记录限定环境的No-Go和后续可选路线，不把“未测”写成“失败”。
+4. 完成三方表（未做/未听如实标示），全量测试、文档、STATE/HANDOFF/WORKLOG和小提交。不主动push。
 
 ## 不要重复做
 
-不重写Core/Provider/Job/Skill/Web，不重装现有Kokoro模型，不重调已完成DeepSeek内容；不静默云上传、不回退Mock伪装成功、不保存原始服务错误或Key、不编造试听分数。不删除原任务或失败尝试，不主动push。
+- 不重写Kokoro/Gemini/Core/Job/Skill/UI，不重新生成Phase 9内容或有效Phase 10音频。
+- 不把模型、音频、密钥、实验环境加入Git；不复用浏览器Cookie，不暗中调用云TTS。
+- 不将预设两voice、WAV可解码、官方benchmark等同真人听感或无漏字。
+- 不把隔离实验脚本称为已接入的生产Provider，不虚构resume或SIGKILL验收。
 
-## 最近 Git commit
+## 最近已存在的Git commit
 
-本阶段接手 HEAD 与本地 origin/main 均为 91b4bcb43d35acf43fe2c40a8bfd19aa3e836914（Phase 9交接），当时工作区干净，Phase 9已推送。功能提交8761c3911b5e9e43d272671b4b613c1f2c67b0dd — feat: add resumable Gemini multi-speaker TTS alongside Kokoro。该提交上367测试/10子测试通过，2联网默认跳过；显式真实任务恢复1通过、0.27秒，无新增请求；validator、compileall、提交diff通过。STATE.last_verified_commit指向此已验证SHA。当前会话未push；远端状态后续应以Git重查。快照自身通过git log -1获取，避免自引用。
+- 639e1bc4fc600ba1b7d385a60f1cac321b5ed02a：Phase 10交接文档；本次接手时与origin/main相同。
+- 8761c3911b5e9e43d272671b4b613c1f2c67b0dd：Phase 10功能，旧last_verified_commit。本快照自身的提交通过git log读取，避免自引用；不能据此推断当前是否已push。
+
+Phase 9/10详细产物、Job ID、用量、恢复记录见[PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)和[PHASE10_TTS_AB.md](PHASE10_TTS_AB.md)。

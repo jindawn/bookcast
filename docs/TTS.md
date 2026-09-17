@@ -2,6 +2,8 @@
 
 BookCast 的真实 TTS 首选 Kokoro 多语言模型，经 sherpa-onnx 在本机 CPU 上合成。无需 API Key、付费服务或 GPU；首次安装下载模型，之后生成不联网。默认未配置环境仍运行 Mock 测试音调，核心 CLI 不依赖 TTS extra。
 
+高质量本地模型的Phase 11选型、Mac实测和接入门禁见 [TTS_PROVIDER_EVALUATION.md](TTS_PROVIDER_EVALUATION.md)。Qwen/CosyVoice当前不属于可配置的BookCast Provider；隔离实验环境不改变这里的安装方法。
+
 ## 安装与运行
 
 在仓库根目录执行：

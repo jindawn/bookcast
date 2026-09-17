@@ -1,6 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 10）
+## 当前实际实现（Phase 10 Core；Phase 11 选型实验）
+
+Phase 11 的官方来源对照和隔离实验见 [TTS_PROVIDER_EVALUATION.md](TTS_PROVIDER_EVALUATION.md)。实验脚本不注册 Provider，不属于产品 Pipeline；只有稳定性、成本和质量门禁通过后才能接入既有 TTS capability、Step/Attempt 与缓存。
 
 Phase 10 在中立 TTS 契约增加 SpeechTurn/SpeechSegment/SegmentSpeechInfo 与 speech_segments/multi_speaker/cloud 能力。speech_segments.py 按主题将对话拆为最多600字符、24次发言的最小 Step/Attempt；speech.py 按能力及历史检查点选择逐句或逐段路径。Gemini 只在 Registry 注册的 Adapter 中调用官方 REST，标准库实现，不新增安装依赖。Kokoro 代码和既有 SpeechUnit 契约不变。配置、隐私、缓存和验收见 [TTS.md](TTS.md)、[PHASE10_TTS_AB.md](PHASE10_TTS_AB.md)、D-019。
 
@@ -102,7 +104,7 @@ examples/
 | 来源与导入 | SourceOffer → SourceAsset | 已实现官方 RDF 书籍版权判定、镜像 TXT、用户 URL/文件、安全下载和摘要 |
 | 整书解析 | SourceAsset → NormalizedBook | 已实现 TXT/EPUB/PDF；章节顺序、文本、源位置、警告 |
 | 内容生成 | Chapter → 分块分析 → 分层综合 → 全局规划 → 分段对话 → 一致性复核 | 九类 finding、证据定位、预算与去重、三种模式和质量门禁；详见 CONTENT |
-| 语音合成 | 脚本 → 逐句 WAV → 片段 | Kokoro 本地中文双音色，独立缓存；Mock 整段兼容 |
+| 语音合成 | 脚本 → 逐句或多角色片段 WAV | Kokoro 本地双音色逐句、Gemini 显式云端多角色片段，各自独立缓存；Mock 整段兼容 |
 | 封装导出 | WAV 片段 → MP3 | 已实现 FFmpeg concat；M4B 待后续阶段 |
 | 任务编排 | 输入与配置 → manifest.json | 已实现 Job/Step/Artifact/Attempt、原子写入、六态恢复、缓存与任务命令 |
 
@@ -153,4 +155,4 @@ Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry /
 
 Phase 8 复用 manifest v3，不增加第二套语音任务库。UnitTTSProvider 通过 capabilities.speech_units 协商；一次调用至多80字符，由 Core 记录最小任务和实际音色归属。已完成旧整段音频保留，新语音以 input hash/契约版本/模型资产与配置摘要验证缓存，汇总片段由单句文件哈希决定。详见 D-016。
 
-没有开机自动执行、账户、支付、云同步或桌面发行。Tauri 的后续复用与取舍见 WEB/D-015；真实中文写作尚未验收，人声自然度需在实际生成样例上人工试听。
+没有开机自动执行、账户、支付、云同步或桌面发行。Tauri 的后续复用与取舍见 WEB/D-015；真实中文写作已完成Phase 9技术验收并保留来源归属警告，人声自然度仍需在实际生成样例上人工试听。

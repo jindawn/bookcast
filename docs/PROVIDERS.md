@@ -32,7 +32,9 @@ uv run bookcast status <job> --json
 | `generation` | 可选严格对象：thinking、reasoning_effort、max_tokens，仅用于兼容 LLM |
 | `reasoning_policy` | 可选 bookcast-v1 任务策略；省略保持旧行为 |
 
-注册组合：`llm/mock`、`tts/mock`、`llm/openai-compatible`、`llm/local`、`tts/kokoro-local`。兼容 LLM 使用 `/chat/completions`；结构化生成使用 JSON mode、提示中的 JSON Schema 和本地 Pydantic 校验，不自动降级为未校验文本。local LLM 使用相同协议，仅允许 loopback 主机；远程地址要求 HTTPS，拒绝重定向。kokoro-local 直接读取本地模型，不使用端点或密钥；仅显式 `tts setup` 下载模型，generate 不下载。配置见 [tts-local.toml](../examples/tts-local.toml)。
+注册组合：`llm/mock`、`tts/mock`、`llm/openai-compatible`、`llm/local`、`tts/kokoro-local`、`tts/gemini-tts`。兼容 LLM 使用 `/chat/completions`；结构化生成使用 JSON mode、提示中的 JSON Schema 和本地 Pydantic 校验，不自动降级为未校验文本。local LLM 使用相同协议，仅允许 loopback 主机；远程地址要求 HTTPS，拒绝重定向。kokoro-local 直接读取本地模型，不使用端点或密钥；仅显式 `tts setup` 下载模型，generate 不下载。配置见 [tts-local.toml](../examples/tts-local.toml)。Gemini必须显式允许云端发送，见 [TTS.md](TTS.md)。
+
+Phase 11 本地大模型仅开展隔离选型实验，未注册 Qwen/CosyVoice 类型，不能将实验脚本当作可恢复的生产 Provider。依据与状态见 [TTS_PROVIDER_EVALUATION.md](TTS_PROVIDER_EVALUATION.md)。
 
 启用外部端点意味着允许将当前文本块、精选证据、综合主题、片段脚本、提示和 schema 发给该端点及已配置备用端点。只保存环境变量名，环境变量值不会进入配置输出；HTTP 请求中的认证头、服务错误正文和原始异常消息不写入 manifest。配置中不要在模型名、名称或 URL 路径夹带 Secret。生成内容仍是本地用户数据，不加入 Git。
 
