@@ -1,0 +1,25 @@
+# Experimental MPS provider; use an isolated environment, see docs/TTS.md.
+# No network requests or model downloads during generation; no cloud fallback.
+schema_version = 1
+llm_priority = ["mock"]
+tts_priority = ["qwen"]
+
+[[providers]]
+name = "mock"
+kind = "llm"
+type = "mock"
+model = "mock-llm-v1"
+
+[[providers]]
+name = "qwen"
+kind = "tts"
+type = "qwen-local"
+model = "Qwen3-TTS-12Hz-1.7B-CustomVoice"
+[providers.local_tts]
+experimental = true
+model_dir = "../data/phase11/model"
+host_voice = "Vivian"
+guest_voice = "Uncle_Fu"
+style_instruction = "自然清晰地讲述，像播客主持人在交谈。"
+threads = 4
+seed = 42

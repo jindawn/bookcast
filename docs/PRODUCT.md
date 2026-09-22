@@ -8,6 +8,8 @@ Phase 8 已提供本地中文双音色 TTS，CPU 合成、逐句缓存与恢复�
 
 Phase 10 提供可选 Gemini 云端多说话者 TTS，保留 Kokoro 本地底座。两种音频路径共用 Core；云端文本发送须显式配置，不借用 Gemini App 订阅会话或 Cookie。真实同脚本音频已生成，人工听感与免费层资格仍待确认，见 [PHASE10_TTS_AB.md](PHASE10_TTS_AB.md)。
 
+Phase 11新增可选实验Qwen本地MPS语音，经过同一候选的五类文本技术预检后接入既有逐句任务。需要显式experimental配置及独立可选依赖；不替代Kokoro默认底座，不声称听感已经更好，也不新增voice cloning。资源/许可/版本/三方对照见 [TTS_PROVIDER_EVALUATION.md](TTS_PROVIDER_EVALUATION.md)。
+
 - 希望在通勤等场景收听自己持有书籍的中文读者。
 - 希望结合全书结构理解论点、概念和章节关系的精读用户。
 - 希望通过双人对谈理解一本书的用户。

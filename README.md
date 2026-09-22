@@ -1,6 +1,6 @@
 # BookCast
 
-Phase 11 正在评估高质量本地中文 TTS：已核查 Qwen3-TTS 与 CosyVoice 官方版本、许可和设备路径，只对 Qwen 官方实现做隔离 Mac 实验。尚未注册新 Provider；实验结果及 Go/No-Go 依据见 [选型记录](docs/TTS_PROVIDER_EVALUATION.md)。
+Phase 11 已完成Qwen3-TTS/CosyVoice官方选型及单候选实测，增加显式启用的实验性 `qwen-local`：在M2 Pro/32 GiB以MPS/BF16运行，复用逐句恢复，Kokoro仍是免费离线底座。五类预检及同脚本三方音频已完成，Qwen输出6分25秒，并通过真实SIGKILL/零调用恢复。人工试听尚未完成，尚未证明听感优于Kokoro，不推荐为默认quality模式。见[选型记录](docs/TTS_PROVIDER_EVALUATION.md)和[TTS指南](docs/TTS.md)。
 
 Phase 10 已加入 Gemini 原生多说话者 TTS，并保持 Kokoro 免费离线逐句恢复。真实同脚本 A/B 已生成：Kokoro 5分20秒、Gemini 4分11秒；Gemini 一次 schema 失败经受控重试完成，恢复无新增 API 调用。人工试听和当前 API 项目免费/付费层级仍待确认，不能据此声称听感优秀或免费层已验收。见 [A/B 记录](docs/PHASE10_TTS_AB.md)、[TTS 配置/云端隐私](docs/TTS.md)。默认 CLI 不需要 Gemini Key，云端必须显式选择。
 

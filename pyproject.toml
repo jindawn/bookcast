@@ -23,6 +23,7 @@ bookcast = "bookcast.cli:app"
 dev = ["pytest>=8,<10", "httpx>=0.28,<1"]
 web = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1"]
 tts = ["sherpa-onnx==1.13.8", "sherpa-onnx-core==1.13.8", "numpy>=1.26,<3"]
+qwen = ["qwen-tts==0.1.1", "torch==2.11.0", "torchaudio==2.11.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bookcast"]

@@ -240,6 +240,8 @@ def doctor(
             reports.append({"kind": spec.kind, **report.model_dump(mode="json"),
                             **({"action": "运行 uv sync --extra tts；用 bookcast tts setup 安装并校验模型，核对 local_tts.model_dir。"}
                                if spec.type == "kokoro-local" and report.availability != "available" else {}),
+                            **({"action": "Qwen为实验MPS Provider；按docs/TTS.md在独立环境安装qwen extra、固定官方模型并检查MPS。"}
+                               if spec.type == "qwen-local" and report.availability != "available" else {}),
                             "capabilities": instance.capabilities().model_dump()})
         ready = {kind: any(r["provider"] in priority and r["availability"] == "available"
                           and r["capabilities"][capability] for r in reports)

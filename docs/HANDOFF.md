@@ -1,64 +1,58 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-17T11:03:27Z。实际代码、Git和实验产物优先；不要依据旧快照推断进程或远端状态。
+更新时间：2026-09-22T23:30:53Z。实际代码、Git和产物优先；不要用历史快照推断当前远端状态。
 
-## 当前目标
+## 当前目标与结论
 
-Phase 11：Research → 单候选真实 Spike → Go/No-Go → 最多一个正式 Adapter。当前尚未完成决定或接入。用户明确允许本机资源/稳定性不合格时 No-Go；不得强行加入半成品，不主动 push。
+Phase 11唯一实验Qwen Adapter及真实技术验收已完成，最终离线/本地恢复复验通过。人工三方试听尚未收到反馈；保持experimental，不推荐默认quality。CosyVoice仅研究，未安装或接入。用户要求不主动push，不开始下一阶段。
 
 ## 刚刚完成与关键文件
 
-- 已读取入口、架构/决策/产品/Provider/任务/内容及状态文档；接手HEAD和origin/main均639e1bc4fc600ba1b7d385a60f1cac321b5ed02a，Phase 10已推送。历史快照中的“未push”不是当前远端状态。
-- docs/TTS_PROVIDER_EVALUATION.md：官方Qwen/CosyVoice版本、许可、设备/能力/体积对照、单候选选择、固定权重及实验方法和数据。
-- scripts/spikes/qwen_native.py：仅实验用，五类自制文本、权重SHA、离线门禁、耗时/RSS/MPS记录、超时、独立输出；不注册Provider，不创建Core任务。
-- scripts/spikes/qwen-macos-requirements.txt：独立实验环境的冻结依赖；Core安装和pyproject未改。
-- tests/test_qwen_spike.py：损坏权重拒绝、联网环境在import/写文件前拒绝；CI不需要Qwen、模型或网络。
-- README/ARCHITECTURE/PROVIDERS/ROADMAP/TTS同步研究边界，并修正两处滞后描述：实际已有Gemini注册和Phase 9真实内容技术验收。
+- [TTS_PROVIDER_EVALUATION.md](TTS_PROVIDER_EVALUATION.md)：官方版本、许可、设备/能力/体积比较，单候选五类文本实验、Go/No-Go及同脚本三方表。
+- src/bookcast/adapters/qwen.py、qwen_assets.py：唯一可选Adapter、固定官方修订和12项SHA，延迟导入运行时，标准24kHz单声道PCM16。
+- provider_config.py、provider_registry.py、cli.py：显式experimental配置、注册和doctor；复用local_tts字段避免旧任务配置序列化变化。
+- pyproject.toml、uv.lock、examples/qwen-local.toml：可选qwen extra及无密钥配置；默认安装不增加Torch，原依赖版本未变。
+- tests/test_qwen_tts.py、test_live_qwen.py及spike测试：离线边界、缓存、Core恢复及显式真实产物零调用复验。
+- README、架构、Provider、TTS、Job、产品和路线图同步范围。运行见[TTS.md](TTS.md)。
 
-## 当前实际代码与实验状态
+## 当前代码与真实产物
 
-Core、Kokoro、Gemini、Registry和Job格式未修改。只选择Qwen官方1.7B CustomVoice；没有安装CosyVoice、第三方Mac fork或第二套Pipeline。
+Core Pipeline/Job/SpeechUnit、Kokoro和Gemini Adapter未改。Qwen复用逐句Step/Attempt/Artifact；voice/style/seed、模型资产、运行时版本和音频契约参与缓存。没有第二套Pipeline或默认云端回退。
 
-本机M2 Pro/10核/32 GiB、macOS26.5.1。隔离环境data/phase11/qwen-env：Python3.12.14、qwen-tts0.1.1、torch/torchaudio2.11.0。早期2.8.0仅做import/MPS预检；已核查并升级匹配的官方arm64 wheel。受限沙箱MPS不可见，宿主的禁止网络sandbox-exec配置可以使用MPS，不能把前者误判成模型不支持。
+宿主Apple M2 Pro/10核/32 GiB、macOS26.5.1。隔离环境data/phase11/qwen-env：Python3.12.14、qwen-tts0.1.1、torch/torchaudio2.11.0。官方模型data/phase11/model修订0c0e3051f131929182e2c023b9537f8b1c68adfe，约4.52GB，固定文件SHA通过。模型、许可卡、日志和环境在忽略目录data/phase11；不要重复下载。
 
-data/phase11/model的官方固定修订版0c0e3051f131929182e2c023b9537f8b1c68adfe已下载；约4.52GB，两项safetensors SHA与官方匹配。许可证/模型卡/元数据/逐文件hash/安装日志保存在data/phase11/research。不要重新下载有效文件。实验均env -i、HF离线开关、系统拒绝网络，未传API密钥或发送文本。
+FP32/eager五类文本：91.36秒音频/392.63秒生成，加权RTF4.30。BF16/SDPA：83.52秒音频/237.36秒生成，加权RTF2.84；首句3.30，其余低于3。BF16加载2.85秒，RSS峰值约2.97GB，MPS driver最大采样约10.29GB；两种口径不能相加。全部WAV完整解码，无超时/OOM；不等于发音正确或听感优于Kokoro。
 
-FP32/eager真实五项全部生成：中文7.12秒/耗时41.45秒；第二声线10.72/44.22；207字长段47.04/202.61；中英11.60/46.82；数字日期14.88/57.52。合计91.36秒音频/392.63秒合成，加权RTF4.30。模型加载11.39秒；RSS约4.38GB，MPS driver最大采样约13.23GB，不相加。产物output/phase11-qwen-mps，全部WAV完整解码通过。尚未人工听校或证明优于Kokoro。
+正式Qwen产物：output/phase11-qwen-ab/podcast.mp3，385.040秒（6分25秒）、4,621,581字节。Job d2bfc59060ff403fb276e805eeccf663，SHA 2af78ad6733a03d328da91b7f3a7163b552d16002ddb20fc8e78daa41c2a383c。Vivian/Uncle_Fu共23成功单元，另有1次受控SIGKILL中断。创建至完成935.62秒包括中断、恢复和检查，不是纯推理benchmark。
 
-截至此快照，BF16+SDPA同模型实验已启动：output/phase11-qwen-bf16-sdpa/events.jsonl，日志data/phase11/research/mps-bf16-sdpa.log。先检查实际产物/进程状态再继续，禁止重复启动相同目标或覆盖结果。
+Kokoro/Gemini历史产物分别output/phase10-kokoro/podcast.mp3和output/phase10-gemini/podcast.mp3，320.267208/251.440秒。三方脚本JSON SHA一致，Qwen沿用13条LLM审计且逐项不变，新增LLM请求0。实际Qwen生成清空环境、HF离线开关、macOS系统禁止网络，没有云API调用。全部实验进程已结束。
 
 ## 已运行测试
 
-- 接手TTS/恢复专项：85 passed，15.64秒。
-- 本阶段全量离线：369 passed、10子测试、2联网默认跳过、7个既有警告，56.66秒；之后实验记录字段/工作目录/attention参数有小改，专项2 passed。
-- Project validator、compileall、git diff --check通过。
-- FP32五份WAV由FFmpeg完整解码；技术检查不等同实际发音/音质验收。
-- 阶段最终完整测试及提交后验证仍待完成。
+- Qwen/实验脚本专项13 passed；旧TTS/Provider专项121 passed。
+- 本次工作区完整离线380 passed、10子测试、3显式验收默认跳过、7既有警告，48.37秒。
+- 真实第7单元RUNNING时SIGKILL退出137；恢复前6个WAV/sidecar SHA、mtime、大小均不变，只重新开始第7中断任务。
+- 完成后禁止模型加载/TTS/LLM/HTTP再resume：84文件SHA/mtime不变，显式测试1 passed（2.69秒）；Kokoro83/Gemini43历史文件复验不变。
+- 三份MP3完整解码；Qwen为24kHz单声道、非静音。最终validator、compileall及diff通过；本次实际禁推理复验1 passed/3.43秒。108仓库文件与75份Phase 11文本产物/日志扫描环境Secret值无匹配，模型音频被Git忽略。
 
 ## 未解决问题
 
-- FP32实测RTF高于实验前设定的≤3目标；低精度是否更快且稳定尚未验证。
-- 没有五类文本的人工逐字听校，也没有新模型与Phase 10完整相同脚本的三方试听。
-- Phase 10主观试听/API项目free或paid资格仍未知；保留在原验收记录，不阻塞本次研究。
-- 一次自动审批曾因额度不足拒绝查询PyTorch最新版本；恢复时间后用户继续，查询与后续实验均已成功，不是当前阻塞。
+- 真人三方试听和逐字听校未完成；自然度、停顿、多音字、英文缩写、数字日期、漏字及角色区分未打分。实验Provider可交付，quality推荐需等待实际证据。
+- 仅测试上述M2 Pro/32 GiB，未验收8/16 GiB、CPU或其他系统，也未验证长书稳定性。未实现voice cloning或流式输出。
+- SIGKILL留下0字节临时文件audio/units/.0001-0007-0001.wav.cmb62mzp.tmp，未被引用为Artifact、不影响恢复。本阶段保留此清理债务，不修改Core。
+- 原真实内容仍有两项来源归属needs_review；Phase 10免费/付费账户层级及人工试听仍未知，详见原记录。
 
-## 下一步
+## 下一步与不要重复做
 
-1. 读取BF16+SDPA结果；如有必要，仅对同一模型做有界精度诊断，不能同时再接CosyVoice。
-2. 根据五类文本、资源与速度决定是否接入；通过后复用UnitTTSProvider/Core Step/Attempt/Artifact/cache/resume，并用scripts/tts_ab.py复用Phase 10内容；不得重调DeepSeek。
-3. 如未达成本/稳定性门槛，明确记录限定环境的No-Go和后续可选路线，不把“未测”写成“失败”。
-4. 完成三方表（未做/未听如实标示），全量测试、文档、STATE/HANDOFF/WORKLOG和小提交。不主动push。
-
-## 不要重复做
-
-- 不重写Kokoro/Gemini/Core/Job/Skill/UI，不重新生成Phase 9内容或有效Phase 10音频。
-- 不把模型、音频、密钥、实验环境加入Git；不复用浏览器Cookie，不暗中调用云TTS。
-- 不将预设两voice、WAV可解码、官方benchmark等同真人听感或无漏字。
-- 不把隔离实验脚本称为已接入的生产Provider，不虚构resume或SIGKILL验收。
+1. 收集同脚本三方试听反馈；无反馈时保持experimental，不能声称优于Kokoro。
+2. 不主动push，不开始新模型/新阶段，不重写Core/Kokoro/Gemini/Job/Skill/UI。
+3. 不重调DeepSeek，不重生成有效音频，不重复下载已校验模型；本地零调用复验命令见选型文档，缓存失效会失败而非偷偷推理。
+4. 不把模型、音频、密钥或环境加入Git；不将可解码及两预设voice等同人工验收。
 
 ## 最近已存在的Git commit
 
-- 639e1bc4fc600ba1b7d385a60f1cac321b5ed02a：Phase 10交接文档；本次接手时与origin/main相同。
-- 8761c3911b5e9e43d272671b4b613c1f2c67b0dd：Phase 10功能，旧last_verified_commit。本快照自身的提交通过git log读取，避免自引用；不能据此推断当前是否已push。
+- 6902999b2a0e4183fbce54d59058e759ae3fe41a：Phase 11官方研究与隔离spike。
+- 639e1bc4fc600ba1b7d385a60f1cac321b5ed02a：Phase 10交接，接手时HEAD和origin/main均为此提交。
+- 8761c3911b5e9e43d272671b4b613c1f2c67b0dd：先前已验证Phase 10功能；功能提交验证后更新STATE完整SHA。
 
-Phase 9/10详细产物、Job ID、用量、恢复记录见[PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)和[PHASE10_TTS_AB.md](PHASE10_TTS_AB.md)。
+本快照自身提交通过git log -1读取，遵循D-006避免自引用；不据此推断当前远端状态。Phase 9/10历史证据见[PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)和[PHASE10_TTS_AB.md](PHASE10_TTS_AB.md)。

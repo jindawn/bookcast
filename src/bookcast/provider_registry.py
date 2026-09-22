@@ -39,6 +39,7 @@ def default_registry() -> ProviderRegistry:
     from .adapters.compatible import CompatibleLLMProvider
     from .adapters.kokoro import KokoroTTSProvider
     from .adapters.gemini import GeminiTTSProvider
+    from .adapters.qwen import QwenTTSProvider
     from .providers import MockLLMProvider, MockTTSProvider
 
     def mock_factory(provider_class):
@@ -55,4 +56,5 @@ def default_registry() -> ProviderRegistry:
     registry.register("llm", "local", CompatibleLLMProvider)
     registry.register("tts", "kokoro-local", KokoroTTSProvider)
     registry.register("tts", "gemini-tts", GeminiTTSProvider)
+    registry.register("tts", "qwen-local", QwenTTSProvider)
     return registry

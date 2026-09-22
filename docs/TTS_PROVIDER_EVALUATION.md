@@ -2,7 +2,7 @@
 
 研究日期：2026-09-17（北京时间）。目标：在 Apple M2 Pro / 32 GiB、10核、macOS 26.5.1 / arm64 上选择一个可稳定运行的中文候选；研究范围只有 Qwen3-TTS 与 CosyVoice，Kokoro/Gemini 作为已有对照。可用磁盘约189 GiB。
 
-流程：官方版本及许可证→源码/依赖核验→单候选真实 spike→Go/No-Go→最多一个 Adapter。当前选择 Qwen 进行隔离实验，尚无新 Provider 注册。
+流程：官方版本及许可证→源码/依赖核验→单候选真实 spike→Go/No-Go→最多一个 Adapter。已完成Qwen五类文本的FP32及BF16真实实验，选择BF16/SDPA接入唯一的实验Provider；尚未推荐为quality默认。
 
 FACT为直接核实事实，PROJECT CLAIM为上游声明，INFERENCE为推断，UNKNOWN为未核实；最终推荐不能由宣传指标或音频格式检查代替人工试听。
 
@@ -25,7 +25,7 @@ FACT为直接核实事实，PROJECT CLAIM为上游声明，INFERENCE为推断，
 | 强依赖 CUDA？（FACT） | 核心可选择其他设备；FlashAttention2 为可选CUDA优化，本次禁用 | 基础CPU分支存在；vLLM/TensorRT/DeepSpeed优化依赖CUDA/Linux，不能移植成Mac默认 |
 | RAM/VRAM（UNKNOWN） | 官方没有适用于此Mac的最低/峰值内存保证；以实验测量为准 | 没有适用于此Mac的保证；0.5B不是整套模型内存 |
 | 模型下载体积（FACT） | 固定快照4,520,218,951字节（约4.52 GB）；主权重3,833,402,552字节、codec682,293,092字节 | 完整仓库9,747,516,745字节（约9.75 GB），包含互为替代的RL/基础/ONNX；不等于最小必需下载量 |
-| 首次加载（UNKNOWN） | 本次将测量冷进程加载，操作系统文件缓存可能已热 | 未实验，不能比较 |
+| 首次加载（FACT/UNKNOWN） | 本机FP32 11.39秒、BF16 2.85秒；独立进程，文件缓存已热，不是冷磁盘结果 | 未实验，不能比较 |
 | 中文质量（PROJECT CLAIM） | 官方宣称高质量多语言和表现力；非本项目听感结论 | 官方宣称中文方言、鲁棒性/自然度改进；非本项目听感结论 |
 | 多 speaker（FACT） | CustomVoice 9个预设音色；两角色分别调用，并非原生双人对话上下文模型 | zero-shot参考音色，可为不同角色提供参考；不是已验证的Gemini式多角色接口 |
 | style control（FACT） | 1.7B CustomVoice 接受自然语言 instruct；不能推断所有0.6B功能相同 | instruct2 / 自然语言控制；本次未测 |
@@ -78,7 +78,7 @@ uv pip install --python data/phase11/qwen-env/bin/python --only-binary :all: -r 
 
 ## 实测及决定
 
-权重下载完成，两项SHA-256全部匹配。FP32基线五项均已生成，低精度实验进行中；尚无接入/质量推荐结论。旧任务、Kokoro Adapter、Gemini Adapter、Provider Registry、Core持久格式均未修改。
+权重下载完成，两项SHA-256全部匹配。FP32、BF16五项均已生成。决策为：**Go for experimental native MPS adapter；No-Go for default quality recommendation until listening acceptance**。旧任务、Kokoro/Gemini Adapter、Core持久格式未改；Registry仅增加qwen-local注册。
 
 FP32/eager 基线已测：依赖import13.10秒，模型加载11.39秒；这不是首次下载安装总耗时，且读过文件做SHA校验，不能称为冷磁盘加载。加载后RSS峰值4,376,395,776字节，MPS allocator8,348,960,768字节；两者不能相加。模型声明的9个声线可枚举。
 
@@ -92,4 +92,56 @@ FP32/eager 基线已测：依赖import13.10秒，模型加载11.39秒；这不�
 
 FP32五项合计91.36秒音频、392.63秒合成（不含import/加载），加权RTF约4.30；全部WAV通过FFmpeg完整解码。所记录MPS driver最大13,227,769,856字节，allocator约8.35GB，RSS峰值约4.38GB；这些是不同口径，driver采样值也不是持续监控的峰值。
 
-FP32速度超出预设目标；接下来在同一模型上验证较低精度及PyTorch SDPA，不下载第二候选，不修改上游实现。使用上面的命令改为新输出目录`output/phase11-qwen-bf16-sdpa`及`--dtype bfloat16 --attention sdpa`。实验过程中存在轻量本地检查，两个配置运行时间不同，不作为严格性能benchmark。两份短句已提供用户试听，截至目前没有主观评分反馈。
+FP32速度超出预设目标；同一模型改为BF16及PyTorch SDPA后完成下表，未下载第二候选或修改上游实现。复现使用上面的命令改为新输出目录`output/phase11-qwen-bf16-sdpa`及`--dtype bfloat16 --attention sdpa`。
+
+| BF16/SDPA case | 音频秒数 | 合成秒数 | RTF |
+| --- | ---: | ---: | ---: |
+| 中文一句 | 6.00 | 19.81 | 3.30 |
+| 第二声线 | 4.40 | 10.63 | 2.42 |
+| 207字长段 | 47.84 | 138.23 | 2.89 |
+| 中英夹杂 | 12.24 | 33.91 | 2.77 |
+| 数字日期 | 13.04 | 34.78 | 2.67 |
+
+合计83.52秒音频/237.36秒合成，加权RTF2.84；首句仍略高于3，后续四项低于3。该目标作为整组持续生成的成本参考，首句额外开销如实保留。加载2.85秒、RSS峰值2,970,648,576字节、MPS allocator约4.17GB、driver最大采样10,292,985,856字节。全部音频为可解码的24kHz单声道PCM16，无超时/OOM。实验过程中存在轻量本地检查，两个配置运行时间不同，不作为严格性能benchmark。两份短句已提供用户试听，截至目前没有主观评分反馈，不能从采样长度变化推断发音优劣。
+
+## 接入决定与范围
+
+在已测M2 Pro/32 GiB上，BF16组的资源与持续生成速度足以进行可选实验接入；不声称官方全面支持macOS，也不推广到8/16 GiB机器、CPU或Windows/Linux。优于Kokoro的听感尚未证明，故必须显式设置`experimental=true`，不切换默认、不增加quality预设，不自动从Kokoro失败回退。
+
+唯一新增`qwen-local` Adapter复用现有SpeechUnit（最多80字符），每句同样进入Core Step/Attempt/Artifact与D-014缓存。固定官方1.7B CustomVoice、MPS/BF16/SDPA；两个已测中文voice、有限style/seed/threads配置；依赖仅在显式qwen extra安装。缓存包含模型修订、全部资产SHA、运行时版本、音色/style/seed与音频契约。generate不下载、不允许端点或Key，不接受自定义模型Python代码。配置见[示例](../examples/qwen-local.toml)，运行见[TTS指南](TTS.md)。
+
+不引入第二套Pipeline或外部HTTP服务。未来若原生路径在其他机器不合格，可单独评估本地HTTP隔离运行时或明确授权的GPU服务器；后者仍需云端隐私声明，不是当前已实现功能。CosyVoice本次仅研究，未用其未合并MPS PR做生产依赖。
+
+## 同脚本三方对照
+
+沿用Phase 10三份脚本JSON，Qwen通过现有scripts/tts_ab.py和Core重新合成独立目录；拒绝新LLM调用，系统层禁网络。Kokoro/Gemini有效历史产物直接保留。
+
+| 项目 | Kokoro | Gemini | Qwen |
+| --- | --- | --- | --- |
+| 音色/模式 | 45/50，逐句 | Kore/Puck，多角色片段 | Vivian/Uncle_Fu，逐句 |
+| 产物 | output/phase10-kokoro/podcast.mp3 | output/phase10-gemini/podcast.mp3 | output/phase11-qwen-ab/podcast.mp3 |
+| 实际时长 | 320.267208秒 | 251.440秒 | 385.040秒 |
+| 大小 | 3,844,269字节 | 3,018,285字节 | 4,621,581字节 |
+| 完成TTS单元/片段 | 23单元 | 3片段 | 23单元，另有1次受控SIGKILL中断 |
+| 自然度、停顿、多音字、对话感 | 待人工评分 | 待人工评分 | 待人工评分 |
+| 英文缩写、数字日期、漏字/重复 | 待逐字听校 | 待逐字听校 | 五类spike已生成，仍待逐字听校 |
+| 主观优于Kokoro？ | 基准，未评分 | 未判定 | 未判定，不推荐默认quality |
+
+Qwen Job为`d2bfc59060ff403fb276e805eeccf663`，MP3 SHA-256为`2af78ad6733a03d328da91b7f3a7163b552d16002ddb20fc8e78daa41c2a383c`；24kHz单声道，FFmpeg完整解码通过。创建至完成935.62秒（15分35.62秒），包括受控中断、恢复及本地验证工作，不能等同纯推理耗时。三方脚本JSON SHA完全一致，Qwen沿用13条LLM审计记录且内容逐项不变，新增LLM请求为0。音频变长不能证明朗读更完整，必须听校。
+
+Qwen真实任务在第7单元RUNNING时SIGKILL，退出137；此前6个单元已落盘。通过同一Core恢复，第7旧Attempt转failed_retryable并仅为第7启动新Attempt；前6份WAV/sidecar的SHA、mtime、大小均未变。完成后显式禁止模型加载、TTS推理、LLM和HTTP，再resume：84文件的SHA/mtime均不变，实际测试1 passed（2.69秒）。其中包含SIGKILL遗留的1个0字节临时文件，未作为产物引用，不影响恢复，本阶段未改Core清理逻辑。旧Kokoro83文件/Gemini43文件也在禁止推理的恢复复验中保持不变。
+
+人工试听尚无反馈；三方主观评分与逐字听校未完成，保持实验Provider，不宣布quality推荐。自动指标不等于人工音质评价。
+
+## 自动测试与复验
+
+Qwen/实验脚本专项13 passed，实际模型测试默认跳过；旧TTS/Provider专项121 passed。完整离线380 passed、10子测试、3项显式启用测试默认跳过（LLM、Gemini和本地Qwen），无模型下载或GPU要求。配置包含可选extra后，默认dev/web/tts安装dry-run只需刷新本项目，不安装Torch；锁文件已有依赖版本未改变。Project validator、compileall、diff检查通过。
+
+真实完成任务仅作读取/恢复验收，不会再次合成：
+
+```sh
+BOOKCAST_VERIFY_LOCAL_QWEN=1 BOOKCAST_QWEN_OUTPUT=output/phase11-qwen-ab \
+  data/phase11/qwen-env/bin/python -m pytest tests/test_live_qwen.py -q
+```
+
+运行需要上述隔离运行时和已完成真实产物；测试强制禁止模型加载、合成及HTTP，缓存失效会失败而不是消耗算力重做。普通CI不依赖这些文件或联网服务。

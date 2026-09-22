@@ -1,5 +1,7 @@
 # 任务、恢复与缓存（Phase 5）
 
+Phase 11的实验Qwen继续使用既有SpeechUnit、Step/Attempt和manifest v3；无需迁移旧任务。模型仅在未完成单元需要合成时加载，完成任务的恢复仍会核验资产/运行时缓存但不重新推理。更换安装路径且全资产SHA相同可复用；改变同名Qwen的voice/style/seed会使相关TTS缓存失效，不重做有效LLM。真实第7单元SIGKILL及前6单元保持不变的证据见 [TTS_PROVIDER_EVALUATION.md](TTS_PROVIDER_EVALUATION.md)。
+
 Phase 9 沿用 manifest v3，为 Attempt 增加可选 generation、reported_model、provider_reported_usage；旧数据缺省 null。缓存按任务最终生成参数而非整个策略对象判断，同名 Provider 的有效 thinking/effort/max_tokens 改变才使相关 AI 检查点失效，再按产物哈希传播。显式换 Provider 保留旧有效结果的 D-014 规则不变。详细配置与用量语义见 [PROVIDERS.md](PROVIDERS.md)，实际验收边界见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。
 
 Phase 7 的 [Web 客户端](WEB.md) 复用此处 Core 语义。Web 提交 ID 与 Core Job ID 不同；任务面板可展开 Core 目录，供 CLI status/resume/retry 使用。Web 历史仅显示当前工作空间提交。

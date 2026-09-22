@@ -2,8 +2,8 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-11",
-  "current_task": "Qwen FP32五项真实spike完成，加权RTF4.30；继续BF16+SDPA成本/稳定性验证，尚未注册Provider",
-  "task_status": "in_progress",
+  "current_task": "Phase 11实验Qwen接入与真实同脚本/中断恢复技术验收完成；人工三方试听待反馈，保持experimental",
+  "task_status": "completed",
   "branch": "main",
   "last_verified_commit": "8761c3911b5e9e43d272671b4b613c1f2c67b0dd",
   "completed_tasks": [
@@ -68,14 +68,45 @@
     "Phase 10：第6段额度接管、真实SIGKILL、单段损坏修复及旧任务兼容测试；两份真实任务禁Provider恢复83/43文件不变",
     "创建并验证Phase 10功能提交8761c3911b5e9e43d272671b4b613c1f2c67b0dd：完整367项/10子测试及真实任务禁HTTP恢复通过；按D-006保存最终交接，未push",
     "Phase 11核验Qwen/CosyVoice官方源码/模型/许可/设备路径，仅安装Qwen官方固定权重，两个safetensors SHA通过；Core未改",
-    "Qwen FP32/eager五类中文真实生成全部完成：91.36秒音频，392.63秒生成，加权RTF4.30；两声线、207字长段、中英、日期数字WAV完整解码通过，未人工听校"
+    "Qwen FP32/eager五类中文真实生成全部完成：91.36秒音频，392.63秒生成，加权RTF4.30；两声线、207字长段、中英、日期数字WAV完整解码通过，未人工听校",
+    "创建研究/spike阶段提交6902999b2a0e4183fbce54d59058e759ae3fe41a，不push",
+    "BF16/SDPA五类中文实际生成通过：83.52秒音频/237.36秒生成，加权RTF2.84；只允许可选实验接入，不推荐quality默认",
+    "接入qwen-local可选Adapter、显式实验类型配置、固定全资产校验、MPS/voice/style/seed缓存；13项专项及121项旧TTS/Provider回归通过",
+    "真实同脚本Qwen任务第7单元RUNNING时SIGKILL退出137；恢复只重新开始第7，前6个WAV和sidecar SHA/mtime/大小未变；默认安装dry-run无Torch或Kokoro依赖改动",
+    "Qwen真实同脚本MP3完成385.040秒/23单元，新增LLM请求0；三方脚本SHA一致，原13条LLM审计未变",
+    "完成后禁模型加载/TTS/LLM/HTTP恢复84文件SHA/mtime不变；Kokoro83/Gemini43历史文件恢复不变",
+    "最终完整离线380 passed/10子测试/3默认跳过；真实本地禁推理恢复1 passed，静态与183文件秘密字面值扫描通过"
   ],
-  "in_progress": [{"task": "Qwen MPS五类文本真实spike及Go/No-Go", "owner": "Codex", "files": ["scripts/spikes/qwen_native.py", "scripts/spikes/qwen-macos-requirements.txt", "tests/test_qwen_spike.py", "docs/TTS_PROVIDER_EVALUATION.md", "docs/STATE.json", "docs/HANDOFF.md"]}],
+  "in_progress": [],
   "next_actions": [
-    "检查BF16+SDPA实际运行与产物，完成同一Qwen候选的成本/稳定性验证，禁止重复下载或覆盖结果",
-    "依据spike决定最多一个正式Adapter或明确No-Go；复用Phase 10脚本和Core，测试、文档、提交，不push"
+    "收集相同脚本Kokoro/Gemini/Qwen真人试听与逐字听校，填入TTS_PROVIDER_EVALUATION；未证明优于Kokoro前保持experimental",
+    "不重复下载/生成有效产物，不主动push，不开始下一阶段；接手先核验Git与最后已验证提交"
   ],
   "tests": [
+    {
+      "name": "phase11-final-full",
+      "command": ".venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "380 passed、10子测试、3显式验收默认跳过，7既有警告，48.37秒；普通测试无API网络或Qwen模型要求",
+      "checked_at": "2026-09-22T23:33:01Z"
+    },
+    {
+      "name": "phase11-local-resume",
+      "command": "BOOKCAST_VERIFY_LOCAL_QWEN=1 BOOKCAST_QWEN_OUTPUT=output/phase11-qwen-ab data/phase11/qwen-env/bin/python -m pytest tests/test_live_qwen.py -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "1 passed/3.43秒；禁止模型加载/TTS/LLM/HTTP，已完成真实任务84文件SHA/mtime不变",
+      "checked_at": "2026-09-22T23:33:01Z"
+    },
+    {
+      "name": "phase11-static-security",
+      "command": "python3 scripts/validate_project.py; compileall; git diff --check; in-memory secret scan",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "validator/compileall/diff通过；108仓库文件和75份Phase 11文本产物/日志扫描2个环境Secret值无匹配；模型音频被Git忽略；Core/Kokoro/Gemini未改",
+      "checked_at": "2026-09-22T23:33:01Z"
+    },
     {
       "name": "phase11-offline",
       "command": ".venv/bin/pytest -q",
@@ -206,6 +237,8 @@
     }
   ],
   "known_failures": [
+    "Phase 11三方真人试听/逐字听校待反馈，Qwen只在M2 Pro/32 GiB技术验收；保持experimental，不推荐quality默认",
+    "真实SIGKILL遗留一个0字节临时WAV，未被Artifact引用且不影响恢复；Core清理逻辑未修改",
     "Gemini preview第三段首轮schema_error，已保留失败usage并经一次受控重试完成；原始响应未保存，具体字段原因未知",
     "Phase 10无真人试听评分，API层级未知；真实限流/额度/403/timeout/5xx仅离线注入，未声称触发真实服务故障",
     "正式demo质量needs_review：两处合理推论被归为source，未完成真人试听；不能以技术成功等同内容优秀",
@@ -214,6 +247,34 @@
   ],
   "blockers": [],
   "important_files": [
+    {
+      "path": "docs/TTS_PROVIDER_EVALUATION.md",
+      "purpose": "官方选型、五类真实spike、实验Go及同脚本三方技术/待试听记录"
+    },
+    {
+      "path": "src/bookcast/adapters/qwen.py",
+      "purpose": "可选实验MPS/BF16逐句TTS，复用Core恢复与音频契约"
+    },
+    {
+      "path": "src/bookcast/adapters/qwen_assets.py",
+      "purpose": "固定官方修订、12项资产SHA与完整性检查"
+    },
+    {
+      "path": "examples/qwen-local.toml",
+      "purpose": "显式实验配置，无凭证、无云端回退"
+    },
+    {
+      "path": "tests/test_qwen_tts.py",
+      "purpose": "离线配置/资产/缓存/错误与Core委托"
+    },
+    {
+      "path": "tests/test_live_qwen.py",
+      "purpose": "显式真实完成任务验收，禁止加载模型、推理和HTTP"
+    },
+    {
+      "path": "scripts/spikes/qwen_native.py",
+      "purpose": "隔离单候选五类文本有界实验"
+    },
     {
       "path": "src/bookcast/adapters/gemini.py",
       "purpose": "官方云端TTS协议、严格PCM校验、安全错误与usage"
@@ -527,5 +588,5 @@
       "purpose": "真实DeepSeek/Kokoro样例、官方usage、失败、缓存恢复、文本审读与验收限制"
     }
   ],
-  "updated_at": "2026-09-17T11:06:11Z"
+  "updated_at": "2026-09-22T23:33:01Z"
 }

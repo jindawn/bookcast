@@ -2,7 +2,46 @@
 
 BookCast 的真实 TTS 首选 Kokoro 多语言模型，经 sherpa-onnx 在本机 CPU 上合成。无需 API Key、付费服务或 GPU；首次安装下载模型，之后生成不联网。默认未配置环境仍运行 Mock 测试音调，核心 CLI 不依赖 TTS extra。
 
-高质量本地模型的Phase 11选型、Mac实测和接入门禁见 [TTS_PROVIDER_EVALUATION.md](TTS_PROVIDER_EVALUATION.md)。Qwen/CosyVoice当前不属于可配置的BookCast Provider；隔离实验环境不改变这里的安装方法。
+高质量本地模型的Phase 11选型、Mac实测和接入门禁见 [TTS_PROVIDER_EVALUATION.md](TTS_PROVIDER_EVALUATION.md)。Qwen已作为显式实验Provider接入；CosyVoice未接入。下面Kokoro安装方式保持不变。
+
+## 可选实验：Qwen原生Mac
+
+仅验收Apple M2 Pro/32 GiB、macOS26.5.1、Python3.12.14、官方Qwen3-TTS-12Hz-1.7B-CustomVoice。Adapter固定MPS/BF16/SDPA，未支持CPU、CUDA、其他模型或克隆声音。上游并无全面原生Mac支持承诺；不能据本机结果保证较小内存设备可用。五类样本的持续生成加权RTF约2.84（生成耗时/音频时长），较Kokoro更重；是否音质更好仍待人工试听，不是默认quality模式。
+
+用独立环境，保留现有Kokoro环境：
+
+```sh
+UV_PROJECT_ENVIRONMENT=data/qwen-env uv sync --frozen --extra qwen
+```
+
+qwen extra才安装PyTorch和Qwen依赖；普通CLI和Kokoro不需要。精确复现本次研究环境可用[冻结依赖](../scripts/spikes/qwen-macos-requirements.txt)，再在该环境安装本项目。模型约4.52GB，单独保存在被Git忽略的data目录，**generate不会联网下载**。
+
+按[选型记录中的固定下载清单](TTS_PROVIDER_EVALUATION.md)从官方HF仓库准备`data/phase11/model`。必须固定修订`0c0e3051f131929182e2c023b9537f8b1c68adfe`、保留声明Apache-2.0的README及两个safetensors。Adapter在首次使用时校验全部配置/词表/权重SHA，任何缺失、篡改或资产符号链接都会停止；不允许下载自定义Python代码或替换成第三方量化权重。代码LICENSE和模型许可依据见选型记录。
+
+```sh
+data/qwen-env/bin/bookcast doctor --config examples/qwen-local.toml
+data/qwen-env/bin/bookcast generate examples/content-demo.txt --config examples/qwen-local.toml --mode two_host --minutes 3 --output-dir output/qwen-demo
+data/qwen-env/bin/bookcast resume JOB_ID --output-dir output/qwen-demo
+```
+
+最后一个命令的output-dir是jobs根目录；用`bookcast jobs --output-dir output/qwen-demo`查询JOB_ID。示例LLM为Mock；真实DeepSeek内容的三方比较复用现有已验证脚本，不重新调用LLM。
+
+`examples/qwen-local.toml`中的local_tts参数：
+
+| 参数 | 约束 |
+| --- | --- |
+| experimental | 必须显式为true；不宣称已完成人工音质验收 |
+| model_dir | 相对配置文件所在目录解析；固定官方快照完整目录 |
+| host_voice / guest_voice | Vivian或Uncle_Fu，必须不同；其他声线未开放 |
+| style_instruction | 1–256字符，默认自然清晰的播客叙述 |
+| threads | 1–8，默认4 |
+| seed | 0–2147483647，默认42；不承诺跨设备逐位相同 |
+
+不得配置base_url或api_key_env。每个SpeechUnit仍最多80字符，逐句落盘、审计、恢复；model revision、全资产SHA、运行时版本、voice/style/seed及音频契约影响缓存，安装路径不影响。切换音色只重建受影响的TTS，保留LLM；不同Provider的有效历史产物按D-014保留，要整本换声音用新的输出任务或既有tts_ab工具。
+
+本机模型/内存/依赖失败作为需干预的永久错误，不隐式切换云端或Mock。doctor会给出检查独立环境、固定模型和MPS的指引。崩溃仍用Core resume；本地推理不保证固定延迟，无法完成时可中断再恢复。首次权重校验读取约4.52GB，doctor/新进程启动会有磁盘成本。
+
+Qwen的SoX/FlashAttention提示不代表本次CustomVoice必须安装它们；本次没有使用参考音频路径。真实验收通过macOS系统sandbox-exec禁网并清空继承环境；普通CLI只保证本Adapter不主动请求网络/下载，第三方运行时的系统遥测行为不由Core控制。需要同等隔离时沿用选型记录的禁网启动方式；不要在禁网任务中请求新的云LLM。
 
 ## 安装与运行
 

@@ -240,3 +240,13 @@
 - FP32/eager五类文本全部生成：91.36秒音频/392.63秒合成；加载11.39秒，加权RTF4.30；全部WAV完整解码。仅技术实测，未给主观音质分数。
 - 新增隔离spike、冻结依赖及2项离线安全检查；全量369通过/10子测试/2联网跳过，56.66秒。后续脚本记录小改的2项专项、validator/compileall/diff检查通过。
 - BF16+SDPA同候选实验继续中，尚未决定接入或No-Go；Core/Kokoro/Gemini/Registry未修改。先保存可接手的研究阶段，不push。
+
+## 2026-09-22T23:32:14Z — Phase 11唯一实验Adapter与真实三方技术验收
+
+- 研究提交6902999之后，Qwen BF16/SDPA五类实验全部通过：83.52秒音频/237.36秒生成，加权RTF2.84，首句3.30保留。RSS峰值约2.97GB、MPS driver最大采样约10.29GB，无OOM/超时。只允许实验接入，不作默认quality推荐。
+- 新增唯一qwen-local Adapter，沿用SpeechUnit/Core任务和恢复；固定官方模型12项SHA、显式experimental配置、voice/style/seed/运行时缓存、安全错误。qwen extra延迟加载，不改Core/Kokoro/Gemini；默认安装dry-run未引入Torch或改变旧依赖版本。
+- Phase 10同脚本Qwen MP3已于9月17日完成：385.040秒、4,621,581字节、23成功单元。三方脚本SHA一致，原13条LLM审计未变，新增LLM请求0。实际生成清空环境、系统禁止网络，无云API调用。
+- 第7单元真实SIGKILL退出137；恢复只重做第7，前6份WAV/sidecar SHA/mtime/大小不变。完成后禁模型加载/TTS/LLM/HTTP恢复84文件不变；旧Kokoro83/Gemini43文件复验不变。
+- 本次用户继续后核验Git与代码仍为同一未提交实现；真实完成任务再次零调用复验1 passed/3.43秒。108仓库文件及75份Phase 11文本产物/日志扫描2个可用环境Secret值均无匹配；模型和音频确认被Git忽略。validator/compileall/diff通过，完整离线测试正在最终复验。
+- 保留SIGKILL的1个0字节未引用临时文件作为清理债务。三方真人试听/逐字听校仍未完成，只验证M2 Pro/32 GiB；更新选型、运行、架构、产品、Provider、Job、路线图及交接，不push。
+- 最终完整离线复验380 passed、10子测试、3默认跳过、7既有警告，48.37秒；状态清理in_progress并保留人工试听限制，准备功能提交。
