@@ -1,6 +1,6 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-22T23:30:53Z。实际代码、Git和产物优先；不要用历史快照推断当前远端状态。
+更新时间：2026-09-22T23:34:40Z。实际代码、Git和产物优先；不要用历史快照推断当前远端状态。
 
 ## 当前目标与结论
 
@@ -31,6 +31,7 @@ Kokoro/Gemini历史产物分别output/phase10-kokoro/podcast.mp3和output/phase1
 
 - Qwen/实验脚本专项13 passed；旧TTS/Provider专项121 passed。
 - 本次工作区完整离线380 passed、10子测试、3显式验收默认跳过、7既有警告，48.37秒。
+- 功能提交64e344027d9e1f9cfddfde13dc99a784ddf5ba65上再次完整380 passed、10子测试、3默认跳过、7既有警告，51.12秒；真实本地禁推理恢复1 passed/2.53秒，validator/compileall/提交diff通过，验证结束工作区干净。
 - 真实第7单元RUNNING时SIGKILL退出137；恢复前6个WAV/sidecar SHA、mtime、大小均不变，只重新开始第7中断任务。
 - 完成后禁止模型加载/TTS/LLM/HTTP再resume：84文件SHA/mtime不变，显式测试1 passed（2.69秒）；Kokoro83/Gemini43历史文件复验不变。
 - 三份MP3完整解码；Qwen为24kHz单声道、非静音。最终validator、compileall及diff通过；本次实际禁推理复验1 passed/3.43秒。108仓库文件与75份Phase 11文本产物/日志扫描环境Secret值无匹配，模型音频被Git忽略。
@@ -51,8 +52,9 @@ Kokoro/Gemini历史产物分别output/phase10-kokoro/podcast.mp3和output/phase1
 
 ## 最近已存在的Git commit
 
+- 64e344027d9e1f9cfddfde13dc99a784ddf5ba65：实验Qwen逐句Adapter及真实验收，已在此提交执行完整测试和本地恢复复验；STATE.last_verified_commit指向此提交。
 - 6902999b2a0e4183fbce54d59058e759ae3fe41a：Phase 11官方研究与隔离spike。
 - 639e1bc4fc600ba1b7d385a60f1cac321b5ed02a：Phase 10交接，接手时HEAD和origin/main均为此提交。
-- 8761c3911b5e9e43d272671b4b613c1f2c67b0dd：先前已验证Phase 10功能；功能提交验证后更新STATE完整SHA。
+- 8761c3911b5e9e43d272671b4b613c1f2c67b0dd：先前已验证Phase 10功能。
 
 本快照自身提交通过git log -1读取，遵循D-006避免自引用；不据此推断当前远端状态。Phase 9/10历史证据见[PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)和[PHASE10_TTS_AB.md](PHASE10_TTS_AB.md)。
