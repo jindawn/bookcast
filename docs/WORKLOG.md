@@ -272,3 +272,11 @@
 - 同一提交上project validator、compileall、git diff HEAD^ HEAD --check通过。
 - 再次对Phase 10/11三条既有完成任务禁调用恢复，Kokoro/Gemini/Qwen各1 passed；无LLM请求、无TTS重合成、无Gemini HTTP，文件SHA/mtime维持不变，Qwen遗留零字节temp已清理。
 - STATE.last_verified_commit指向功能提交。technical acceptance=completed；listening acceptance=pending。Qwen仍experimental；未开始Phase 13，不push。
+
+## 2026-09-23T00:16:49Z — Phase 13 M4B 导出层与验收
+
+- 新增独立 `export.py`：对已完成 MP3 和真实章节 WAV 测时，按节目规划或旧 Job 源章节写 FFmetadata；FFmpeg 输出 AAC/M4B，使用 M4B major brand，封面仅用户提供的可解码 JPEG/PNG。
+- CLI `bookcast export JOB_ID --format m4b [--cover ...]` 支持 Job ID/目录；输入与输出哈希决定复用，原 MP3 不变，无 LLM/TTS Provider 调用。Web API/UI 仅在有效 M4B 已存在时显示下载。
+- 实际旧 Phase 2 Job 导出 4.640 秒、2 章 M4B，ffprobe 查到 M4B brand、AAC、连续中文章节、标题/作者/来源元数据，FFmpeg 完整音频解码通过。既有 Phase 9 DeepSeek+Kokoro 中文节目不重跑 AI/TTS，导出 320.283 秒、3 章 M4B。
+- 新增单章/多章/Unicode/封面/损坏 WAV 与 MP3/重复导出/源变更缓存失效/旧 Job/Web 下载测试；补验法语 BCP47 → ISO 639-2 音轨语言标签；完整 pytest 390 passed、4 个显式真实测试跳过、10 subtests passed、7 既有 warnings。Web build、typecheck、3 个 Playwright E2E、validator、compileall、diff --check 均通过。
+- 该阶段未调用 DeepSeek/Gemini API、未运行 Kokoro/Qwen 推理或下载模型；只离线重编码现有 MP3。Qwen 人工试听仍待外部反馈，保持 experimental。

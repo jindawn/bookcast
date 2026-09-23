@@ -26,6 +26,7 @@ type Job = {
   error: string | null;
   warnings: string[];
   audio_url: string | null;
+  m4b_url: string | null;
   audio_kind?: string;
   audio_seconds?: number | null;
   can_resume: boolean;
@@ -600,6 +601,11 @@ export default function Home() {
                       <a href={current.audio_url} download="podcast.mp3">
                         下载 MP3 ↓
                       </a>
+                      {current.m4b_url && (
+                        <a href={current.m4b_url} download="podcast.m4b">
+                          下载 M4B ↓
+                        </a>
+                      )}
                     </div>
                   )}
                   <details>

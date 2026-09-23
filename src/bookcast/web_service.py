@@ -13,6 +13,7 @@ from pydantic import Field, model_validator
 from .acquisition import choose_edition
 from .composition import settings_snapshot
 from .errors import BookCastError
+from .export import read_valid_export
 from .jobs import job_status, manifest_paths
 from .models import Model, utc_now
 from .provider_config import load_config
@@ -99,6 +100,7 @@ class WebService:
         if not active and integrity == 'damaged':
             state = 'FAILED_RETRYABLE'
         audio = artifact_path(path.parent, 'podcast.mp3') if path else None
+        m4b = read_valid_export(path.parent) if path and state == 'SUCCEEDED' and integrity == 'ok' else None
         warnings = list(core['warnings']) if core else []
         if core and core['metadata_seed']:
             warnings.extend(core['metadata_seed'].get('warnings', []))
@@ -122,6 +124,7 @@ class WebService:
                 'audio_kind': audio_info.get('audio_kind', 'unknown'),
                 'audio_seconds': audio_info.get('duration_seconds'),
                 'audio_url': f'/api/jobs/{identifier}/audio' if state == 'SUCCEEDED' and integrity == 'ok' and audio and audio.is_file() else None,
+                'm4b_url': f'/api/jobs/{identifier}/audio.m4b' if m4b else None,
                 'can_resume': not active and state == 'FAILED_RETRYABLE',
                 'can_retry': not active and state == 'FAILED_PERMANENT'}
 

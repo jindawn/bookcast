@@ -312,6 +312,28 @@ def jobs_command(
         typer.echo(f"无效任务：{error['directory']}；{error['error']}",err=True)
 
 
+@app.command('export')
+def export_command(
+    job: Annotated[str, typer.Argument(help='已完成 Job ID 或任务目录')],
+    format: Annotated[str, typer.Option(help='导出格式；目前支持 m4b')] = 'm4b',
+    output_dir: Annotated[Path, typer.Option(help='任务存储根目录')] = Path('output'),
+    cover: Annotated[Path | None, typer.Option(help='用户有权使用的本地 JPEG/PNG 封面')] = None,
+) -> None:
+    """从已完成的 MP3 和章节 WAV 独立导出；不调用 LLM/TTS。"""
+    from .export import export_m4b
+    if format.lower() != 'm4b':
+        typer.echo('错误：目前仅支持 --format m4b。', err=True)
+        raise typer.Exit(1)
+    try:
+        root = resolve_job(job, output_dir).parent
+        record, reused = export_m4b(root, cover)
+        typer.echo(f"{'复用' if reused else '导出'} M4B：{root/'podcast.m4b'}\n"
+                   f"章节：{len(record.chapters)}；时长：{record.duration_seconds:.3f} 秒")
+    except (BookCastError, OSError, ValueError) as exc:
+        typer.echo(f"错误：{exc if isinstance(exc, BookCastError) else '任务文件或导出输入无效。'}", err=True)
+        raise typer.Exit(1) from None
+
+
 def continue_job(job, output_dir, config, provider, tts_provider, *, retry, revise_segment=None):
     try:
         path = resolve_job(job, output_dir)

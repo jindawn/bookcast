@@ -8,7 +8,7 @@ Phase 10 在中立 TTS 契约增加 SpeechTurn/SpeechSegment/SegmentSpeechInfo �
 
 Phase 9 复用 CompatibleLLMProvider，增加 generation.py 严格契约与集中任务策略、可选调用视图、服务端 usage 和有效配置哈希审计。ProviderChain 绑定任务后调用中立接口，Pipeline 只使用任务级配置校验；不新增厂商 SDK 或改写 Core。真实 LLM + Kokoro 技术链路已验收；内容保留来源归属警告，尚未进行人工试听，见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。旧未配置推理选项的请求与缓存保持兼容。
 
-Phase 8 增加可选 Kokoro CPU 中文 TTS：显式安装模型，Registry 注入适配器，Core 通过中立语音单元接口保存逐句 Step/Attempt 和音频。默认仍为 Mock，业务代码不 import sherpa-onnx。UI → Application API → Core；CLI 与 worker 共用 composition.py 注入 Provider，原有解析、内容、质量与恢复流程保持可用。OCR、M4B 与桌面包未实现。语音细节见 [TTS.md](TTS.md)，Web 接口、进程与存储见 [WEB.md](WEB.md)。
+Phase 8 增加可选 Kokoro CPU 中文 TTS：显式安装模型，Registry 注入适配器，Core 通过中立语音单元接口保存逐句 Step/Attempt 和音频。默认仍为 Mock，业务代码不 import sherpa-onnx。UI → Application API → Core；CLI 与 worker 共用 composition.py 注入 Provider，原有解析、内容、质量与恢复流程保持可用。Phase 13 增加独立 M4B 导出层；OCR 与桌面包未实现。语音细节见 [TTS.md](TTS.md)，Web 接口、进程与存储见 [WEB.md](WEB.md)。
 
 ```text
 AGENTS.md / CLAUDE.md      Agent 统一入口
@@ -67,6 +67,7 @@ src/bookcast/
   quality.py              指标、来源检查与 TTS 前门禁
   storage.py              原子写入、指纹、锁和 SHA-256
   audio.py                WAV 校验与 FFmpeg MP3 合并
+  export.py               已完成 MP3 → AAC/M4B、实际章节与哈希缓存；不调用 Provider
 tests/
   test_validate_project.py 交接校验器回归测试
   test_phase1.py          Phase 1 解析、Provider、恢复和 CLI 测试
@@ -105,7 +106,7 @@ examples/
 | 整书解析 | SourceAsset → NormalizedBook | 已实现 TXT/EPUB/PDF；章节顺序、文本、源位置、警告 |
 | 内容生成 | Chapter → 分块分析 → 分层综合 → 全局规划 → 分段对话 → 一致性复核 | 九类 finding、证据定位、预算与去重、三种模式和质量门禁；详见 CONTENT |
 | 语音合成 | 脚本 → 逐句或多角色片段 WAV | Kokoro本地逐句、可选实验Qwen MPS逐句、Gemini显式云端多角色片段，各自独立缓存；Mock整段兼容 |
-| 封装导出 | WAV 片段 → MP3 | 已实现 FFmpeg concat；M4B 待后续阶段 |
+| 封装导出 | WAV 片段 → MP3；已完成音频 → M4B | MP3 继续由原 Pipeline 生成；M4B 由独立 export 模块用 FFmpeg、实际 WAV/MP3 时长及节目规划封装，`exports/m4b.json` 审计/缓存 |
 | 任务编排 | 输入与配置 → manifest.json | 已实现 Job/Step/Artifact/Attempt、原子写入、六态恢复、缓存与任务命令 |
 
 正常流程为“书名识别 → 版本确认 → 合法来源/用户导入 → 解析 → 内容生成 → TTS → 导出”；直接导入用户文件也是独立入口，不强迫先联网搜书。扫描型 PDF 的 OCR 需求必须显式检测与报告，具体实现排期见 ROADMAP。

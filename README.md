@@ -6,7 +6,7 @@ Phase 10 已加入 Gemini 原生多说话者 TTS，并保持 Kokoro 免费离线
 
 BookCast 是一个以开源为目标的本地工具：从书名或用户提供的 EPUB、PDF、TXT 出发，确认正确书籍版本，获取合法来源，解析整本书，再用 AI 生成高质量中文音频、精读内容或双人播客，最终导出 MP3 / M4B。
 
-Phase 9 已完成真实 LLM 技术验收：复用兼容适配器增加 DeepSeek 示例、强类型 thinking/effort、任务策略、usage 和缓存审计。自制三章文本已通过真实 DeepSeek 分层生成，保留两处来源归属警告，见 [实际验收记录](docs/PHASE9_REAL_LLM.md)。默认仍为 Mock；外部 LLM 需显式配置且可能收费，本地 TTS 不调用付费 API。既有 Web、CLI、Skill 与分层 Core 保持可用。OCR、M4B、桌面包未实现。运行见 [TTS 指南](docs/TTS.md)、[Web 指南](docs/WEB.md)，交接见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)。
+Phase 9 已完成真实 LLM 技术验收：复用兼容适配器增加 DeepSeek 示例、强类型 thinking/effort、任务策略、usage 和缓存审计。自制三章文本已通过真实 DeepSeek 分层生成，保留两处来源归属警告，见 [实际验收记录](docs/PHASE9_REAL_LLM.md)。默认仍为 Mock；外部 LLM 需显式配置且可能收费，本地 TTS 不调用付费 API。Phase 13 可把完成任务的 MP3 单独导出为带章节的 M4B；OCR、桌面包未实现。运行见 [TTS 指南](docs/TTS.md)、[Web 指南](docs/WEB.md)，交接见 [HANDOFF.md](docs/HANDOFF.md)、[STATE.json](docs/STATE.json)。
 
 ## 开始接手
 
@@ -58,12 +58,16 @@ uv run bookcast jobs --json
 uv run bookcast status JOB_ID --json
 uv run bookcast resume JOB_ID
 uv run bookcast retry JOB_ID
+uv run bookcast export JOB_ID --format m4b
+uv run bookcast export JOB_ID --format m4b --cover './my licensed cover.png'
 .venv/bin/python -m pytest -q
 python3 scripts/validate_project.py
 git diff --check
 ```
 
 `bookcast generate ./books/example.epub` 是主入口；也支持 `.pdf` 和 `.txt`。产物在 `output/{book_id}/`，包含 `source/`、`metadata.json`、`chapters/`、`analysis/`、`synthesis/`、`plans/`、`scripts/`、`evaluation/`、`audio/`、`logs/events.jsonl`、`manifest.json` 和 `podcast.mp3`。新任务具有独立 Job ID；用 `jobs` 查找后执行 `resume JOB_ID`，校验并复用导入副本，即使原文件移走也可继续。永久错误修复后显式 `retry JOB_ID`；两者都保留有效完成检查点。`status` 显示持锁/stale、进度、最近错误和完整性，`doctor` 同时检查任务存储。`--output-dir` 指定查找根目录，也可直接传任务目录。
+
+已完成任务可用 `bookcast export JOB_ID --format m4b` 导出 `podcast.m4b`；无需 LLM/TTS 请求，原 `podcast.mp3` 保留。可选 `--cover` 只接受用户有权使用的本地 JPEG/PNG；无封面正常导出。`exports/m4b.json` 记录标题、作者、语言、模式、来源归属、实际时长、章节与输入/输出哈希；分层节目章节是 **podcast segment**，不冒充原书章节，另保留其 source chapter ID。旧版无节目规划任务按原书章节标记。重复导出复用有效 M4B；源 MP3、章节 WAV、规划或封面变动则重导出。Web 已有 MP3 下载，只有 M4B 实际存在且校验有效时才显示 M4B 下载。
 
 `--mode summary|deep_read|two_host` 选择模式，`--minutes` 设置脚本时间预算；同一本书比较不同模式时使用不同输出目录。质量报告包含重复率、实际章节覆盖、长度、角色比例、空泛表达和事实检查。阻断项会在 TTS 前停止；警告可以继续，Mock 的语义核验始终需人工复核。报告通过不代表内容已达到真实播客质量。
 

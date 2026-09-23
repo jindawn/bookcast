@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from bookcast.pipeline import load_manifest
+from bookcast.export import export_m4b
 from bookcast.provider_api import ErrorKind, ProviderError
 from bookcast.providers import MockLLMProvider
 from bookcast.source_api import BookIdentity, EditionCandidate, SearchResult, SourceOffer
@@ -52,6 +53,23 @@ def run(client, identifier):
 
 def snapshot(path):
     return {p: (p.stat().st_mtime_ns, sha256_file(p)) for p in path.rglob('*') if p.is_file() and p.name != '.lock'}
+
+
+def test_m4b_download_appears_only_after_explicit_export(client):
+    identifier, _ = submit(client)
+    job = run(client, identifier)
+    assert job['state'] == 'SUCCEEDED' and job['audio_url'] and job['m4b_url'] is None
+    assert client.get(f'/api/jobs/{identifier}/audio.m4b').status_code == 409
+    export_m4b(Path(job['directory']))
+    job = client.get(f'/api/jobs/{identifier}').json()
+    assert job['m4b_url']
+    response = client.get(job['m4b_url'])
+    assert response.status_code == 200 and response.headers['content-type'] == 'audio/mp4'
+    assert response.content.startswith(b'\x00\x00')
+    assert client.get(job['audio_url']).status_code == 200
+    (Path(job['directory']) / 'podcast.mp3').write_bytes(b'broken')
+    assert client.get(f'/api/jobs/{identifier}').json()['m4b_url'] is None
+    assert client.get(job['m4b_url']).status_code == 409
 
 
 @pytest.mark.parametrize('mode', ['summary', 'deep_read', 'two_host'])

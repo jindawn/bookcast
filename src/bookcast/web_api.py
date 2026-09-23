@@ -125,6 +125,14 @@ def create_app(data_dir: Path = Path('data/web'), config: Path | None = None, ui
         path = artifact_path(service.core_path(identifier).parent, 'podcast.mp3')
         return FileResponse(path, media_type='audio/mpeg', filename='podcast.mp3', content_disposition_type='inline')
 
+    @app.get('/api/jobs/{identifier}/audio.m4b')
+    def audiobook(identifier: str):
+        status = service.status(identifier)
+        if not status['m4b_url']:
+            raise HTTPException(409, 'M4B 尚未导出或已失效；请用 bookcast export 重新导出。')
+        path = artifact_path(service.core_path(identifier).parent, 'podcast.m4b')
+        return FileResponse(path, media_type='audio/mp4', filename='podcast.m4b')
+
     @app.get('/api/providers')
     def providers():
         settings, registry = load_config(config), default_registry()

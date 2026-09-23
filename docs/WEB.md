@@ -31,6 +31,7 @@ E2E 使用已构建页面、真实 API/worker/FFmpeg、临时数据目录和 887
 - 书名搜索仅用 Gutenberg 目录。每个候选均需手动选择；作者、语言、版次、年份未知时明确保留。中文译名未必匹配，首次需下载目录。获取前仍由 Core 验证书籍版权依据；美国公有领域声明不代表全球授权。
 - 模式为 summary/deep_read/two_host；1–120 分钟整数控制脚本预算。默认 Mock 为测试音调；按 [TTS.md](TTS.md) 安装后，用 `bookcast serve --config data/tts-local.toml` 启用中文人声。播放区显示实际音频类型和秒数，预算不保证播放时长。
 - 显示阶段、章节、Provider、完成/剩余、最近错误、Core ID/目录、质量与解析警告。规划前的总步骤量并不固定。
+- 完成任务保留 MP3 播放与下载；用户通过 CLI 显式导出 M4B 后，且产物与源音频哈希仍有效时，页面额外显示 M4B 下载。浏览器不编码音频，也不自动调用 Provider。API 为 `GET /api/jobs/{id}/audio.m4b`。
 - 书架只显示当前 Web 工作空间的提交；旧 CLI output 任务继续用 CLI 管理。新提交使用独立输出根，不同模式不会冲突。
 - Provider 显示 Registry 的 health_check 状态、能力与安全错误分类。服务可用性不证明真实内容质量；端点/模型优先级由本地 TOML 配置，外部服务可能接收书稿。
 

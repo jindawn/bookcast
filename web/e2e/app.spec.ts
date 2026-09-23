@@ -54,6 +54,17 @@ test("upload → Core generation → history → actual audio playback; mobile l
   await page.screenshot({ path: "test-results/desktop.png", fullPage: true });
   await page.reload();
   await expect(page.getByLabel("播客音频")).toBeVisible();
+  await expect(page.getByRole("link", { name: "下载 M4B ↓" })).toHaveCount(0);
+  const completed = await (await page.request.get(`/api/jobs/${job.id}`)).json();
+  execFileSync(resolve("../.venv/bin/bookcast"), [
+    "export", completed.directory, "--format", "m4b",
+  ]);
+  await page.reload();
+  const m4b = page.getByRole("link", { name: "下载 M4B ↓" });
+  await expect(m4b).toBeVisible();
+  const downloading = page.waitForEvent("download");
+  await m4b.click();
+  expect((await downloading).suggestedFilename()).toBe("podcast.m4b");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole("button", { name: "生成播客" })).toBeVisible();
   expect(

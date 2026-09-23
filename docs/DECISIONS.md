@@ -182,3 +182,7 @@ Gemini 使用标准库调用官方、仍有文档的 generateContent REST TTS；
 云端配置必须 send_text_to_cloud=true，运行时提示第三方文本发送。data_tier 是用户声明，不是实际计费证明。App/AI Pro 对话额度与 Developer API 配额分离；外部 credit 不改变官方凭证及请求方式。禁止任何 Cookie/内部接口或隐式 Kokoro→云端回退；云端链不得包含 Mock。链内只允许一致的逐句/逐段能力，配额与临时错误按既有策略接管，鉴权/权限/schema/input 不切换。
 
 已有检查点决定任务语音模式，完成产物继续遵循 D-014；跨模式接续未完成任务会明确失败，应恢复原能力链或用独立输出目录。A/B 客户端仅导入经过哈希校验的内容检查点、保留导入尝试来源并委托原 Pipeline，禁止重新调用 LLM，不复制任何合成/拼接逻辑。对已完成请求未本地落盘的崩溃窗口，仍不能保证免重复计费。
+
+## D-020 — M4B 是已完成音频的独立导出
+
+状态：accepted；日期：2026-09-23。Phase 13 不修改 LLM/TTS 任务与 manifest，也不改变既有 MP3。用户显式调用 `bookcast export JOB_ID --format m4b`；独立 export 模块持同一 Job 锁，读取已完成 MP3、真实章节 WAV、元数据与节目规划，以 FFmpeg 编 AAC/M4B 并写 sidecar。新分层任务用 podcast segment 作章节并保留源书章节 ID 映射；无 episode plan 的旧任务才用 source chapter。章节起止由 WAV 实际帧长与最终 MP3 实测时长确定，禁止用预算或字数估算。封面仅用户显式提供可解码、大小受限的本地 JPEG/PNG。输入哈希含 MP3、WAV、规划、元数据、封面及编码契约；输出 SHA 校验后复用，Web 只暴露有效现存 M4B。这样避免重新消耗 AI 额度；代价是完成 Job 不会自动有 M4B，需用户显式导出，变更源音频后需重导出。
