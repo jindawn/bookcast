@@ -187,11 +187,11 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 
 ### Phase 15：V1 Release Engineering 与完整链路验收
 
-**状态：实现进行中；当前包版本保持 0.1.0 / pre-1.0，首次 GitHub Actions 远程执行与项目许可证选择待维护者完成。**
+**状态：工程验收完成并提交；当前包版本保持 0.1.0 / pre-1.0。首次 GitHub Actions 远程执行、维护者项目许可证选择和分发资产审查仍是发布前人工事项。**
 
 1. GitHub Actions 分开验证 Python Core、Web 与静态状态/文档；默认只运行 unit/integration、compileall、project validator 和 Mock MP3/M4B 冒烟，不访问收费 API、不下载 Qwen。
 2. pytest 默认选择 `unit` / `integration`；`live`、`large_model`、`manual_listening` 明确隔离并由人工 opt-in。
-3. 临时干净检出验证 install、doctor、Mock、Web、MP3、M4B；独立的完整公开领域书籍测试检查章节/体量、manifest、无新增调用恢复、磁盘和章节 M4B。
+3. 临时干净检出验证 install、doctor、Mock、Web、MP3、M4B；67 章、2.47 MB 公有领域样本完成 Mock pipeline、manifest、0 字节增长恢复及 20 个 M4B 节目章节验证。全新获取该长书的测试保留为 opt-in，当前网络 DNS/代理阻止了来源地址校验。
 4. 记录第三方组件与模型许可边界，不替维护者选择 BookCast 许可证；在 PyMuPDF 与 Kokoro 数据许可确认前保持发布阻塞。
 5. 建立按 verified/manual/optional/blocked 区分证据的 Release Checklist；发布前保持 0.1.0/pre-1.0，直到分发阻塞解决。
 

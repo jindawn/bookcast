@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 
 
+# Keep each module in one tier. Provider contract, filesystem, and CLI compositions
+# are integration tests even when an individual assertion is small.
 UNIT_MODULES = {
     "test_source_http", "test_validate_project", "test_qwen_spike",
 }

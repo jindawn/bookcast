@@ -6,8 +6,9 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 from bookcast.cli import app
-from bookcast.content import CHUNK_CHARS, FAN_IN, MAX_PROMPT_CHARS, chunks, planner
-from bookcast.content_models import (CATEGORIES, ContentOptions, EpisodePlan, RichAnalysis,
+from bookcast.content import (CHUNK_CHARS, FAN_IN, MAX_PROMPT_CHARS, chunks, planner,
+                              prompt, resolve_analysis, validate_analysis)
+from bookcast.content_models import (CATEGORIES, ContentOptions, EpisodePlan, EvidenceAnalysis, RichAnalysis,
                                     SegmentScript, Synthesis, Theme)
 from bookcast.errors import BookCastError
 from bookcast.models import Chapter
@@ -255,6 +256,15 @@ def test_chunk_boundaries_are_contiguous_and_quote_offsets_survive_unicode():
     assert len(parts)>1
     assert ''.join(p['chapter']['text'] for p in parts)==chapter.text
     assert [p['start'] for p in parts]==list(range(0,len(chapter.text),CHUNK_CHARS))
+
+
+def test_mock_analysis_handles_chunk_containing_only_punctuation():
+    chapter = Chapter(id='0001', title='A punctuation boundary', text=', ,\n?!', source_locator='lines:1-1')
+    payload = next(chunks(chapter))
+    selected = MockLLMProvider().generate_structured(prompt('analysis', **payload), EvidenceAnalysis)
+    result = resolve_analysis(selected, payload)
+    validate_analysis(result, payload)
+    assert result.core_ideas[0].quote == chapter.text
 
 
 def test_revision_propagates_actual_ending_changes_without_reanalyzing(tmp_path):

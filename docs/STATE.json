@@ -2,7 +2,7 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-15",
-  "current_task": "建立可持续CI、许可证清单与发布验收流程",
+  "current_task": "Phase 15 Release Engineering 收尾与交接",
   "task_status": "in_progress",
   "branch": "main",
   "last_verified_commit": "c33a2b27da97a1658e345669dedc6a705a7c7943",
@@ -85,28 +85,35 @@
     "Phase 13功能提交ed479cd3eea1e1dc87da7ea71e65390325b73294已验证：390项pytest通过、4项显式跳过、10子测试通过；3项浏览器E2E、Web build/typecheck、validator、compileall和提交diff通过",
     "Phase 14：固定无密钥首次配置方案、doctor --human、Web安全状态摘要和README顶部Quick Start；未改Provider Core或默认Mock",
     "隔离克隆Python 3.12正常安装Web依赖，setup demo→doctor→自制TXT Mock生成106893字节MP3通过；真实API未调用",
-    "Phase 14功能提交c33a2b27da97a1658e345669dedc6a705a7c7943已验证：393项pytest通过、4项显式跳过、10子测试；3项浏览器E2E、Web构建通过"
+    "Phase 14功能提交c33a2b27da97a1658e345669dedc6a705a7c7943已验证：393项pytest通过、4项显式跳过、10子测试；3项浏览器E2E、Web构建通过",
+    "建立 GitHub Actions Python Core / Web / Static validation 三个 job；PR 默认不调用收费 API、不下载 Qwen 大模型，含 lock、compile、validator、Mock MP3/M4B ffprobe 冒烟。",
+    "pytest 默认只收 unit/integration 标记；live、large_model、manual_listening 单独登记，新增测试模块若未分类即阻止收集。",
+    "使用临时全新 Git 克隆创建新虚拟环境并安装锁定 Python 与 npm 依赖；doctor、Mock 生成、MP3/M4B、Web build、project validator 均通过。",
+    "使用经官方 Gutenberg 元数据和原始 SHA 重新核验的美国公有领域《国富论》副本完成 67 章 Mock pipeline；1507 Step、20 个 M4B 节目章节，completed resume 新增 0 字节。",
+    "完整书运行发现 Mock 在纯标点分析块产生永久业务错误；content_mock 跳过无词项并用安全占位证据处理，新增回归测试，断点恢复后全书生成通过。",
+    "创建第三方许可兼容说明和逐项 verified/manual/optional/blocked 发布检查表；未选择 BookCast LICENSE，保持版本 0.1.0 / pre-1.0。"
   ],
   "in_progress": [
     {
-      "task": "Phase 15 release engineering",
+      "task": "Phase 15 final verification and handoff snapshot",
       "owner": "Codex",
       "files": [
-        ".github/workflows/ci.yml",
-        "pyproject.toml",
+        "src/bookcast/content_mock.py",
+        "tests/test_content.py",
         "tests/conftest.py",
-        "tests/test_release_large_book.py",
-        "scripts/ci_smoke.py",
-        "THIRD_PARTY_NOTICES.md",
         "docs/RELEASE_CHECKLIST.md",
-        "docs/STATE.json"
+        "docs/ROADMAP.md",
+        "docs/STATE.json",
+        "docs/HANDOFF.md",
+        "docs/WORKLOG.md"
       ]
     }
   ],
   "next_actions": [
-    "验证临时全新 Git 克隆的依赖安装与离线 mock/MP3/M4B 链路；记录本机受限 DNS 对完整书籍获取验收的影响",
-    "提交 Phase 15 CI、测试分层和许可/发布文档功能变更",
-    "完成状态、交接和工作日志快照，验证提交并创建最终交接提交"
+    "在已提交功能提交上重跑完整离线测试、smoke、compileall、validator 和提交差异检查，更新 last_verified_commit。",
+    "在 GitHub 首次运行并检查 Python Core、Web、Static validation 三个 Actions job；本阶段没有 push。",
+    "维护者选择项目许可证并决定 PyMuPDF AGPL/商业/替代方案；审计 Kokoro 包中 espeak-ng-data 的独立许可与发布通知。",
+    "在公共 DNS 网络重跑 BOOKCAST_RUN_RELEASE_LARGE_BOOK=1 全书来源 acquisition 测试；本机代理解析结果被安全下载器拒绝。"
   ],
   "tests": [
     {
@@ -396,6 +403,46 @@
       "scope": "working_tree",
       "summary": "测试在安全获取前因本机 DNS/代理将 Gutenberg 主机映射到非公开地址而终止；未下载书籍、未调用任何 LLM/TTS。该网络相关 opt-in 测试保留待外部公开 DNS 验收。",
       "checked_at": "2026-09-23T05:08:00Z"
+    },
+    {
+      "name": "phase15-offline-suite-after-mock-fix",
+      "command": ".venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "394 passed、5项 live/large-book 显式测试 deselected、10 subtests passed、7项既有依赖 warning；覆盖纯标点 Mock 回归。",
+      "checked_at": "2026-09-23T05:17:00Z"
+    },
+    {
+      "name": "phase15-ci-smoke-final",
+      "command": "PATH=.venv/bin:$PATH .venv/bin/python scripts/ci_smoke.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "无本地 bookcast.toml/密钥配置的显式 Demo；临时路径 doctor→2章 Mock Job→MP3→AAC/M4B，ffprobe读到2章。",
+      "checked_at": "2026-09-23T05:17:00Z"
+    },
+    {
+      "name": "phase15-clean-clone-install",
+      "command": "temporary git clone --no-local; uv sync --locked --extra dev --extra web; npm ci/typecheck/build; uv run scripts/ci_smoke.py; uv run scripts/validate_project.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "全新临时克隆成功创建新虚拟环境并安装 Python 锁定依赖，npm 全新安装；Web构建、doctor、Mock MP3/M4B、validator通过。使用CPython3.14.7；CI pin CPython3.12。",
+      "checked_at": "2026-09-23T05:17:00Z"
+    },
+    {
+      "name": "phase15-large-book-mock-pipeline",
+      "command": "Mock generate/resume/export/ffprobe against isolated copy of verified Gutenberg 3300 public-domain text",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "2468951字节、67个章节、1507个成功Step、1433条LLM记录（全Mock）、20个M4B chapter markers；完整resume增加0字节，Job产物含M4B为17701350字节，0外部LLM/TTS调用。",
+      "checked_at": "2026-09-23T05:17:00Z"
+    },
+    {
+      "name": "phase15-full-book-network-acquisition",
+      "command": "PATH=.venv/bin:$PATH BOOKCAST_RUN_RELEASE_LARGE_BOOK=1 .venv/bin/pytest -m large_model tests/test_release_large_book.py -q",
+      "status": "failed",
+      "scope": "working_tree",
+      "summary": "本机代理DNS将Gutenberg主机解析为保留/非公开地址，BookCast安全校验拒绝请求；未下载、未调用AI。自动化opt-in测试保留待正常公共DNS环境执行。",
+      "checked_at": "2026-09-23T05:17:00Z"
     }
   ],
   "known_failures": [
@@ -407,11 +454,12 @@
     "Phase 10无真人试听评分，API层级未知；真实限流/额度/403/timeout/5xx仅离线注入，未声称触发真实服务故障",
     "正式demo质量needs_review：两处合理推论被归为source，未完成真人试听；不能以技术成功等同内容优秀",
     "独立真实测试在证据ID契约下曾出现1次schema_error，人工显式重试成功；原始响应未保存，不能断言具体坏字段或100%稳定",
-    "真实402/限流/timeout/5xx未实际制造，仅官方协议及离线故障注入验证；小样本未比较推理强度或验收长书"
+    "真实402/限流/timeout/5xx未实际制造，仅官方协议及离线故障注入验证；小样本未比较推理强度或验收长书",
+    "Phase15长书Mock首次运行发现纯标点 chunk 令 Mock 内容分析抛 IndexError/business_error；已修复并加入回归，全书从最近失败 Step 恢复后完成。"
   ],
   "blockers": [
-    "BookCast 项目许可证必须由维护者选择；PyMuPDF AGPL/商业路径和 Kokoro 模型包 espeak-ng-data 许可需审查，当前不得声称可再分发。",
-    "本机完整长书 opt-in acquisition 的 Gutenberg 主机名被网络代理解析到保留/私有地址，安全下载器拒绝继续；测试逻辑需在正常公开 DNS 的 GitHub/外部环境验收。"
+    "本机完整长书 opt-in acquisition 的 Gutenberg 主机名被网络代理解析到非公开地址，安全下载器拒绝继续；全书 Mock pipeline 已由已有合法来源副本验证，来源重新获取仍待公共 DNS 环境。",
+    "首次 GitHub Actions 远程执行尚未发生；提交尚未 push。"
   ],
   "important_files": [
     {
@@ -787,5 +835,5 @@
       "purpose": "Third-party license inventory and unresolved release compatibility review"
     }
   ],
-  "updated_at": "2026-09-23T05:08:00Z"
+  "updated_at": "2026-09-23T05:17:00Z"
 }

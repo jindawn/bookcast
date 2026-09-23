@@ -13,8 +13,11 @@ def generate(payload):
         chapter, offset = payload['chapter'], payload['start']
         text = chapter['text']
         sentences = list(re.finditer(r'[^。！？\n.!?]+[。！？.!?]?', text))
-        body = [m for m in sentences if m.group().strip() and m.group().strip() != chapter['title']]
-        selected = (body or sentences)[:3]
+        body = [m for m in sentences if m.group().strip() and m.group().strip() != chapter['title']
+                and re.search(r'\w', m.group())]
+        # Long-book chunk boundaries can land between punctuation in English text.
+        # Such a match has no clause to summarize and must not crash the Mock.
+        selected = body[:3]
         findings = []
         for match in selected:
             quote = match.group()[:120]
