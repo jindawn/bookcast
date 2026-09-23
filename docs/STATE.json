@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-15",
-  "current_task": "Phase 15 Release Engineering 收尾与交接",
-  "task_status": "in_progress",
+  "current_task": "V1 Release Engineering 工程验收完成",
+  "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "c33a2b27da97a1658e345669dedc6a705a7c7943",
+  "last_verified_commit": "ec1ad6f4e99526205ebb749ef472e7baef1fbcab",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -91,29 +91,15 @@
     "使用临时全新 Git 克隆创建新虚拟环境并安装锁定 Python 与 npm 依赖；doctor、Mock 生成、MP3/M4B、Web build、project validator 均通过。",
     "使用经官方 Gutenberg 元数据和原始 SHA 重新核验的美国公有领域《国富论》副本完成 67 章 Mock pipeline；1507 Step、20 个 M4B 节目章节，completed resume 新增 0 字节。",
     "完整书运行发现 Mock 在纯标点分析块产生永久业务错误；content_mock 跳过无词项并用安全占位证据处理，新增回归测试，断点恢复后全书生成通过。",
-    "创建第三方许可兼容说明和逐项 verified/manual/optional/blocked 发布检查表；未选择 BookCast LICENSE，保持版本 0.1.0 / pre-1.0。"
+    "创建第三方许可兼容说明和逐项 verified/manual/optional/blocked 发布检查表；未选择 BookCast LICENSE，保持版本 0.1.0 / pre-1.0。",
+    "Phase 15功能提交验证完成：ec1ad6f；完整离线pytest 394 passed/5显式测试deselected/10 subtests，clean clone、Web、Mock MP3/M4B、全书Mock恢复、静态检查通过；项目保持0.1.0/pre-1.0，许可证与远端Actions运行留作人工发布门禁。"
   ],
-  "in_progress": [
-    {
-      "task": "Phase 15 final verification and handoff snapshot",
-      "owner": "Codex",
-      "files": [
-        "src/bookcast/content_mock.py",
-        "tests/test_content.py",
-        "tests/conftest.py",
-        "docs/RELEASE_CHECKLIST.md",
-        "docs/ROADMAP.md",
-        "docs/STATE.json",
-        "docs/HANDOFF.md",
-        "docs/WORKLOG.md"
-      ]
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
-    "在已提交功能提交上重跑完整离线测试、smoke、compileall、validator 和提交差异检查，更新 last_verified_commit。",
-    "在 GitHub 首次运行并检查 Python Core、Web、Static validation 三个 Actions job；本阶段没有 push。",
-    "维护者选择项目许可证并决定 PyMuPDF AGPL/商业/替代方案；审计 Kokoro 包中 espeak-ng-data 的独立许可与发布通知。",
-    "在公共 DNS 网络重跑 BOOKCAST_RUN_RELEASE_LARGE_BOOK=1 全书来源 acquisition 测试；本机代理解析结果被安全下载器拒绝。"
+    "推送或创建 PR 后核对 GitHub Actions 的 Python Core、Web、Static validation 三个 job；当前分支尚未推送。",
+    "维护者选择 BookCast 项目许可证并确定 PyMuPDF AGPL/商业/替代方案；审查 Kokoro bundle 中 espeak-ng-data 独立许可及需要的 notices。",
+    "在正常公共 DNS 环境运行 BOOKCAST_RUN_RELEASE_LARGE_BOOK=1 uv run pytest -m large_model tests/test_release_large_book.py -v，验证完整目录获取后全书Mock链路。",
+    "发布前完成秘密扫描、平台依赖/FFmpeg notice审计；版本保持0.1.0，未声明1.0。"
   ],
   "tests": [
     {
@@ -443,6 +429,22 @@
       "scope": "working_tree",
       "summary": "本机代理DNS将Gutenberg主机解析为保留/非公开地址，BookCast安全校验拒绝请求；未下载、未调用AI。自动化opt-in测试保留待正常公共DNS环境执行。",
       "checked_at": "2026-09-23T05:17:00Z"
+    },
+    {
+      "name": "phase15-functional-commit-full-suite",
+      "command": ".venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "提交ec1ad6f4e99526205ebb749ef472e7baef1fbcab：394 passed、5项live/large-book显式测试deselected、10 subtests passed、7项既有依赖warning，53.38秒。",
+      "checked_at": "2026-09-23T05:18:35Z"
+    },
+    {
+      "name": "phase15-functional-commit-static-smoke",
+      "command": "python scripts/ci_smoke.py; workflow YAML parse; uv lock --check; validate_project; compileall; git diff HEAD^ HEAD --check",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "ec1ad6f功能提交：clean-temp Demo doctor、Mock MP3及2章M4B/ffprobe通过；lock、validator、compileall、YAML和提交差异检查通过。",
+      "checked_at": "2026-09-23T05:18:35Z"
     }
   ],
   "known_failures": [
@@ -455,12 +457,12 @@
     "正式demo质量needs_review：两处合理推论被归为source，未完成真人试听；不能以技术成功等同内容优秀",
     "独立真实测试在证据ID契约下曾出现1次schema_error，人工显式重试成功；原始响应未保存，不能断言具体坏字段或100%稳定",
     "真实402/限流/timeout/5xx未实际制造，仅官方协议及离线故障注入验证；小样本未比较推理强度或验收长书",
-    "Phase15长书Mock首次运行发现纯标点 chunk 令 Mock 内容分析抛 IndexError/business_error；已修复并加入回归，全书从最近失败 Step 恢复后完成。"
+    "Phase15长书Mock首次运行发现纯标点 chunk 令 Mock 内容分析抛 IndexError/business_error；已修复并加入回归，全书从最近失败 Step 恢复后完成。",
+    "Phase15外部长书获取测试本机因代理/DNS将Gutenberg域名解析到非公开地址而被安全下载器拒绝；全书Mock pipeline已用来源哈希与US public-domain元数据核验的独立副本完成，source acquisition复验仍待公共DNS网络。",
+    "GitHub Actions workflow已提交并在干净克隆等效步骤本地验证，但本分支尚未push，远端Actions状态尚无证据。",
+    "BookCast尚无项目LICENSE；PyMuPDF许可兼容路径和Kokoro bundle内espeak-ng-data通知待维护者/资产级审查，禁止宣称当前二进制可再分发。"
   ],
-  "blockers": [
-    "本机完整长书 opt-in acquisition 的 Gutenberg 主机名被网络代理解析到非公开地址，安全下载器拒绝继续；全书 Mock pipeline 已由已有合法来源副本验证，来源重新获取仍待公共 DNS 环境。",
-    "首次 GitHub Actions 远程执行尚未发生；提交尚未 push。"
-  ],
+  "blockers": [],
   "important_files": [
     {
       "path": "src/bookcast/onboarding.py",
@@ -833,7 +835,11 @@
     {
       "path": "THIRD_PARTY_NOTICES.md",
       "purpose": "Third-party license inventory and unresolved release compatibility review"
+    },
+    {
+      "path": "tests/conftest.py",
+      "purpose": "Central test-tier classification; unclassified new test modules fail collection"
     }
   ],
-  "updated_at": "2026-09-23T05:17:00Z"
+  "updated_at": "2026-09-23T05:18:35Z"
 }

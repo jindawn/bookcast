@@ -294,3 +294,14 @@
 - 临时隔离克隆在 Python 3.12 下用公开包完成 `uv sync --extra web`，离线 Demo 配置、doctor 与自制 2 章 TXT 生成成功，MP3 106893 字节。未调用 DeepSeek/Gemini、未推理 Kokoro/Qwen、未下载模型。离线 uv 缓存缺包，改正常安装公共 Python 包后通过。
 - 功能提交 `c33a2b27da97a1658e345669dedc6a705a7c7943` 已创建并在该提交上完整验证：393 passed、4 skipped、10 subtests passed、7 既有 warning；专项 24 passed、Web build/typecheck、浏览器 E2E 3 passed、项目校验、compileall 与差异检查通过。首次 E2E 本地端口被沙箱拒绝，按测试权限重跑通过。
 - README/架构/Provider/Web/路线图更新；真实收费路径没有在本阶段重复联网验收。Qwen 真人试听仍 pending，继续 experimental；未推送。
+
+## 2026-09-23T05:18:35Z — Phase 15 Release Engineering 与全链路验收
+
+- 新增 GitHub Actions Python Core/Web/Static validation jobs；默认 pytest 仅收 unit/integration。收费 live、大书下载/处理和人工试听分别登记，默认 CI 不请求厂商 API、不下载 Qwen、不运行 Playwright。
+- CI smoke 显式创建 demo 配置，在临时路径依次完成 doctor、两章 Mock job、MP3 和 M4B；ffprobe 读取 2 个 chapter marker。新测试文件未声明成本层级会在 collection 阶段失败。
+- 临时全新 git 克隆创建独立虚拟环境，Python/npm 全新安装，Web 类型检查/构建、Core smoke 和项目校验通过；CI 固定 Python 3.12。
+- 复验官方 Gutenberg 3300 获取记录、US public-domain 分类与源 SHA-256；隔离副本 2,468,951 字节/67章完成全 Mock 流水线，1507 steps、1433条Mock LLM记录、20章M4B、17,701,350字节Job产物；完成态恢复新增0字节，无外部AI/TTS调用。
+- 长书测试发现纯标点 chunk 边界导致 Mock 分析器 IndexError/business_error；增加保护与单元回归，原Job从失败最小任务恢复，全书完成。
+- 本机 fresh source acquisition opt-in 因代理 DNS 把 Gutenberg 主机映射为非公开地址而被安全下载器拒绝，未下载或调用 AI；保留 normal-public-DNS 手工重跑项。
+- THIRD_PARTY_NOTICES 和 RELEASE_CHECKLIST 记录许可证证据与阻塞。未选择 BookCast 项目 LICENSE；PyMuPDF 许可路径、eSpeak 数据通知、远端 Actions 首次执行待处理，版本维持 0.1.0/pre-1.0。
+- 功能提交 fe6a75a644393042be206dcf377f8ab8f2d85525 与恢复修复提交 ec1ad6f4e99526205ebb749ef472e7baef1fbcab 已创建。最新功能提交完整测试 394 passed、5显式测试deselected、10 subtests、7既有warning；Web clean install/build、smoke、validator、compileall、lock、workflow YAML 和提交 diff 检查通过。没有 push。
