@@ -30,5 +30,12 @@ packages = ["src/bookcast"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
-markers = ["live_llm: explicit environment opt-in required; may call a paid LLM API"]
+addopts = "-ra -m 'unit or integration'"
+markers = [
+  "unit: deterministic unit test; no external network, paid API, or model download",
+  "integration: offline Core integration test; no external network, paid API, or large model download",
+  "live: explicit environment opt-in required; contacts an external service",
+  "large_model: explicit opt-in required; may download/process a full public-domain book or large local model",
+  "manual_listening: requires human listening and must not be treated as an automated test",
+  "live_llm: compatibility marker for explicit live LLM acceptance tests",
+]

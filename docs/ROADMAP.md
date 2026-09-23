@@ -185,6 +185,16 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 3. `doctor --human` 增加 ✓/△/✗ 检查，原 JSON 及退出码保留；Web 只读显示安全摘要和缺失步骤，浏览器不保存 Secret。
 4. README 顶部给出安装→诊断→导入 TXT/EPUB/PDF→生成→播放→M4B 导出的最短路径；隔离克隆在 Python 3.12 下完成依赖安装和 Mock 首次生成。真实收费 API 不在默认测试中调用。
 
+### Phase 15：V1 Release Engineering 与完整链路验收
+
+**状态：实现进行中；当前包版本保持 0.1.0 / pre-1.0，首次 GitHub Actions 远程执行与项目许可证选择待维护者完成。**
+
+1. GitHub Actions 分开验证 Python Core、Web 与静态状态/文档；默认只运行 unit/integration、compileall、project validator 和 Mock MP3/M4B 冒烟，不访问收费 API、不下载 Qwen。
+2. pytest 默认选择 `unit` / `integration`；`live`、`large_model`、`manual_listening` 明确隔离并由人工 opt-in。
+3. 临时干净检出验证 install、doctor、Mock、Web、MP3、M4B；独立的完整公开领域书籍测试检查章节/体量、manifest、无新增调用恢复、磁盘和章节 M4B。
+4. 记录第三方组件与模型许可边界，不替维护者选择 BookCast 许可证；在 PyMuPDF 与 Kokoro 数据许可确认前保持发布阻塞。
+5. 建立按 verified/manual/optional/blocked 区分证据的 Release Checklist；发布前保持 0.1.0/pre-1.0，直到分发阻塞解决。
+
 ### 后续候选
 
 **状态：规划中。**

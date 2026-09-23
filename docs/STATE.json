@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-14",
-  "current_task": "Phase 14首次使用与Provider配置体验已完成；等待下一阶段授权",
-  "task_status": "completed",
+  "current_phase": "phase-15",
+  "current_task": "建立可持续CI、许可证清单与发布验收流程",
+  "task_status": "in_progress",
   "branch": "main",
   "last_verified_commit": "c33a2b27da97a1658e345669dedc6a705a7c7943",
   "completed_tasks": [
@@ -87,11 +87,26 @@
     "隔离克隆Python 3.12正常安装Web依赖，setup demo→doctor→自制TXT Mock生成106893字节MP3通过；真实API未调用",
     "Phase 14功能提交c33a2b27da97a1658e345669dedc6a705a7c7943已验证：393项pytest通过、4项显式跳过、10子测试；3项浏览器E2E、Web构建通过"
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "task": "Phase 15 release engineering",
+      "owner": "Codex",
+      "files": [
+        ".github/workflows/ci.yml",
+        "pyproject.toml",
+        "tests/conftest.py",
+        "tests/test_release_large_book.py",
+        "scripts/ci_smoke.py",
+        "THIRD_PARTY_NOTICES.md",
+        "docs/RELEASE_CHECKLIST.md",
+        "docs/STATE.json"
+      ]
+    }
+  ],
   "next_actions": [
-    "等待用户授权下一阶段；Phase 14不扩展Provider Core或开始新功能",
-    "如用户提供明确收费API opt-in，在新隔离输出目录验收setup生成的DeepSeek+Kokoro真实路径；当前已有Phase 9真实链路证据，不默认重复调用",
-    "继续收集真人三方TTS盲听评分；Qwen维持experimental"
+    "验证临时全新 Git 克隆的依赖安装与离线 mock/MP3/M4B 链路；记录本机受限 DNS 对完整书籍获取验收的影响",
+    "提交 Phase 15 CI、测试分层和许可/发布文档功能变更",
+    "完成状态、交接和工作日志快照，验证提交并创建最终交接提交"
   ],
   "tests": [
     {
@@ -341,6 +356,46 @@
       "scope": "commit",
       "summary": "实际功能提交上的project validator、compileall、git diff HEAD^ HEAD --check均通过；工作区干净",
       "checked_at": "2026-09-16T06:11:34Z"
+    },
+    {
+      "name": "phase15-offline-suite",
+      "command": ".venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "393 passed、5项 live/large-book 显式测试 deselected、10 subtests passed；7项既有依赖 warning。默认 pytest marker 筛选阻止收费/长书任务。",
+      "checked_at": "2026-09-23T05:08:00Z"
+    },
+    {
+      "name": "phase15-ci-smoke",
+      "command": "PATH=.venv/bin:$PATH .venv/bin/python scripts/ci_smoke.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "临时中文路径下 setup demo→doctor→两章 Mock Job→MP3→M4B；ffprobe 验证 2 个 M4B 章节；0 网络 AI 调用。",
+      "checked_at": "2026-09-23T05:08:00Z"
+    },
+    {
+      "name": "phase15-web",
+      "command": "npm --prefix web ci && npm --prefix web run typecheck && npm --prefix web run build",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "npm ci 安装成功，TypeScript 检查通过，Next.js 16 静态生产构建成功。",
+      "checked_at": "2026-09-23T05:08:00Z"
+    },
+    {
+      "name": "phase15-static",
+      "command": "ruby YAML parse; python3 scripts/validate_project.py; compileall; git diff --check; UV_CACHE_DIR=/private/tmp/bookcast-uv-cache uv lock --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Workflow YAML 可解析；项目 validator、Python compileall、lock 检查和差异 whitespace 检查通过。",
+      "checked_at": "2026-09-23T05:08:00Z"
+    },
+    {
+      "name": "phase15-full-book-network",
+      "command": "PATH=.venv/bin:$PATH BOOKCAST_RUN_RELEASE_LARGE_BOOK=1 .venv/bin/pytest -m large_model tests/test_release_large_book.py -q",
+      "status": "failed",
+      "scope": "working_tree",
+      "summary": "测试在安全获取前因本机 DNS/代理将 Gutenberg 主机映射到非公开地址而终止；未下载书籍、未调用任何 LLM/TTS。该网络相关 opt-in 测试保留待外部公开 DNS 验收。",
+      "checked_at": "2026-09-23T05:08:00Z"
     }
   ],
   "known_failures": [
@@ -354,7 +409,10 @@
     "独立真实测试在证据ID契约下曾出现1次schema_error，人工显式重试成功；原始响应未保存，不能断言具体坏字段或100%稳定",
     "真实402/限流/timeout/5xx未实际制造，仅官方协议及离线故障注入验证；小样本未比较推理强度或验收长书"
   ],
-  "blockers": [],
+  "blockers": [
+    "BookCast 项目许可证必须由维护者选择；PyMuPDF AGPL/商业路径和 Kokoro 模型包 espeak-ng-data 许可需审查，当前不得声称可再分发。",
+    "本机完整长书 opt-in acquisition 的 Gutenberg 主机名被网络代理解析到保留/私有地址，安全下载器拒绝继续；测试逻辑需在正常公开 DNS 的 GitHub/外部环境验收。"
+  ],
   "important_files": [
     {
       "path": "src/bookcast/onboarding.py",
@@ -711,7 +769,23 @@
     {
       "path": "tests/test_export.py",
       "purpose": "M4B单/多章、Unicode、合法封面、损坏输入、旧Job、语言与缓存回归"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "purpose": "Python/Web/static GitHub Actions checks; no paid API or large TTS model on PR"
+    },
+    {
+      "path": "scripts/ci_smoke.py",
+      "purpose": "Temporary clean-checkout doctor, Mock MP3, and chaptered M4B smoke"
+    },
+    {
+      "path": "docs/RELEASE_CHECKLIST.md",
+      "purpose": "Evidence levels and manual/optional/blocked release gates"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "purpose": "Third-party license inventory and unresolved release compatibility review"
     }
   ],
-  "updated_at": "2026-09-23T04:49:42Z"
+  "updated_at": "2026-09-23T05:08:00Z"
 }

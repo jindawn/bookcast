@@ -71,6 +71,8 @@ Phase 9 已完成真实 LLM 技术验收：复用兼容适配器增加 DeepSeek 
 
 ## 如何运行与测试
 
+Pull requests run offline Python unit/integration tests, compile and validate the project, a clean-checkout Mock → MP3 → M4B smoke, and Web typecheck/build. Test tiers and opt-in full-book/live checks are documented in [RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md). No API key or large TTS model is needed for CI. BookCast remains pre-1.0 (0.1.0); no project license has been selected, and release blockers are tracked in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 真实 DeepSeek + Kokoro 使用 [无密钥示例](examples/deepseek-kokoro.toml)。先安装本地 TTS，安全注入 `DEEPSEEK_API_KEY`，再执行：
 
 ```sh
@@ -81,7 +83,7 @@ Phase 9 已完成真实 LLM 技术验收：复用兼容适配器增加 DeepSeek 
 
 `config providers` 显示各任务有效 reasoning 配置。普通 pytest 不调用收费 LLM；仅 `BOOKCAST_RUN_LIVE_LLM=1 .venv/bin/pytest tests/test_live_deepseek.py -q` 且 key 存在时启用联网内容测试。完整音频/人工验收步骤见上述实际验收记录。
 
-在仓库根目录运行；需要 **Python 3.12+、FFmpeg、Git**。依赖由 `uv` 管理，也可以使用兼容 PEP 621 的工具安装 `pyproject.toml`。Mock 模式无需 API key 或网络。
+在仓库根目录运行；需要 **Python 3.12+、FFmpeg、Git**。依赖由 `uv` 管理，也可以使用兼容 PEP 621 的工具安装 `pyproject.toml`。Mock 模式无需 API key 或网络。默认 `pytest` 只选择 `unit` 和 `integration` 标记；`live`、`large_model`、`manual_listening` 均需显式选择，不会混入普通 CI。
 
 ```sh
 python3.12 --version

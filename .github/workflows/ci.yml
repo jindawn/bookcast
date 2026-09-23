@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-core:
+    name: Python Core (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install FFmpeg tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install Python project and test dependencies
+        run: uv sync --locked --extra dev --extra web
+      - name: Run offline unit and integration tests
+        run: uv run pytest -q
+      - name: Compile Python sources
+        run: uv run python -m compileall -q src tests scripts
+      - name: Clean-checkout mock audio and M4B smoke
+        run: uv run python scripts/ci_smoke.py
+
+  web:
+    name: Web (typecheck and build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+
+  static-validation:
+    name: Static validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      # The validator checks that STATE.branch matches the checked-out branch.
+      # GitHub Actions checks out a detached snapshot, so give it the event branch name.
+      - run: git checkout -B "$CI_BRANCH"
+        env:
+          CI_BRANCH: ${{ github.head_ref || github.ref_name }}
+      - name: Check lockfile and handoff contract
+        run: |
+          uv lock --check
+          python3 scripts/validate_project.py
