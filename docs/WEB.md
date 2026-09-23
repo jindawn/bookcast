@@ -1,5 +1,7 @@
 # 本地 Web 与 Application API
 
+Phase 14 首页从同源 `/api/providers` 的安全摘要显示当前优先级链中首个可用的 LLM/TTS、模型、本地/云端/实验性、是否真实人声和缺失步骤。未配置时明确标注 Mock 测试音调；需要 Key 时只给出环境变量名与本机终端操作提示。Web 不接收、不持久化 Provider Secret；请先运行 `bookcast setup` 与 `bookcast doctor --human`，再用同一配置启动 `bookcast serve`。`doctor` 默认 JSON 契约保持不变。
+
 Phase 7 的 Next.js 界面只负责表单、状态和播放。FastAPI 将请求交给已有 Core；没有前端 AI SDK，也没有第二套解析、下载、生成或缓存算法。CLI 和 Skill 继续独立可用。
 
 ## 运行与测试

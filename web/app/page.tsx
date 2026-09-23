@@ -49,6 +49,16 @@ type Provider = {
   last_error: string | null;
   capabilities: { mock?: boolean };
 };
+type Onboarding = {
+  selected: Record<"llm" | "tts", {
+    name: string; model: string; mode: string; experimental: boolean;
+    available: boolean; real: boolean;
+  }>;
+  real_voice: boolean;
+  ready: boolean;
+  missing_steps: string[];
+  privacy: string;
+};
 const modes = [
   {
     id: "summary" as Mode,
@@ -140,6 +150,7 @@ export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [onboarding, setOnboarding] = useState<Onboarding | null>(null);
   const [error, setError] = useState("");
   const [connection, setConnection] = useState("");
   const [busy, setBusy] = useState("");
@@ -157,9 +168,9 @@ export default function Home() {
   async function checkProviders() {
     setProviderBusy(true);
     try {
-      setProviders(
-        (await api<{ providers: Provider[] }>("/api/providers")).providers,
-      );
+      const status = await api<{ providers: Provider[]; onboarding: Onboarding }>("/api/providers");
+      setProviders(status.providers);
+      setOnboarding(status.onboarding);
     } catch (e) {
       setError(String((e as Error).message));
     } finally {
@@ -311,7 +322,7 @@ export default function Home() {
             声音工作室 <b>/</b> 创建播客
           </span>
           <span className="local">
-            <span /> 本地模式
+            <span /> 本地工作空间
           </span>
         </header>
         <section className="intro" id="create">
@@ -324,6 +335,18 @@ export default function Home() {
           </div>
           <Wave />
         </section>
+        {onboarding && (
+          <div className={`notice ${onboarding.ready && onboarding.real_voice ? "" : "error"}`} role="status">
+            <strong>当前配置：</strong> LLM {onboarding.selected.llm.name}（{onboarding.selected.llm.mode}） ·
+            TTS {onboarding.selected.tts.name}（{onboarding.selected.tts.mode}
+            {onboarding.selected.tts.experimental ? "，实验性" : ""}；
+            {onboarding.real_voice ? "真实人声" : "测试音调"}）
+            {onboarding.missing_steps.map((step) => <p key={step}>✗ {step}</p>)}
+            {!onboarding.real_voice && <p>当前可试用完整流程。要生成真实语音，请在本机终端运行 bookcast setup，并按 README 的 5 分钟指南配置。</p>}
+            {(onboarding.selected.llm.mode === "云端" || onboarding.selected.tts.mode === "云端") &&
+              <p>{onboarding.privacy}</p>}
+          </div>
+        )}
         {connection && (
           <div role="status" className="notice error">
             {connection}
@@ -674,10 +697,7 @@ export default function Home() {
                   </span>
                 </div>
               ))}
-              <p className="mock-note">
-                当前内置 TTS 生成测试音调，非真人语音。Provider 优先级在本地
-                TOML 中配置。
-              </p>
+              <p className="mock-note">使用本机终端运行 bookcast setup 选择方案、bookcast doctor --human 检查；网页不会收集或保存 API Key。</p>
             </section>
           </div>
         </div>

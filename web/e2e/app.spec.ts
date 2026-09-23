@@ -12,6 +12,7 @@ test("upload → Core generation → history → actual audio playback; mobile l
   await expect(
     page.getByRole("heading", { name: "让阅读，有回声。" }),
   ).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "当前配置" })).toContainText("测试音调");
   await page
     .getByLabel("上传电子书")
     .setInputFiles({
@@ -48,9 +49,7 @@ test("upload → Core generation → history → actual audio playback; mobile l
   await audio.evaluate((element: HTMLAudioElement) => element.pause());
   await page.getByText("产物与任务信息").click();
   await expect(page.locator("details code")).toContainText("output");
-  await expect(
-    page.getByText("当前内置 TTS 生成测试音调", { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByText("网页不会收集或保存 API Key", { exact: false })).toBeVisible();
   await page.screenshot({ path: "test-results/desktop.png", fullPage: true });
   await page.reload();
   await expect(page.getByLabel("播客音频")).toBeVisible();

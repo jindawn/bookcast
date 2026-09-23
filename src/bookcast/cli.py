@@ -15,12 +15,64 @@ from .provider_config import load_config
 from .provider_registry import default_registry
 from .provider_api import ProviderStatus, classify_error
 from .jobs import list_jobs, resolve_job
+from .onboarding import PROFILES, profile_text, provider_summary
 
 app = typer.Typer(no_args_is_help=True, help="BookCast：本地电子书 → 可恢复的双人播客流水线。")
 config_app = typer.Typer(help="查看 Provider 配置。")
 app.add_typer(config_app, name="config")
 tts_app = typer.Typer(help="安装免费开源本地中文 TTS；生成阶段完全离线。")
 app.add_typer(tts_app, name="tts")
+
+
+@app.command()
+def setup(
+    profile: Annotated[str | None, typer.Option(help="demo / deepseek-kokoro / deepseek-gemini / deepseek-qwen")] = None,
+    config_output: Annotated[Path, typer.Option(help="新建配置位置；不会覆盖已有文件")] = Path("bookcast.toml"),
+    model_dir: Annotated[Path | None, typer.Option(help="已有本地模型目录；Kokoro 默认 data/models/kokoro-multi-lang-v1_0")] = None,
+    install_model: Annotated[bool, typer.Option(help="显式下载并校验 Kokoro 官方模型（约 350 MB）")] = False,
+    allow_cloud_tts: Annotated[bool, typer.Option(help="明确同意向 Gemini Developer API 发送播客脚本")] = False,
+    allow_experimental: Annotated[bool, typer.Option(help="明确启用实验性高资源 Qwen 本地语音")] = False,
+) -> None:
+    """列出首次使用方案，或创建不含密钥的配置文件。"""
+    if profile is None:
+        typer.echo("首次使用可选方案：")
+        for name, description in PROFILES.items():
+            typer.echo(f"  {name}: {description}")
+        typer.echo("运行 bookcast setup --profile demo 开始离线试用；真实语音见 README Quick Start。")
+        return
+    try:
+        if config_output.exists():
+            raise BookCastError("配置已存在；不会覆盖。用 --config-output 指定新文件。")
+        if profile == 'deepseek-gemini' and not allow_cloud_tts:
+            raise BookCastError("Gemini 云端语音会发送播客脚本；明确使用 --allow-cloud-tts 后才能创建该方案。")
+        if profile == 'deepseek-qwen' and not allow_experimental:
+            raise BookCastError("Qwen 仍属实验性高资源方案；明确使用 --allow-experimental。")
+        if install_model and profile != 'deepseek-kokoro':
+            raise BookCastError("--install-model 只适用于 deepseek-kokoro。")
+        if model_dir is not None and profile not in {'deepseek-kokoro', 'deepseek-qwen'}:
+            raise BookCastError("--model-dir 只适用于本地语音方案。")
+        if profile == 'deepseek-qwen' and model_dir is None:
+            raise BookCastError("Qwen 需用 --model-dir 指定已从官方获取的模型目录。")
+        directory = model_dir or Path('data/models/kokoro-multi-lang-v1_0')
+        if install_model and directory.name != 'kokoro-multi-lang-v1_0':
+            raise BookCastError("安装 Kokoro 时 --model-dir 的末级目录必须是 kokoro-multi-lang-v1_0。")
+        content = profile_text(profile, config_output, directory)
+        if install_model:
+            from .tts_setup import install_model as install_kokoro
+            typer.echo("正在安装 Kokoro 官方模型；下载约 350 MB，校验后在本地合成。")
+            install_kokoro(directory.parent)
+        config_output.parent.mkdir(parents=True, exist_ok=True)
+        with config_output.open('x', encoding='utf-8') as stream:
+            stream.write(content)
+        typer.echo(f"已创建 {config_output.resolve()}：{PROFILES[profile]}")
+        if profile != 'demo':
+            typer.echo('需在启动 BookCast 的终端设置 DEEPSEEK_API_KEY；密钥不要写入配置、网页或命令历史。')
+        if profile == 'deepseek-gemini':
+            typer.echo('还需设置 GEMINI_API_KEY；播客脚本将发送给 Google Developer API。')
+        typer.echo('下一步：bookcast doctor --human')
+    except (BookCastError, OSError, ValueError) as exc:
+        typer.echo(f"错误：{exc if isinstance(exc, BookCastError) else '无法创建配置文件。'}", err=True)
+        raise typer.Exit(1) from None
 
 
 @tts_app.command("setup")
@@ -226,6 +278,7 @@ def config_providers(
 def doctor(
     config: Annotated[Path | None, typer.Option(help="Provider TOML 文件")] = None,
     output_dir: Annotated[Path, typer.Option(help="检查任务存储根目录")] = Path("output"),
+    human: Annotated[bool, typer.Option("--human", help="给普通用户的 ✓/△/✗ 检查结果；默认仍为 JSON")] = False,
 ) -> None:
     """检查运行环境和 Provider；兼容端点只查询 models，不生成内容。"""
     try:
@@ -248,15 +301,39 @@ def doctor(
                  for kind, priority, capability in (("llm", settings.llm_priority, "structured"),
                                                     ("tts", settings.tts_priority, "speech"))}
         environment = {"python": sys.version.split()[0], "python_supported": sys.version_info >= (3, 12),
-                       "ffmpeg": shutil.which("ffmpeg") is not None}
+                       "ffmpeg": shutil.which("ffmpeg") is not None,
+                       "ffprobe": shutil.which("ffprobe") is not None,
+                       "web_build": Path('web/out/index.html').is_file()}
         healthy = all(ready.values()) and environment["python_supported"] and environment["ffmpeg"]
         inventory = list_jobs(output_dir)
         job_health = {'total': len(inventory['jobs']), 'active': sum(j['active'] for j in inventory['jobs']),
                       'stale': [j['job_id'] for j in inventory['jobs'] if j['stale']],
                       'corrupt': inventory['errors'], 'output_dir': str(output_dir.resolve()),
                       'recovery': 'stale 任务使用 resume；永久错误修复后使用 retry。'}
-        typer.echo(json.dumps({"ready": healthy, "environment": environment, "chains": ready, 'jobs': job_health,
-                              "providers": reports}, ensure_ascii=False, indent=2))
+        summary = provider_summary(settings, reports)
+        result = {"ready": healthy, "environment": environment, "chains": ready, 'jobs': job_health,
+                  "providers": reports, "onboarding": summary}
+        if human:
+            typer.echo(f"{'✓' if environment['python_supported'] else '✗'} Python {environment['python']}（需要 3.12+）")
+            typer.echo(f"{'✓' if environment['ffmpeg'] else '✗'} FFmpeg（合成与导出音频必需）")
+            typer.echo(f"{'✓' if environment['ffprobe'] else '△'} ffprobe（M4B 检查使用）")
+            if not environment['python_supported']:
+                typer.echo('✗ 待完成：安装 Python 3.12+ 并重新创建虚拟环境。')
+            if not environment['ffmpeg']:
+                typer.echo('✗ 待完成：安装 FFmpeg 并确认 ffmpeg 在 PATH 中。')
+            typer.echo(f"{'✓' if environment['web_build'] else '△'} Web 页面构建（可选；npm --prefix web ci && npm --prefix web run build）")
+            for kind in ('llm', 'tts'):
+                selected = summary['selected'][kind]
+                typer.echo(f"{'✓' if selected['available'] else '✗'} {kind.upper()}：{selected['name']} / {selected['model']} "
+                           f"[{selected['mode']}{'，实验性' if selected['experimental'] else ''}]"
+                           f"{'；真人语音' if kind == 'tts' and selected['real'] else '；测试音调' if kind == 'tts' else ''}")
+            for action in summary['missing_steps']:
+                typer.echo(f"✗ 待完成：{action}")
+            if not summary['real_voice']:
+                typer.echo('△ 当前 TTS 只生成测试音调。真实语音可选 deepseek-kokoro 方案。')
+            typer.echo(f"{'✓' if healthy else '✗'} {'可以生成' if healthy else '配置尚未就绪'}")
+        else:
+            typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
     except BookCastError as exc:
         typer.echo(f"错误：{exc}", err=True)
         raise typer.Exit(1) from None

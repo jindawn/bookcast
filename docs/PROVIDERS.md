@@ -1,5 +1,11 @@
 # Provider 使用与扩展
 
+## 普通用户首次配置
+
+从 [README Quick Start](../README.md#5-分钟-quick-start) 开始；`bookcast setup` 列出四个方案并说明测试音调、本地语音、云端传输和实验状态。`bookcast setup --profile demo` 写入可离线运行的 Mock 配置；`--profile deepseek-kokoro --install-model` 显式安装 Kokoro 官方模型并创建真实 LLM + 本地语音配置。`deepseek-gemini` 要求 `--allow-cloud-tts`，`deepseek-qwen` 要求 `--allow-experimental --model-dir <官方模型目录>`。既有配置不会覆盖；可用 `--config-output` 另建文件。方案生成的是严格校验后的现有 Provider TOML，没有新增 Adapter，也不把密钥写入文件。
+
+`bookcast doctor --human` 用 ✓ 可用、△ 可选、✗ 阻塞显示 Python、FFmpeg/ffprobe、Web 构建、首个可用 LLM/TTS、真人语音状态和下一步。默认 `doctor` **仍输出 JSON**，退出码和原有 `ready`/`environment`/`chains`/`jobs`/`providers` 字段不变；新增 `onboarding` 安全摘要，供 Web 同源读取。Web 只显示模型、local/cloud/experimental、可用性及环境变量名，不接收 Key 值；云端仅由用户显式创建的方案启用。模型健康检查可能消耗本机 CPU/磁盘 I/O；兼容 LLM 的检查只读取 models，不生成内容。
+
 Phase 7 的 [Web 界面](WEB.md) 只读显示 Registry 状态，配置仍在本地 TOML。CLI 与 worker 共用 composition.py；浏览器不接受密钥、端点配置，也不直接调用 Provider。恢复沿用任务快照，改配置须用 CLI 的显式 --config。
 
 统一契约、配置、注册表、调用状态和选择性切换始于 Phase 2。默认全部 Mock；Phase 8 新增可选本地中文 TTS、显式模型安装及 tts extra，详见 [TTS.md](TTS.md)。远程 LLM 仍需用户自行配置。

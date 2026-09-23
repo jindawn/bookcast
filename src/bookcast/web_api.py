@@ -135,6 +135,7 @@ def create_app(data_dir: Path = Path('data/web'), config: Path | None = None, ui
 
     @app.get('/api/providers')
     def providers():
+        from .onboarding import provider_summary
         settings, registry = load_config(config), default_registry()
 
         def check(spec):
@@ -149,7 +150,8 @@ def create_app(data_dir: Path = Path('data/web'), config: Path | None = None, ui
 
         with ThreadPoolExecutor(max_workers=4) as pool:
             result = list(pool.map(check, settings.providers))
-        return {'providers': result, 'llm_priority': settings.llm_priority, 'tts_priority': settings.tts_priority}
+        return {'providers': result, 'llm_priority': settings.llm_priority, 'tts_priority': settings.tts_priority,
+                'onboarding': provider_summary(settings, result)}
 
     if ui_dir is not None and ui_dir.joinpath('index.html').is_file():
         app.mount('/', StaticFiles(directory=ui_dir, html=True), name='ui')

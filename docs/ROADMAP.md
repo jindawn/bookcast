@@ -176,6 +176,15 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 2. 分层任务标记 podcast segment 并保留 source chapter 映射；无规划旧任务标记 source chapter。可选用户合法封面，不抓取网络图片。
 3. 输入与输出哈希决定重用或重导出，Web 仅下载已存在且有效的 M4B。真实小样本为 4.640 秒、2 章；Phase 9 真实中文节目为 320.283 秒、3 章。ffprobe 读到 M4B brand、AAC、标题/作者/来源和连续章节；完整离线测试 390 passed、4 skipped、10 subtests，浏览器 E2E 3 passed。
 
+### Phase 14：V1 Onboarding 与 Provider 配置体验
+
+**状态：实现与验收进行中；以 STATE/HANDOFF 的最新测试和提交为准。**
+
+1. `setup` 列出固定方案或创建新本地配置，不覆盖现有文件，不保存密钥；DeepSeek + Kokoro 是真实中文播客入门方案，Demo 明确为测试音调。
+2. 云端 Gemini TTS 和实验 Qwen 需要显式标志，Kokoro 模型只在 `--install-model` 下显式下载；没有新增 Provider 或 Core 业务路径。
+3. `doctor --human` 增加 ✓/△/✗ 检查，原 JSON 及退出码保留；Web 只读显示安全摘要和缺失步骤，浏览器不保存 Secret。
+4. README 顶部给出安装→诊断→导入 TXT/EPUB/PDF→生成→播放→M4B 导出的最短路径；隔离克隆在 Python 3.12 下完成依赖安装和 Mock 首次生成。真实收费 API 不在默认测试中调用。
+
 ### 后续候选
 
 **状态：规划中。**

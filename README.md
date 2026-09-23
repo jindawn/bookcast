@@ -1,5 +1,43 @@
 # BookCast
 
+## 5 分钟 Quick Start
+
+需要 **Python 3.12+、[uv](https://docs.astral.sh/uv/)、FFmpeg/ffprobe**。从仓库根目录运行。首次真实中文播客使用 DeepSeek 云端 LLM 与 Kokoro 本地中文人声；DeepSeek 会收到书籍文本并可能收费，Kokoro 模型首次下载约 350 MB。请只处理自己有权使用的书籍。
+
+```sh
+uv sync --extra web --extra tts
+uv run bookcast setup --profile deepseek-kokoro --install-model
+```
+
+在 macOS/Linux 终端**单独执行**下一行，输入自己的 DeepSeek API Key 并按回车；输入时不回显：
+
+```sh
+read -rs DEEPSEEK_API_KEY
+```
+
+随后在同一个终端继续：
+
+```sh
+export DEEPSEEK_API_KEY
+uv run bookcast doctor --human
+uv run bookcast generate examples/content-demo.txt --mode two_host --minutes 5
+uv run bookcast jobs
+```
+
+Key 只在当前终端会话有效，关闭后需重新输入；请勿写进 `bookcast.toml`、URL、浏览器或命令历史。生成完成后终端会给出 Job ID 和 `output/.../podcast.mp3`。听完可用 `uv run bookcast export JOB_ID --format m4b` 导出带章节的 `podcast.m4b`，不再调用 AI。换成自己的书时，将示例路径改成 `.txt`、`.epub` 或 `.pdf`；扫描 PDF 暂不支持 OCR。已有 `bookcast.toml` 不会被覆盖，可用 `--config-output` 创建新文件，再用 `--config` 传给 `doctor`、`generate`、`serve`。
+
+希望先在**完全离线、不使用 API Key** 的环境熟悉操作：运行 `uv sync --extra web`、`uv run bookcast setup --profile demo`、`uv run bookcast doctor --human` 和 `uv run bookcast generate examples/example.txt`。这条路径产生的是**测试音调，不是真人播客**。`bookcast setup` 可查看全部方案；Gemini 云端语音必须显式加 `--allow-cloud-tts`，Qwen 本地语音仍属实验性。所有方案只在配置中保存环境变量名，密钥由启动进程的环境提供。
+
+要在浏览器上传书籍、播放或下载音频，先安装 Node.js 20.9+，然后运行：
+
+```sh
+npm --prefix web ci
+npm --prefix web run build
+uv run bookcast serve
+```
+
+打开 [本地页面](http://127.0.0.1:8765)。页面会显示当前 LLM/TTS、是否真实人声、云端/本地状态和缺失步骤；不会接收或保存 API Key。Web 书架只显示其自身提交的任务；上述 CLI 任务的 MP3/M4B 直接使用终端给出的文件路径。`doctor` 默认保持机器可读 JSON，`doctor --human` 是面向人的检查视图；Web 构建属可选项。详细配置见 [PROVIDERS.md](docs/PROVIDERS.md)，模型与云端隐私见 [TTS.md](docs/TTS.md)。
+
 Phase 13 已支持把完成 Job 的现有 MP3 独立导出为带真实章节时间与元数据的 AAC/M4B，不重新调用 LLM/TTS。新分层节目按 podcast segment 标记章节，旧 Job 按原书章节；可选合法用户封面。CLI 和 Web 下载方式见下文，实际 FFmpeg/ffprobe 验收见 [HANDOFF.md](docs/HANDOFF.md)。
 
 Phase 12 完成TTS人工试听协议和原子临时产物恢复清理；目前没有真人评分，Qwen继续为显式启用的实验Provider。Kokoro是较轻量的本地CPU基线，Gemini是需显式发送文本的云端多speaker方案，Qwen在M2 Pro/32 GiB以MPS运行且资源需求较高。没有证据支持音质排行或quality默认升级。评分模板和产品定位见[选型记录](docs/TTS_PROVIDER_EVALUATION.md)。

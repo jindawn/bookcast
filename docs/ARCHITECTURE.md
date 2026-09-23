@@ -1,6 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 13）
+## 当前实际实现（Phase 14）
+
+Phase 14 在 CLI/Web 的组合边界增加 `onboarding.py`：由四个固定、严格校验的现有 Provider 配置方案创建本地 TOML，只保存环境变量名；`doctor` 原 JSON 契约不变，`--human` 提供可读检查，`/api/providers` 增加同源安全摘要供页面显示当前 LLM/TTS、真人语音与缺失步骤。方案选择不修改 Provider Registry、Core、Job 快照或缓存。Gemini 云端语音与 Qwen 实验语音需要额外显式标志。Web 不接收凭证。
 
 完成 Job 的现有 podcast.mp3 进入独立 export.py：在同一 Job 锁内验证音频，读取各最终 WAV 的真实帧长和 MP3 实测时长，按 EpisodePlan 的 podcast segment 或旧 Job 的 source chapter 生成 FFmetadata，再以 FFmpeg 编 AAC/M4B。sidecar 记录严格受限的导出元数据、源/输出哈希与章节类型；Web 仅在其有效时暴露下载链接。导出不修改原 Pipeline、Job manifest 或 Provider 缓存，不重新生成内容、语音和原 MP3。详见 D-020。
 
@@ -39,7 +41,8 @@ scripts/
 skills/bookcast/
   SKILL.md                可移植 Agent 指令，只有 CLI 调用，无实现代码
 src/bookcast/
-  cli.py                  Typer acquire/generate/jobs/status/resume/retry/config/doctor/serve
+  cli.py                  Typer setup/acquire/generate/jobs/status/resume/retry/config/doctor/serve
+  onboarding.py           固定首次使用方案与 CLI/Web 共用的安全状态摘要
   composition.py          CLI 与 worker 共用配置快照恢复及 Provider 注入
   web_api.py              本地 HTTP、流式上传、状态与音频接口
   web_service.py          提交记录、幂等派发和 Core 状态投影
