@@ -5,7 +5,7 @@
   "current_task": "Phase 12工程验收完成；technical acceptance completed，listening acceptance pending",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "64e344027d9e1f9cfddfde13dc99a784ddf5ba65",
+  "last_verified_commit": "7e71a2b8a24e678a93ac7d29ed8049f34d5faab5",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -79,29 +79,30 @@
     "创建并验证Phase 11功能提交64e344027d9e1f9cfddfde13dc99a784ddf5ba65：380测试/10子测试通过，3默认跳过；真实本地零调用恢复1 passed，validator/compileall/提交diff通过，未push",
     "Phase 12：建立可重复三方盲听协议和评分模板，真实试听尚未发生；Qwen继续experimental",
     "Phase 12：原子写临时文件增加BookCast专属标记，Job锁内恢复清理；manifest绑定的旧式0字节TTS unit temp安全清理，不改Artifact/缓存",
-    "Phase 12：真实SIGKILL/临时文件专项3通过；已完成Kokoro/Gemini/Qwen任务禁synthesis/HTTP/LLM恢复各1通过"
+    "Phase 12：真实SIGKILL/临时文件专项3通过；已完成Kokoro/Gemini/Qwen任务禁synthesis/HTTP/LLM恢复各1通过",
+    "创建并验证Phase 12功能提交7e71a2b8a24e678a93ac7d29ed8049f34d5faab5：完整381测试/10子测试通过，项目校验、compileall、提交diff及三Provider真实零调用恢复均通过；未推送"
   ],
   "in_progress": [],
   "next_actions": [
-    "如后续完成至少两位听者的三方盲听，按docs/TTS_PROVIDER_EVALUATION.md记录原始单项评分及逐字错误，再决定是否调整Provider定位",
-    "Qwen保持experimental；未取得人工证据前不升级默认、不声称音质胜出。Phase 12收尾后不开始Phase 13"
+    "等待人工听者按盲听协议提交评分和可定位错误；揭盲前保存各听者原始记录",
+    "在有充分人工证据并完成独立产品决策之前，维持qwen-local=experimental；不开始Phase 13"
   ],
   "tests": [
     {
       "name": "phase12-final-full",
       "command": ".venv/bin/pytest -q",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "381 passed、10子测试、4项需显式启用的真实服务/产物测试默认跳过，7既有warning，52.79秒",
-      "checked_at": "2026-09-22T23:59:47Z"
+      "scope": "commit",
+      "summary": "Phase 12功能提交7e71a2b8a24e678a93ac7d29ed8049f34d5faab5：381 passed、10子测试、4项显式真实验收默认跳过，7既有warning，52.43秒",
+      "checked_at": "2026-09-23T00:01:57Z"
     },
     {
       "name": "phase12-static",
       "command": "python3 scripts/validate_project.py && .venv/bin/python -m compileall -q src tests scripts && git diff --check",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "项目结构/状态/本地链接验证通过，compileall及差异空白检查通过",
-      "checked_at": "2026-09-22T23:59:47Z"
+      "scope": "commit",
+      "summary": "Phase 12实际功能提交7e71a2b8a24e678a93ac7d29ed8049f34d5faab5：project validator、compileall及git diff HEAD^ HEAD --check通过",
+      "checked_at": "2026-09-23T00:01:57Z"
     },
     {
       "name": "phase12-sigkill-temp",
@@ -123,9 +124,9 @@
       "name": "phase12-live-resumes",
       "command": "禁推理/禁HTTP复验已完成的Phase10 Kokoro、Gemini及Phase11 Qwen任务",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "Kokoro/Gemini/Qwen各1 passed；真实完成任务恢复分别阻断合成、HTTP与LLM；产物SHA/mtime不变，Qwen旧孤儿文件清理",
-      "checked_at": "2026-09-22T23:59:47Z"
+      "scope": "commit",
+      "summary": "Phase 12提交上分别复验实际完成的Kokoro/Gemini/Qwen任务，各1 passed；禁本地TTS推理/禁Gemini HTTP/禁LLM，缓存产物哈希/mtime不变；Qwen旧孤儿已清理",
+      "checked_at": "2026-09-23T00:01:57Z"
     },
     {
       "name": "phase11-commit-static",
@@ -642,5 +643,5 @@
       "purpose": "真实DeepSeek/Kokoro样例、官方usage、失败、缓存恢复、文本审读与验收限制"
     }
   ],
-  "updated_at": "2026-09-22T23:59:47Z"
+  "updated_at": "2026-09-23T00:02:31Z"
 }

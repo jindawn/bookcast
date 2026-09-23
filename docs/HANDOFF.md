@@ -1,6 +1,6 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-22T23:57:02Z。实际代码、Git和产物优先；禁止根据旧交接猜测实时状态。
+更新时间：2026-09-23T00:02:31Z。实际代码、Git和产物优先；禁止根据旧交接猜测实时状态。
 
 ## 当前目标与阶段状态
 
@@ -38,17 +38,17 @@ Phase 12工程工作：人工TTS试听协议与原子临时产物清理。工程
 - SIGKILL临时文件专项：3 passed。
 - Job Recovery + Qwen Offline + Gemini segment 专项：70 passed。
 - Kokoro/Gemini/Qwen既有真实任务禁调用resume：各1 passed。
-- 完整pytest：381 passed、10 subtests、4个显式真实服务/产物测试默认跳过、7个既有warning（52.79秒）。
-- Project validator、compileall、git diff --check通过；在功能提交上复验待完成。
+- 功能提交7e71a2b8a24e678a93ac7d29ed8049f34d5faab5上完整pytest：381 passed、10 subtests、4个显式真实服务/产物测试默认跳过、7个既有warning（52.43秒）。
+- 同一提交上Project validator、compileall、git diff HEAD^ HEAD --check及Kokoro/Gemini/Qwen实际零调用恢复均通过。
 
 ## 下一步
 
-1. 按仓库流程提交Phase 12工程收尾，在实际功能提交上复验并把完整SHA写入STATE。
-2. 若未来收到听者数据，按盲码先记录原始分数和错误证据，再揭盲；无人评审时维持Qwen experimental。
+1. 若未来收到听者数据，按盲码先记录原始分数和错误证据，再揭盲；无人评审时维持Qwen experimental。
 
 不要重跑DeepSeek/Gemini TTS/Qwen推理，不要下载模型，不要修改既有缓存语义，不要删除零规则以外的用户文件。不要把音频/模型/凭证提交Git。
 
 ## 最近Git状态
 
 - 远程origin/main上已有Phase 12之前的提交e32d002；Phase 11功能验收SHA记录于STATE。
-- Phase 12当前变更待提交；结束前读取实际git log和状态，不凭本段推测推送情况。
+- 7e71a2b8a24e678a93ac7d29ed8049f34d5faab5：Phase 12功能提交，STATE.last_verified_commit指向此完整SHA。
+- 本次交接快照自身的提交从git log -1读取，不在此文件自引用，遵循D-006；不主动push。

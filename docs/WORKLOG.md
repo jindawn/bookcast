@@ -264,4 +264,11 @@
 - 原子文件使用BookCast专属临时前缀。恢复持有Job锁后清理标记文件，并仅清理manifest绑定的旧式、零字节语音unit临时文件；路径不跟随符号链接，无mtime门槛，不变更Artifact/Step状态。
 - SIGKILL专项3 passed，包含atomic WAV写入中的非空部分文件和旧版零字节孤儿；resume移除孤儿，只继续未完成unit。无关manifest未列target的相似文件和符号链接均保留。
 - Job Recovery/Qwen offline/Gemini TTS专项70 passed。实际Kokoro/Gemini/Qwen完成任务分别在禁合成/禁HTTP/禁LLM条件下恢复，各1 passed；哈希与mtime不变，Qwen既有零字节孤儿被清理。未重新调用DeepSeek、Gemini TTS、Qwen推理或下载模型。
-- 更新Phase 11技术完成/人工试听pending状态、README、ROADMAP、PRODUCT、质量选型、STATE和handoff；Qwen仍experimental。完整pytest 381 passed/10子测试/4显式跳过/7既有warning，52.79秒；validator/compileall/diff通过，提交和提交后复验待完成。
+- 更新Phase 11技术完成/人工试听pending状态、README、ROADMAP、PRODUCT、质量选型、STATE和handoff；Qwen仍experimental。Phase 12最终完整pytest 381 passed/10子测试/4显式跳过/7既有warning，52.43秒；validator/compileall/diff通过。
+
+## 2026-09-23T00:01:57Z — Phase 12功能提交验证
+
+- 创建功能提交7e71a2b8a24e678a93ac7d29ed8049f34d5faab5。该提交上完整pytest 381 passed、10 subtests passed、4项显式真实验收默认跳过、7既有warning，52.43秒。
+- 同一提交上project validator、compileall、git diff HEAD^ HEAD --check通过。
+- 再次对Phase 10/11三条既有完成任务禁调用恢复，Kokoro/Gemini/Qwen各1 passed；无LLM请求、无TTS重合成、无Gemini HTTP，文件SHA/mtime维持不变，Qwen遗留零字节temp已清理。
+- STATE.last_verified_commit指向功能提交。technical acceptance=completed；listening acceptance=pending。Qwen仍experimental；未开始Phase 13，不push。
