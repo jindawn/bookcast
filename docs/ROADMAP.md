@@ -178,7 +178,7 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 
 ### Phase 14：V1 Onboarding 与 Provider 配置体验
 
-**状态：实现与验收进行中；以 STATE/HANDOFF 的最新测试和提交为准。**
+**状态：已完成；功能提交 c33a2b2，完整 pytest 393 passed / 4 skipped、10 subtests，浏览器 E2E 3 passed。**
 
 1. `setup` 列出固定方案或创建新本地配置，不覆盖现有文件，不保存密钥；DeepSeek + Kokoro 是真实中文播客入门方案，Demo 明确为测试音调。
 2. 云端 Gemini TTS 和实验 Qwen 需要显式标志，Kokoro 模型只在 `--install-model` 下显式下载；没有新增 Provider 或 Core 业务路径。

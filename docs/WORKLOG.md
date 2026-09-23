@@ -286,3 +286,11 @@
 - 功能提交 ed479cd3eea1e1dc87da7ea71e65390325b73294 已创建，提交上完整 pytest 390 passed、4 skipped、10 subtests passed、7个既有warning；项目 validator、compileall、提交diff检查均通过。
 - 提交上浏览器 E2E 3 passed，包含真实条件显示和下载 M4B；Web build/typecheck通过。再次从旧 Phase 2 Job 导出4.640秒/2章小型M4B，Phase 9真实中文节目导出320.283秒/3章；ffprobe与小样本解码均通过。
 - 修正文档中已过期的M4B规划表述；STATE记录已验证功能提交SHA，HANDOFF记录产物、测试及下一步。快照提交自身使用git log查询，不在文档自引用；未主动push。
+
+## 2026-09-23T04:49:42Z — Phase 14 首次使用与配置体验
+
+- 新增固定 `setup` 方案：离线 Demo、DeepSeek+Kokoro、显式云端 Gemini TTS、实验 Qwen；排他创建经现有 Pydantic 契约校验的 TOML，只保存环境变量名。Kokoro 模型仅在显式 `--install-model` 下载。
+- `doctor --human` 显示 ✓/△/✗、Python/FFmpeg/ffprobe/Web 构建、Provider 与缺失操作；默认 JSON 原字段/退出码不变。Web `/api/providers` 共用安全摘要，首页显示当前配置、人声/音调、local/cloud/experimental 和缺失步骤。
+- 临时隔离克隆在 Python 3.12 下用公开包完成 `uv sync --extra web`，离线 Demo 配置、doctor 与自制 2 章 TXT 生成成功，MP3 106893 字节。未调用 DeepSeek/Gemini、未推理 Kokoro/Qwen、未下载模型。离线 uv 缓存缺包，改正常安装公共 Python 包后通过。
+- 功能提交 `c33a2b27da97a1658e345669dedc6a705a7c7943` 已创建并在该提交上完整验证：393 passed、4 skipped、10 subtests passed、7 既有 warning；专项 24 passed、Web build/typecheck、浏览器 E2E 3 passed、项目校验、compileall 与差异检查通过。首次 E2E 本地端口被沙箱拒绝，按测试权限重跑通过。
+- README/架构/Provider/Web/路线图更新；真实收费路径没有在本阶段重复联网验收。Qwen 真人试听仍 pending，继续 experimental；未推送。

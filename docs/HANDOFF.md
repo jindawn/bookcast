@@ -1,34 +1,31 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-23T04:35:00Z。实际代码、Git 与现有产物优先；本文件的 Git 远程状态会过时。
+更新时间：2026-09-23T04:49:42Z。实际代码和 Git 是权威来源；远端状态请重新核对。
 
-## 当前目标与阶段状态
+## 当前目标与状态
 
-Phase 13 已完成：已完成的 BookCast Job 可显式导出带章节的 AAC/M4B，原有 MP3/Pipeline/Provider 保持原样。没有新增 LLM/TTS Provider，也没有重新调用 DeepSeek、Gemini、Kokoro 或 Qwen。Phase 12 的 Qwen technical acceptance 已完成，真人试听仍 pending，继续 experimental；勿把本阶段封装成功当作播客内容或 TTS 音质验收。
+Phase 14 已完成首次使用与 Provider 配置体验；等待用户授权下一阶段。没有新增 AI Provider，也没有修改 Pipeline、Job、缓存或默认 Mock。Qwen 真人试听仍无评分，继续 experimental。
 
 ## 刚完成的工作与关键文件
 
-- [export.py](../src/bookcast/export.py)：Pydantic 导出元数据、Job 锁、FFmpeg/ffprobe、M4B brand、AAC、节目或旧源书章节、合法可选封面、输入/输出哈希与只读有效性检查。语言按已支持映射写入 ISO 639-2/3 音轨标记；sidecar 不保存绝对路径、URL 或密钥。
-- [cli.py](../src/bookcast/cli.py)：新增 bookcast export JOB_ID --format m4b，可给 --output-dir 或直接传任务目录、--cover 本地 JPEG/PNG。
-- [web_service.py](../src/bookcast/web_service.py)、[web_api.py](../src/bookcast/web_api.py)、[page.tsx](../web/app/page.tsx)：只有 M4B 实际存在且缓存/Job 完整性有效才显示下载；原 MP3 播放与下载保留。
-- [test_export.py](../tests/test_export.py)、[test_web.py](../tests/test_web.py)、[app.spec.ts](../web/e2e/app.spec.ts)：单/多章节、中文标题与路径、旧 Job、封面、损坏输入、重复导出、源变更、语言标签、Web 条件下载和浏览器实际下载。
-- README、ARCHITECTURE、ROADMAP、PRODUCT、WEB、DECISIONS D-020 与 WORKLOG 同步了边界和验收。
+- `src/bookcast/onboarding.py`、`src/bookcast/cli.py`：`bookcast setup` 列出四个固定方案或排他写入严格校验的本地配置。Demo 明确为测试音调；DeepSeek+Kokoro 是云端 LLM + 本地真实语音；Gemini TTS 要 `--allow-cloud-tts`，Qwen 要 `--allow-experimental` 和已有模型目录。仅 `--install-model` 会下载 Kokoro 官方模型。没有任何 Key 值写入配置。
+- `bookcast doctor --human` 增加 ✓/△/✗ 及操作提示；默认 JSON、原字段和退出码保留，新增安全 `onboarding` 摘要。
+- `src/bookcast/web_api.py`、`web/app/page.tsx`：首页显示首个可用 LLM/TTS、模型、本地/云端/实验状态、是否真实人声和缺失步骤；网页不接收或保存 Secret。原 Web 创建与播放逻辑不变。
+- README 顶部 5 分钟 Quick Start、PROVIDERS/WEB/ARCHITECTURE/ROADMAP 和 `tests/test_onboarding.py`、Playwright 断言同步。
 
-## 当前代码和产物状态
+## 当前代码与 Git 状态
 
-功能提交 ed479cd3eea1e1dc87da7ea71e65390325b73294 已创建并在该提交上完成核心回归；最终 Git 快照提交用 git log -1 获取，避免在文件中自引用。新分层任务的 M4B chapter kind 为 podcast_segment，同时记录 source_chapter_ids，不假定与原书章节一一对应。无 EpisodePlan 的旧任务按 source_chapter 标记。章节边界取真实 WAV 帧数并对齐实际 MP3 时长；FFmpeg 编码后用 ffprobe 校验 AAC、章节数和时长。导出缓存键含 MP3、章节 WAV、计划、元数据、封面和音频契约；同输入复用 M4B，改变源音频只重导出，不重做 AI/TTS。
+已验证功能提交 `c33a2b27da97a1658e345669dedc6a705a7c7943`。交接快照提交自身请用 `git log -1` 获取，避免文档自引用（D-006）。当前已完成 Phase 14 范围；不主动 push。`bookcast.toml`、本地模型、书籍、音频和 Secret 均不应进入 Git。Phase 9 已有真实 DeepSeek+Kokoro 内容/音频技术验收，本阶段没有为 onboarding 重复消耗 API 额度。
 
-现有忽略目录中的真实样例：Phase 2 旧 Job 的 4.640 秒、2 章 M4B 位于 output/phase2-smoke-gd5jfq00/15902d020a918466ff5da3a5/podcast.m4b；Phase 9 中文节目 320.283 秒、3 章 M4B 位于 output/phase9-deepseek/5bdad5ca96f5e42cd019ff30/podcast.m4b。这些音频、来源书稿与模型不进入 Git。ffprobe 确认 M4B major brand、AAC、标题/作者/来源及连续中文章节；小样本完整音频解码成功。
+## 验证
 
-## 测试与结果
+- 功能提交上完整 pytest：393 passed、4 skipped、10 subtests passed，7 个既有依赖 warning；收费/真实服务测试默认跳过。
+- 首次安装：临时隔离克隆（叠加 Phase 14 代码）用 Python 3.12 执行 `uv sync --extra web`，再 `setup --profile demo`、`doctor --human`、自制 TXT Mock 生成；2 章任务完成，MP3 106893 字节。没有调用收费 API 或下载语音模型。最初离线 uv 缓存缺包，正常公共包安装后通过。
+- Next.js build/TypeScript 和 Playwright 3 项 E2E 通过；浏览器显示 Mock 测试音调提示，既有上传播放/M4B 下载通过。首次 E2E 沙箱拒绝绑定本地端口，按测试权限重跑成功。
+- 专项 24 passed；project validator、compileall、`git diff --check` 通过。最终快照后再检查 validator 与差异。
 
-- 功能提交上完整 pytest：390 passed、4 skipped、10 subtests passed、7 个既有依赖 warning；4 个显式真实服务/产物测试默认跳过。
-- 专项 M4B + Web API：9 passed；FFmpeg 真实生成、ffprobe 容器/章节核对和小样本全解码通过。
-- Next.js build、TypeScript typecheck 与 Playwright 3 项浏览器 E2E 通过；其中浏览器验证显式导出后显示 M4B 下载并收到 podcast.m4b。
-- 项目 validator、compileall、提交 diff --check 通过。最终快照后再次运行 validator 与 git diff --check。
+## 未解决问题、下一步与不要重复做的事
 
-## 未解决问题与下一步
+本阶段没有阻塞。新 `setup` 生成的 DeepSeek+Kokoro 路径只做了配置/健康提示的离线回归；本阶段没有再次运行收费 DeepSeek 内容生成或 Kokoro 长音频推理。若需专门验收 onboarding 的真实路径，须用户显式 opt-in 收费调用，并使用新隔离输出目录；现有 Phase 9 真实链路结果不可冒称为本次首次安装验证。
 
-没有 Phase 13 阻塞。M4B 是完成 Job 的显式附加导出，Web 不在浏览器内编码，也不自动生成 M4B。封面仅接受用户明确提供并有权使用的 JPEG/PNG；尚无从合法来源自动读取封面的流程。已有 Qwen 真人试听与其它历史质量限制仍记录在 STATE 和 TTS_PROVIDER_EVALUATION。
-
-下一位 Agent 先核对 git status、git log -1、origin/main 与 STATE；等待用户授权下一阶段或推送。不要重跑 DeepSeek/Gemini TTS/Qwen 推理、不要重下模型，不要将音频或密钥提交 Git。
+下一阶段由用户决定。可继续收集已有 Kokoro/Gemini/Qwen 三方节目的真人试听评分；没有评分前不要改变默认或称 Qwen 音质优胜。不要重复下载模型、重跑已有真实节目、将 API Key 写入配置/网页/日志，或在未授权时推送远端。

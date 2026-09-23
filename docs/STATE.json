@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-13",
-  "current_task": "Phase 13 M4B/Audiobook Export 实现并在功能提交上验证完成",
+  "current_phase": "phase-14",
+  "current_task": "Phase 14首次使用与Provider配置体验已完成；等待下一阶段授权",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "ed479cd3eea1e1dc87da7ea71e65390325b73294",
+  "last_verified_commit": "c33a2b27da97a1658e345669dedc6a705a7c7943",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -82,15 +82,42 @@
     "Phase 12：真实SIGKILL/临时文件专项3通过；已完成Kokoro/Gemini/Qwen任务禁synthesis/HTTP/LLM恢复各1通过",
     "创建并验证Phase 12功能提交7e71a2b8a24e678a93ac7d29ed8049f34d5faab5：完整381测试/10子测试通过，项目校验、compileall、提交diff及三Provider真实零调用恢复均通过；未推送",
     "Phase 13：独立完成Job音频→AAC/M4B导出，实际章节时间、节目/原书章节区分、受限封面及哈希缓存，CLI/Web按现存有效产物下载；无新增LLM/TTS调用",
-    "Phase 13功能提交ed479cd3eea1e1dc87da7ea71e65390325b73294已验证：390项pytest通过、4项显式跳过、10子测试通过；3项浏览器E2E、Web build/typecheck、validator、compileall和提交diff通过"
+    "Phase 13功能提交ed479cd3eea1e1dc87da7ea71e65390325b73294已验证：390项pytest通过、4项显式跳过、10子测试通过；3项浏览器E2E、Web build/typecheck、validator、compileall和提交diff通过",
+    "Phase 14：固定无密钥首次配置方案、doctor --human、Web安全状态摘要和README顶部Quick Start；未改Provider Core或默认Mock",
+    "隔离克隆Python 3.12正常安装Web依赖，setup demo→doctor→自制TXT Mock生成106893字节MP3通过；真实API未调用",
+    "Phase 14功能提交c33a2b27da97a1658e345669dedc6a705a7c7943已验证：393项pytest通过、4项显式跳过、10子测试；3项浏览器E2E、Web构建通过"
   ],
   "in_progress": [],
   "next_actions": [
-    "等待用户决定是否推送Phase 13提交；当前未主动push",
-    "如收到后续阶段授权，先核对真实Git/STATE/HANDOFF，再从已完成导出层继续；不重新生成现有音频",
-    "继续等待Phase 12三方真人盲听反馈，Qwen保持experimental"
+    "等待用户授权下一阶段；Phase 14不扩展Provider Core或开始新功能",
+    "如用户提供明确收费API opt-in，在新隔离输出目录验收setup生成的DeepSeek+Kokoro真实路径；当前已有Phase 9真实链路证据，不默认重复调用",
+    "继续收集真人三方TTS盲听评分；Qwen维持experimental"
   ],
   "tests": [
+    {
+      "name": "phase14-full-commit",
+      "command": ".venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "功能提交c33a2b27da97a1658e345669dedc6a705a7c7943上393 passed、4项显式真实服务/产物测试跳过、10 subtests passed、7既有warning，52.74秒",
+      "checked_at": "2026-09-23T04:49:00Z"
+    },
+    {
+      "name": "phase14-fresh-clone-mock",
+      "command": "isolated git clone --no-local; uv sync --python 3.12 --extra web; uv run bookcast setup --profile demo; doctor --human; generate examples/example.txt",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "隔离克隆叠加Phase14代码后Python3.12安装成功，doctor全必需项可用，2章Mock任务完成并生成106893字节MP3；无收费API及语音模型下载",
+      "checked_at": "2026-09-23T04:45:00Z"
+    },
+    {
+      "name": "phase14-web-e2e",
+      "command": "npm --prefix web run build; npm --prefix web run test:e2e",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Next.js构建和TypeScript通过；3项浏览器E2E通过，含首页Mock/真实语音引导、上传播放及M4B下载；最初沙箱禁止本地端口，授权后成功",
+      "checked_at": "2026-09-23T04:47:00Z"
+    },
     {
       "name": "phase13-final-full",
       "command": ".venv/bin/pytest -q",
@@ -329,6 +356,14 @@
   ],
   "blockers": [],
   "important_files": [
+    {
+      "path": "src/bookcast/onboarding.py",
+      "purpose": "Phase14固定无密钥首次配置方案和CLI/Web共用的安全状态摘要"
+    },
+    {
+      "path": "tests/test_onboarding.py",
+      "purpose": "首次配置排他写入、云端与实验显式确认、doctor JSON/可读输出及Web密钥不泄漏回归"
+    },
     {
       "path": "docs/TTS_PROVIDER_EVALUATION.md",
       "purpose": "官方选型、五类真实spike、实验Go及同脚本三方技术/待试听记录"
@@ -678,5 +713,5 @@
       "purpose": "M4B单/多章、Unicode、合法封面、损坏输入、旧Job、语言与缓存回归"
     }
   ],
-  "updated_at": "2026-09-23T04:35:23Z"
+  "updated_at": "2026-09-23T04:49:42Z"
 }
