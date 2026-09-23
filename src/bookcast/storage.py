@@ -5,10 +5,15 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 from typing import Iterator
 
 from .errors import BookCastError
+
+
+_BOOKCAST_TEMP = re.compile(r"^\.bookcast-tmp-.+\.[A-Za-z0-9_]{8}\.tmp$")
+_UNIT_TASK = re.compile(r"^tts:([0-9]{4,}):([0-9]{4}-[0-9]{4})$")
 
 
 def sha256_file(path: Path) -> str:
@@ -41,7 +46,7 @@ def artifact_path(root: Path, relative: str) -> Path:
 @contextmanager
 def atomic_target(path: Path) -> Iterator[Path]:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    fd, temporary = tempfile.mkstemp(prefix=f".bookcast-tmp-{path.name}.", suffix=".tmp", dir=path.parent)
     os.close(fd)
     temp = Path(temporary)
     try:
@@ -57,6 +62,42 @@ def atomic_target(path: Path) -> Iterator[Path]:
                 os.close(directory_fd)
     finally:
         temp.unlink(missing_ok=True)
+
+
+def cleanup_orphan_temporary_artifacts(root: Path, manifest=None) -> list[Path]:
+    """Remove only BookCast atomic temps and zero-byte legacy speech-unit temps.
+
+    Call while holding the job lock. Legacy names are constrained to unfinished
+    or completed unit task IDs recorded in this job's manifest.
+    """
+    root = root.resolve()
+    legacy_targets: set[str] = set()
+    if manifest is not None:
+        for task in manifest.steps:
+            match = _UNIT_TASK.fullmatch(task)
+            if match:
+                chapter, unit = match.groups()
+                legacy_targets.add(f".{chapter}-{unit}.wav")
+    removed = []
+    for current, directories, filenames in os.walk(root, topdown=True, followlinks=False):
+        parent = Path(current)
+        directories[:] = [name for name in directories if not (parent / name).is_symlink()]
+        for name in filenames:
+            candidate = parent / name
+            if candidate.is_symlink() or not candidate.is_file():
+                continue
+            owned = _BOOKCAST_TEMP.fullmatch(name) is not None
+            legacy_unit_temp = (
+                manifest is not None
+                and candidate.parent == root / "audio" / "units"
+                and any(re.fullmatch(re.escape(target) + r"\.[A-Za-z0-9_]{8}\.tmp", name)
+                        for target in legacy_targets)
+                and candidate.stat().st_size == 0
+            )
+            if owned or legacy_unit_temp:
+                candidate.unlink()
+                removed.append(candidate)
+    return removed
 
 
 def write_json(path: Path, value: object) -> None:

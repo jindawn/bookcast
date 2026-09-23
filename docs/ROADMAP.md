@@ -152,12 +152,21 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 
 ### Phase 11：高质量本地 TTS 选型
 
-**状态：官方研究、Qwen五类技术spike、唯一实验Adapter及真实同脚本第三路MP3完成；SIGKILL与零调用恢复通过。人工三方试听/质量推荐待验收，保持实验状态。**
+**状态：技术验收完成；同脚本三路MP3及真实恢复完成。人工三方试听待Phase 12执行，`qwen-local` 保持experimental。**
 
 1. 对照 Qwen3-TTS 与 CosyVoice 官方版本、源码/权重许可、设备支持及安装成本。
 2. 隔离安装并固定官方Qwen权重，只测这一候选；先验证中文、两声线、长段、中英及数字日期。
 3. 稳定性/资源/质量门禁决定是否接入一个既有 capability Adapter；允许 No-Go，不强行实现，也不宣称未试听的质量优胜。
 4. 保持Kokoro免费离线底座、Gemini显式云端；模型不入Git，不重写Core，不主动push。详见 [TTS_PROVIDER_EVALUATION.md](TTS_PROVIDER_EVALUATION.md)。
+
+### Phase 12：TTS Quality Gate 与 Phase 11 收尾
+
+**状态：工程收尾完成；technical acceptance完成，listening acceptance待人工评分；Qwen继续experimental。**
+
+1. 使用Phase 10/11既有同脚本音频建立盲听评分流程，记录自然度、停顿、语言/数字准确、漏错字、角色稳定、对话感、长段和疲劳；自动指标不替代人工评分。
+2. 修复强杀残留临时文件，只清理可识别的BookCast原子写入文件和清单绑定的历史语音临时产物；不删用户文件，不变更缓存/Artifact状态。
+3. 明确Kokoro轻量离线基线、Gemini显式云端多speaker、Qwen高资源experimental的当前边界。没有评分时不得改变默认或声称质量胜出。
+4. 完成零推理/零HTTP真实任务恢复验证、回归与全量离线测试，更新状态和交接。不要开始Phase 13。
 
 ### 后续候选
 

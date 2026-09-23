@@ -17,7 +17,8 @@ from .parsers import parse_book
 from .provider_api import LLMProvider, TTSProvider, ProviderError, ProviderStatus, ErrorKind, classify_error
 from .provider_chain import ProviderChain, provider_config_hash
 from .prompts import ANALYSIS_VERSION, SCRIPT_VERSION, TTS_VERSION, analysis_prompt, script_prompt
-from .storage import artifact_path, atomic_target, fingerprint, job_lock, sha256_file, write_json
+from .storage import (artifact_path, atomic_target, cleanup_orphan_temporary_artifacts,
+                      fingerprint, job_lock, sha256_file, write_json)
 
 
 def load_manifest(path: Path) -> Manifest:
@@ -75,6 +76,7 @@ class Pipeline:
                 if (manifest.book_id != book_id or manifest.source_sha256 != digest
                         or manifest.source_format != source_format):
                     raise BookCastError("任务输入不匹配，请使用另一个 --output-dir。")
+                cleanup_orphan_temporary_artifacts(root, manifest)
                 if manifest.pipeline_version == "2":
                     stored = ContentOptions.model_validate(manifest.content_options)
                     requested = ContentOptions(mode=stored.mode if mode is None else mode, minutes=stored.minutes if minutes is None else minutes)
@@ -105,6 +107,7 @@ class Pipeline:
                     manifest.config = config
                     write_json(manifest_path, manifest.model_dump())
             else:
+                cleanup_orphan_temporary_artifacts(root)
                 if any(path.name != ".lock" and not (path.name.startswith(".manifest.json.")
                            and path.name.endswith(".tmp") and path.is_file() and not path.is_symlink())
                        for path in root.iterdir()):

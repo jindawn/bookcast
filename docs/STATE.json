@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-11",
-  "current_task": "Phase 11实验Qwen接入与真实同脚本/中断恢复技术验收完成；人工三方试听待反馈，保持experimental",
+  "current_phase": "phase-12",
+  "current_task": "Phase 12工程验收完成；technical acceptance completed，listening acceptance pending",
   "task_status": "completed",
   "branch": "main",
   "last_verified_commit": "64e344027d9e1f9cfddfde13dc99a784ddf5ba65",
@@ -76,14 +76,57 @@
     "Qwen真实同脚本MP3完成385.040秒/23单元，新增LLM请求0；三方脚本SHA一致，原13条LLM审计未变",
     "完成后禁模型加载/TTS/LLM/HTTP恢复84文件SHA/mtime不变；Kokoro83/Gemini43历史文件恢复不变",
     "最终完整离线380 passed/10子测试/3默认跳过；真实本地禁推理恢复1 passed，静态与183文件秘密字面值扫描通过",
-    "创建并验证Phase 11功能提交64e344027d9e1f9cfddfde13dc99a784ddf5ba65：380测试/10子测试通过，3默认跳过；真实本地零调用恢复1 passed，validator/compileall/提交diff通过，未push"
+    "创建并验证Phase 11功能提交64e344027d9e1f9cfddfde13dc99a784ddf5ba65：380测试/10子测试通过，3默认跳过；真实本地零调用恢复1 passed，validator/compileall/提交diff通过，未push",
+    "Phase 12：建立可重复三方盲听协议和评分模板，真实试听尚未发生；Qwen继续experimental",
+    "Phase 12：原子写临时文件增加BookCast专属标记，Job锁内恢复清理；manifest绑定的旧式0字节TTS unit temp安全清理，不改Artifact/缓存",
+    "Phase 12：真实SIGKILL/临时文件专项3通过；已完成Kokoro/Gemini/Qwen任务禁synthesis/HTTP/LLM恢复各1通过"
   ],
   "in_progress": [],
   "next_actions": [
-    "收集相同脚本Kokoro/Gemini/Qwen真人试听与逐字听校，填入TTS_PROVIDER_EVALUATION；未证明优于Kokoro前保持experimental",
-    "不重复下载/生成有效产物，不主动push，不开始下一阶段；接手先核验Git与最后已验证提交"
+    "如后续完成至少两位听者的三方盲听，按docs/TTS_PROVIDER_EVALUATION.md记录原始单项评分及逐字错误，再决定是否调整Provider定位",
+    "Qwen保持experimental；未取得人工证据前不升级默认、不声称音质胜出。Phase 12收尾后不开始Phase 13"
   ],
   "tests": [
+    {
+      "name": "phase12-final-full",
+      "command": ".venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "381 passed、10子测试、4项需显式启用的真实服务/产物测试默认跳过，7既有warning，52.79秒",
+      "checked_at": "2026-09-22T23:59:47Z"
+    },
+    {
+      "name": "phase12-static",
+      "command": "python3 scripts/validate_project.py && .venv/bin/python -m compileall -q src tests scripts && git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "项目结构/状态/本地链接验证通过，compileall及差异空白检查通过",
+      "checked_at": "2026-09-22T23:59:47Z"
+    },
+    {
+      "name": "phase12-sigkill-temp",
+      "command": ".venv/bin/pytest tests/test_tts.py::test_sigkill_recovers_minimum_unit tests/test_tts.py::test_cleanup_only_removes_owned_and_manifest_bound_legacy_units -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "3 passed；真实子进程SIGKILL遗留新式非空原子临时WAV及Phase11式零字节临时WAV，resume安全清理并只恢复缺失语音单元；不相关文件保持",
+      "checked_at": "2026-09-22T23:56:26Z"
+    },
+    {
+      "name": "phase12-recovery",
+      "command": ".venv/bin/pytest tests/test_job_recovery.py tests/test_qwen_tts.py tests/test_gemini_tts.py -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "70 passed；覆盖Job恢复、Qwen离线配置/缓存及Gemini segment缓存/恢复",
+      "checked_at": "2026-09-22T23:56:26Z"
+    },
+    {
+      "name": "phase12-live-resumes",
+      "command": "禁推理/禁HTTP复验已完成的Phase10 Kokoro、Gemini及Phase11 Qwen任务",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Kokoro/Gemini/Qwen各1 passed；真实完成任务恢复分别阻断合成、HTTP与LLM；产物SHA/mtime不变，Qwen旧孤儿文件清理",
+      "checked_at": "2026-09-22T23:59:47Z"
+    },
     {
       "name": "phase11-commit-static",
       "command": "python3 scripts/validate_project.py; compileall; git diff HEAD^ HEAD --check",
@@ -246,8 +289,10 @@
     }
   ],
   "known_failures": [
+    "Phase 12技术验收完成但没有真人试听记录；listening acceptance=pending，qwen-local保持experimental，听感质量/相对风格效果未知",
+    "Phase 12工程技术验收完成后仍无真人试听评分；listening acceptance=pending，qwen-local继续experimental，不升级quality",
+    "现有三路测试节目仅一个短样本、本机设备；试听结论不能推广为所有文本或硬件",
     "Phase 11三方真人试听/逐字听校待反馈，Qwen只在M2 Pro/32 GiB技术验收；保持experimental，不推荐quality默认",
-    "真实SIGKILL遗留一个0字节临时WAV，未被Artifact引用且不影响恢复；Core清理逻辑未修改",
     "Gemini preview第三段首轮schema_error，已保留失败usage并经一次受控重试完成；原始响应未保存，具体字段原因未知",
     "Phase 10无真人试听评分，API层级未知；真实限流/额度/403/timeout/5xx仅离线注入，未声称触发真实服务故障",
     "正式demo质量needs_review：两处合理推论被归为source，未完成真人试听；不能以技术成功等同内容优秀",
@@ -597,5 +642,5 @@
       "purpose": "真实DeepSeek/Kokoro样例、官方usage、失败、缓存恢复、文本审读与验收限制"
     }
   ],
-  "updated_at": "2026-09-22T23:34:40Z"
+  "updated_at": "2026-09-22T23:59:47Z"
 }

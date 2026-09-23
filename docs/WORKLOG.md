@@ -257,3 +257,11 @@
 - 在实际提交上完整380 passed、10子测试、3默认跳过、7既有警告，51.12秒；显式真实完成Qwen任务禁推理恢复1 passed/2.53秒，84文件SHA/mtime不变，没有新增模型或API调用。
 - Project validator、compileall、提交diff通过，验证结束工作区干净。STATE记录已验证完整SHA，按D-006另存最终文档快照。
 - 三方主观试听与逐字听校仍待反馈，保持实验Provider；仅本机技术验收，不推荐默认quality、不push、不开始下一阶段。
+
+## 2026-09-22T23:54:49Z — Phase 12 Quality Gate与恢复清理
+
+- 同脚本既有节目加入盲听流程、1–5/N/A评分锚点、错误定位模板和无数据时的状态规则。完整节目及三个对齐片段供人工比较；本次没有真实听者评分。
+- 原子文件使用BookCast专属临时前缀。恢复持有Job锁后清理标记文件，并仅清理manifest绑定的旧式、零字节语音unit临时文件；路径不跟随符号链接，无mtime门槛，不变更Artifact/Step状态。
+- SIGKILL专项3 passed，包含atomic WAV写入中的非空部分文件和旧版零字节孤儿；resume移除孤儿，只继续未完成unit。无关manifest未列target的相似文件和符号链接均保留。
+- Job Recovery/Qwen offline/Gemini TTS专项70 passed。实际Kokoro/Gemini/Qwen完成任务分别在禁合成/禁HTTP/禁LLM条件下恢复，各1 passed；哈希与mtime不变，Qwen既有零字节孤儿被清理。未重新调用DeepSeek、Gemini TTS、Qwen推理或下载模型。
+- 更新Phase 11技术完成/人工试听pending状态、README、ROADMAP、PRODUCT、质量选型、STATE和handoff；Qwen仍experimental。完整pytest 381 passed/10子测试/4显式跳过/7既有warning，52.79秒；validator/compileall/diff通过，提交和提交后复验待完成。

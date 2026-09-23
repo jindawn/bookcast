@@ -22,7 +22,7 @@ from bookcast.provider_chain import ProviderChain
 from bookcast.provider_config import ProviderSpec, LocalTTSConfig, load_config
 from bookcast.providers import MockLLMProvider, MockTTSProvider
 from bookcast.speech import split_text
-from bookcast.storage import sha256_file
+from bookcast.storage import cleanup_orphan_temporary_artifacts, sha256_file
 from bookcast import tts_setup
 
 DEMO = Path(__file__).resolve().parents[1] / "examples/content-demo.txt"
@@ -239,6 +239,8 @@ import sys, time
 from pathlib import Path
 from bookcast.pipeline import Pipeline
 import bookcast.pipeline as core
+import bookcast.speech as speech
+from bookcast.storage import atomic_target
 from bookcast.providers import MockLLMProvider
 sys.path.insert(0, str(Path.cwd() / 'tests'))
 from test_tts import UnitFake
@@ -246,10 +248,24 @@ source, output, ready, window = sys.argv[1:]
 observe = core._Runner.observe
 def observed(self, attempt):
     observe(self, attempt)
-    if attempt.task == 'tts:0001:0002-0001' and attempt.status == window:
+    if window == 'completed' and attempt.task == 'tts:0001:0002-0001' and attempt.status == 'completed':
+        orphan = self.root / 'audio/units/.0001-0002-0001.wav.abcdefgh.tmp'
+        orphan.write_bytes(b'')
         Path(ready).write_text('ready')
         while True: time.sleep(.05)
 core._Runner.observe = observed
+if window == 'running':
+    original = speech.atomic_target
+    from contextlib import contextmanager
+    @contextmanager
+    def interrupted_target(path):
+        with original(path) as temporary:
+            if path.name == '0001-0002-0001.wav':
+                temporary.write_bytes(b'partial audio')
+                Path(ready).write_text('ready')
+                while True: time.sleep(.05)
+            yield temporary
+    speech.atomic_target = interrupted_target
 Pipeline(MockLLMProvider(), UnitFake(), Path(output)).generate(Path(source), minutes=1)
 '''
 
@@ -269,9 +285,20 @@ def test_sigkill_recovers_minimum_unit(tmp_path, window):
         before = sha256_file(first), first.stat().st_mtime_ns
         process.kill()
         process.wait(timeout=10)
+        if window == "running":
+            orphan = next((root / "audio/units").glob(".bookcast-tmp-0001-0002-0001.wav.*.tmp"))
+            assert orphan.read_bytes() == b"partial audio"
+        else:
+            orphan = root / "audio/units/.0001-0002-0001.wav.abcdefgh.tmp"
+            assert orphan.is_file() and orphan.stat().st_size == 0
+        unrelated = root / "audio/units/.0001-9999-0001.wav.abcdefgh.tmp"
+        unrelated.write_bytes(b"user data")
         provider = UnitFake()
         Pipeline(MockLLMProvider(), provider, output).resume_job(root)
         assert (sha256_file(first), first.stat().st_mtime_ns) == before
+        assert not orphan.exists()
+        assert unrelated.read_bytes() == b"user data"
+        assert not list((root / "audio/units").glob(".bookcast-tmp-*.tmp"))
         manifest = load_manifest(root / "manifest.json")
         calls = [c for c in manifest.ai_calls if c.task == "tts:0001:0002-0001"]
         assert len(calls) == (2 if window == "running" else 1)
@@ -281,3 +308,24 @@ def test_sigkill_recovers_minimum_unit(tmp_path, window):
             process.kill()
         process.wait(timeout=10)
         process.stderr.close()
+
+
+def test_cleanup_only_removes_owned_and_manifest_bound_legacy_units(tmp_path):
+    root = Pipeline(MockLLMProvider(), UnitFake(), tmp_path / "out").generate(DEMO, minutes=1)
+    manifest = load_manifest(root / "manifest.json")
+    units = root / "audio/units"
+    legacy = units / ".0001-0001-0001.wav.abcdefgh.tmp"
+    owned = units / ".bookcast-tmp-manifest.json.abcdefgh.tmp"
+    unrelated = units / ".9999-0001-0001.wav.abcdefgh.tmp"
+    symlink = units / ".bookcast-tmp-other.json.abcdefgh.tmp"
+    legacy.touch()
+    owned.write_bytes(b"partial")
+    unrelated.touch()
+    outside = tmp_path / "outside"
+    outside.write_text("keep")
+    symlink.symlink_to(outside)
+
+    removed = cleanup_orphan_temporary_artifacts(root, manifest)
+
+    assert set(removed) == {legacy, owned}
+    assert unrelated.exists() and symlink.is_symlink() and outside.read_text() == "keep"

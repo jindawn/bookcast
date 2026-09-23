@@ -21,8 +21,11 @@ def test_real_qwen_job_resumes_without_loading_or_inference(monkeypatch):
     assert calls and all(a.model == "Qwen3-TTS-12Hz-1.7B-CustomVoice" for a in calls)
     for wav in (root / "audio/units").glob("*.wav"):
         validate_wav(wav)
+    legacy_orphan = root / "audio/units/.0001-0007-0001.wav.cmb62mzp.tmp"
+    if legacy_orphan.exists():
+        assert legacy_orphan.is_file() and legacy_orphan.stat().st_size == 0
     before = {p.relative_to(root): (sha256_file(p), p.stat().st_mtime_ns)
-              for p in root.rglob("*") if p.is_file()}
+              for p in root.rglob("*") if p.is_file() and p != legacy_orphan}
     def forbidden(*args, **kwargs):
         pytest.fail("completed local resume must not load a model, infer or request HTTP")
     monkeypatch.setattr("bookcast.adapters.qwen.QwenTTSProvider._load", forbidden)
@@ -33,5 +36,6 @@ def test_real_qwen_job_resumes_without_loading_or_inference(monkeypatch):
     ab = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ab)
     ab.render(root)  # CachedLLM in this client independently forbids all LLM inference.
+    assert not legacy_orphan.exists()
     assert before == {p.relative_to(root): (sha256_file(p), p.stat().st_mtime_ns)
                       for p in root.rglob("*") if p.is_file()}
