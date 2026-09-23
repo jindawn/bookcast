@@ -280,3 +280,9 @@
 - 实际旧 Phase 2 Job 导出 4.640 秒、2 章 M4B，ffprobe 查到 M4B brand、AAC、连续中文章节、标题/作者/来源元数据，FFmpeg 完整音频解码通过。既有 Phase 9 DeepSeek+Kokoro 中文节目不重跑 AI/TTS，导出 320.283 秒、3 章 M4B。
 - 新增单章/多章/Unicode/封面/损坏 WAV 与 MP3/重复导出/源变更缓存失效/旧 Job/Web 下载测试；补验法语 BCP47 → ISO 639-2 音轨语言标签；完整 pytest 390 passed、4 个显式真实测试跳过、10 subtests passed、7 既有 warnings。Web build、typecheck、3 个 Playwright E2E、validator、compileall、diff --check 均通过。
 - 该阶段未调用 DeepSeek/Gemini API、未运行 Kokoro/Qwen 推理或下载模型；只离线重编码现有 MP3。Qwen 人工试听仍待外部反馈，保持 experimental。
+
+## 2026-09-23T04:35:45Z — Phase 13功能提交验证与接力快照
+
+- 功能提交 ed479cd3eea1e1dc87da7ea71e65390325b73294 已创建，提交上完整 pytest 390 passed、4 skipped、10 subtests passed、7个既有warning；项目 validator、compileall、提交diff检查均通过。
+- 提交上浏览器 E2E 3 passed，包含真实条件显示和下载 M4B；Web build/typecheck通过。再次从旧 Phase 2 Job 导出4.640秒/2章小型M4B，Phase 9真实中文节目导出320.283秒/3章；ffprobe与小样本解码均通过。
+- 修正文档中已过期的M4B规划表述；STATE记录已验证功能提交SHA，HANDOFF记录产物、测试及下一步。快照提交自身使用git log查询，不在文档自引用；未主动push。

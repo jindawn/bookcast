@@ -1,6 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 11）
+## 当前实际实现（Phase 13）
+
+完成 Job 的现有 podcast.mp3 进入独立 export.py：在同一 Job 锁内验证音频，读取各最终 WAV 的真实帧长和 MP3 实测时长，按 EpisodePlan 的 podcast segment 或旧 Job 的 source chapter 生成 FFmetadata，再以 FFmpeg 编 AAC/M4B。sidecar 记录严格受限的导出元数据、源/输出哈希与章节类型；Web 仅在其有效时暴露下载链接。导出不修改原 Pipeline、Job manifest 或 Provider 缓存，不重新生成内容、语音和原 MP3。详见 D-020。
 
 Phase 11 的官方来源对照和隔离实验见 [TTS_PROVIDER_EVALUATION.md](TTS_PROVIDER_EVALUATION.md)。Qwen通过五类技术预检后，仅增加可选实验Adapter，复用SpeechUnit/Core持久与恢复。`local_tts`以类型区分原Kokoro整数voice配置和Qwen显式experimental/字符串voice配置；旧配置序列化不增加新空字段。qwen_assets固定官方修订及全文件hash；运行时lazy import，不影响未选择Qwen的CLI。人工质量验收尚未完成，不设quality默认。
 

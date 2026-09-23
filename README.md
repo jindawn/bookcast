@@ -1,5 +1,7 @@
 # BookCast
 
+Phase 13 已支持把完成 Job 的现有 MP3 独立导出为带真实章节时间与元数据的 AAC/M4B，不重新调用 LLM/TTS。新分层节目按 podcast segment 标记章节，旧 Job 按原书章节；可选合法用户封面。CLI 和 Web 下载方式见下文，实际 FFmpeg/ffprobe 验收见 [HANDOFF.md](docs/HANDOFF.md)。
+
 Phase 12 完成TTS人工试听协议和原子临时产物恢复清理；目前没有真人评分，Qwen继续为显式启用的实验Provider。Kokoro是较轻量的本地CPU基线，Gemini是需显式发送文本的云端多speaker方案，Qwen在M2 Pro/32 GiB以MPS运行且资源需求较高。没有证据支持音质排行或quality默认升级。评分模板和产品定位见[选型记录](docs/TTS_PROVIDER_EVALUATION.md)。
 
 Phase 10 已加入 Gemini 原生多说话者 TTS，并保持 Kokoro 免费离线逐句恢复。真实同脚本 A/B 已生成：Kokoro 5分20秒、Gemini 4分11秒；Gemini 一次 schema 失败经受控重试完成，恢复无新增 API 调用。人工试听和当前 API 项目免费/付费层级仍待确认，不能据此声称听感优秀或免费层已验收。见 [A/B 记录](docs/PHASE10_TTS_AB.md)、[TTS 配置/云端隐私](docs/TTS.md)。默认 CLI 不需要 Gemini Key，云端必须显式选择。

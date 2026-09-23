@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-12",
-  "current_task": "Phase 12工程验收完成；technical acceptance completed，listening acceptance pending",
+  "current_phase": "phase-13",
+  "current_task": "Phase 13 M4B/Audiobook Export 实现并在功能提交上验证完成",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "7e71a2b8a24e678a93ac7d29ed8049f34d5faab5",
+  "last_verified_commit": "ed479cd3eea1e1dc87da7ea71e65390325b73294",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -80,14 +80,41 @@
     "Phase 12：建立可重复三方盲听协议和评分模板，真实试听尚未发生；Qwen继续experimental",
     "Phase 12：原子写临时文件增加BookCast专属标记，Job锁内恢复清理；manifest绑定的旧式0字节TTS unit temp安全清理，不改Artifact/缓存",
     "Phase 12：真实SIGKILL/临时文件专项3通过；已完成Kokoro/Gemini/Qwen任务禁synthesis/HTTP/LLM恢复各1通过",
-    "创建并验证Phase 12功能提交7e71a2b8a24e678a93ac7d29ed8049f34d5faab5：完整381测试/10子测试通过，项目校验、compileall、提交diff及三Provider真实零调用恢复均通过；未推送"
+    "创建并验证Phase 12功能提交7e71a2b8a24e678a93ac7d29ed8049f34d5faab5：完整381测试/10子测试通过，项目校验、compileall、提交diff及三Provider真实零调用恢复均通过；未推送",
+    "Phase 13：独立完成Job音频→AAC/M4B导出，实际章节时间、节目/原书章节区分、受限封面及哈希缓存，CLI/Web按现存有效产物下载；无新增LLM/TTS调用",
+    "Phase 13功能提交ed479cd3eea1e1dc87da7ea71e65390325b73294已验证：390项pytest通过、4项显式跳过、10子测试通过；3项浏览器E2E、Web build/typecheck、validator、compileall和提交diff通过"
   ],
   "in_progress": [],
   "next_actions": [
-    "等待人工听者按盲听协议提交评分和可定位错误；揭盲前保存各听者原始记录",
-    "在有充分人工证据并完成独立产品决策之前，维持qwen-local=experimental；不开始Phase 13"
+    "等待用户决定是否推送Phase 13提交；当前未主动push",
+    "如收到后续阶段授权，先核对真实Git/STATE/HANDOFF，再从已完成导出层继续；不重新生成现有音频",
+    "继续等待Phase 12三方真人盲听反馈，Qwen保持experimental"
   ],
   "tests": [
+    {
+      "name": "phase13-final-full",
+      "command": ".venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "功能提交ed479cd3eea1e1dc87da7ea71e65390325b73294：390 passed、4显式真实验收默认跳过、10 subtests passed、7个既有warning，56.03秒",
+      "checked_at": "2026-09-23T04:35:23Z"
+    },
+    {
+      "name": "phase13-web-e2e",
+      "command": "npm run build --prefix web; npm run typecheck --prefix web; npm run test:e2e --prefix web",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "Next.js静态构建与类型检查通过；3个Playwright E2E通过，含显式M4B导出后的浏览器下载",
+      "checked_at": "2026-09-23T04:35:23Z"
+    },
+    {
+      "name": "phase13-static-real-export",
+      "command": "python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; git diff HEAD^ HEAD --check; ffprobe/ffmpeg small M4B",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "项目校验、compileall、提交diff通过；既有Phase2短Job导出4.640秒/2章，M4B brand/AAC/metadata/chapter可读且全音频解码；Phase9中文节目320.283秒/3章，无AI/TTS调用",
+      "checked_at": "2026-09-23T04:35:23Z"
+    },
     {
       "name": "phase12-final-full",
       "command": ".venv/bin/pytest -q",
@@ -641,7 +668,15 @@
     {
       "path": "docs/PHASE9_REAL_LLM.md",
       "purpose": "真实DeepSeek/Kokoro样例、官方usage、失败、缓存恢复、文本审读与验收限制"
+    },
+    {
+      "path": "src/bookcast/export.py",
+      "purpose": "独立M4B导出、实际章节、封面验证与输入/输出哈希缓存"
+    },
+    {
+      "path": "tests/test_export.py",
+      "purpose": "M4B单/多章、Unicode、合法封面、损坏输入、旧Job、语言与缓存回归"
     }
   ],
-  "updated_at": "2026-09-23T00:02:31Z"
+  "updated_at": "2026-09-23T04:35:23Z"
 }
