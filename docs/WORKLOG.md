@@ -322,3 +322,4 @@
 - 新增 PDF text/image/mixed/blank 页分类和扫描区域 OCR、EPUB 内嵌图片 OCR；OCR 块保留源 SHA、页/资源、归一化区域和置信度，低置信与未覆盖页给 warning。解析/检测在隔离进程，OCR 配置与适配器版本参与 parse Step 指纹；后续生成链路未分叉。
 - 默认完整离线 `410 passed、1 skipped、5 deselected、10 subtests`；显式真实本机 Vision `1 passed`，覆盖中文、英文、旋转页与隔离进程。没有云 AI/TTS 请求、模型下载或已有真实音频重生成。
 - 文档记录 OCR 当前仅 macOS、复杂版面/非 macOS 未验收、parse 未提交前恢复会重做整份识别；不改变 V1 发布许可阻塞。
+- 功能提交 `3ff4eb360e4fcf9ecfffd7cafa280be4246a769c` 上再次通过完整410项离线回归、显式真实Vision 1项、validator、compileall、提交差异检查；STATE按D-006记录已验证提交，交接快照将另行提交。未推送。

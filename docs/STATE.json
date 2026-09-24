@@ -5,7 +5,7 @@
   "current_task": "Phase 17 本地 OCR 技术验收与接力收尾",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "acecfbfc336112d2a3fc226cd3ed334a6bfc0fa4",
+  "last_verified_commit": "3ff4eb360e4fcf9ecfffd7cafa280be4246a769c",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -112,25 +112,25 @@
       "name": "phase17-full-offline",
       "command": ".venv/bin/pytest -q",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "410 passed、1个本地Vision显式测试默认跳过、5项live/large-model deselected、10 subtests、7既有依赖warning；不调用收费API",
-      "checked_at": "2026-09-24T05:11:47Z"
+      "scope": "commit",
+      "summary": "功能提交3ff4eb360e4fcf9ecfffd7cafa280be4246a769c：410 passed、1显式Vision默认跳过、5项live/large-model deselected、10 subtests、7既有依赖warning；无收费API",
+      "checked_at": "2026-09-24T05:16:45Z"
     },
     {
       "name": "phase17-apple-vision-real",
       "command": "BOOKCAST_RUN_OCR_LIVE=1 .venv/bin/pytest -q tests/test_ocr.py -k real_chinese",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "1 passed；自制中文/英文扫描图、90度PDF及隔离子进程均真实识别；Swift编译缓存需要本机权限，无云API",
-      "checked_at": "2026-09-24T05:11:47Z"
+      "scope": "commit",
+      "summary": "功能提交3ff4eb360e4fcf9ecfffd7cafa280be4246a769c：1 passed；自制中文/英文扫描图、90度PDF及隔离子进程均实际识别；无云API",
+      "checked_at": "2026-09-24T05:16:45Z"
     },
     {
       "name": "phase17-static",
-      "command": "python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; git diff --check",
+      "command": "python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; git diff HEAD^ HEAD --check",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "项目状态/链接/Git校验、编译与差异空白检查通过",
-      "checked_at": "2026-09-24T05:11:47Z"
+      "scope": "commit",
+      "summary": "功能提交3ff4eb360e4fcf9ecfffd7cafa280be4246a769c：项目状态/链接/Git校验、编译、提交差异检查通过，工作区干净",
+      "checked_at": "2026-09-24T05:16:45Z"
     },
     {
       "name": "phase16-full-offline",
@@ -937,5 +937,5 @@
       "purpose": "PDF/EPUB检测、来源、恢复、安全反例与显式真实Vision验收"
     }
   ],
-  "updated_at": "2026-09-24T05:11:47Z"
+  "updated_at": "2026-09-24T05:16:45Z"
 }

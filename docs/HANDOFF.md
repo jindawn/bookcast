@@ -1,6 +1,6 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-24T05:11:47Z。按 [AGENTS.md](../AGENTS.md) 阅读项目文档并核对实际代码与 Git。OCR 详情见 [OCR.md](OCR.md)，架构决定见 D-021；聊天记录不是项目状态。
+更新时间：2026-09-24T05:16:45Z。按 [AGENTS.md](../AGENTS.md) 阅读项目文档并核对实际代码与 Git。OCR 详情见 [OCR.md](OCR.md)，架构决定见 D-021；聊天记录不是项目状态。
 
 ## 当前目标与代码状态
 
@@ -17,7 +17,7 @@ Phase 17 可选本地 OCR 工程验收完成，V1 原生解析和后续 Content/
 
 - 默认完整离线 `pytest -q`：410 passed、1 skipped、5 deselected、10 subtests、7 个既有依赖 warning。OCR 模块默认 12 passed、真实系统 1 skipped。
 - 显式 `BOOKCAST_RUN_OCR_LIVE=1 .venv/bin/pytest -q tests/test_ocr.py -k real_chinese`：1 passed；自制中文/英文扫描图、90° PDF 与隔离子进程均实际识别。Swift 编译缓存需要本机用户缓存写入权限，无云 API。
-- `python3 scripts/validate_project.py`、`compileall`、`git diff --check` 通过；提交后应再验证提交差异。完成 parse 后恢复测试确认 Chapter 产物 mtime 未变、无再次 OCR。
+- `python3 scripts/validate_project.py`、`compileall`、`git diff --check` 通过；功能提交上已复验项目校验、编译和 `git diff HEAD^ HEAD --check`。完成 parse 后恢复测试确认 Chapter 产物 mtime 未变、无再次 OCR。
 
 ## 未解决问题与下一步
 
@@ -27,4 +27,4 @@ Phase 17 可选本地 OCR 工程验收完成，V1 原生解析和后续 Content/
 
 ## Git 与不要重复做的事情
 
-本阶段接手时 `main`/`origin/main` 同为 `da4ca8e465dfa5037f6c451b2348d689aa5d1638`；Phase16 旧交接的“尚未推送”已过期。本段撰写时最近已存在 commit 是 `da4ca8e docs: hand off Phase 16 audit`；Phase17 功能提交和交接快照的实际 HEAD 必须用 `git log -1` 查询，STATE 不自引用。Phase17 未主动 push，远端 CI 不可冒充本地验证。不要重复生成已有 DeepSeek/Gemini/Kokoro/Qwen 任务，不要下载大型模型，不要为了 OCR 改写内容或语音 Provider。
+本阶段接手时 `main`/`origin/main` 同为 `da4ca8e465dfa5037f6c451b2348d689aa5d1638`；Phase16 旧交接的“尚未推送”已过期。最新已验证功能提交为 `3ff4eb360e4fcf9ecfffd7cafa280be4246a769c`（`feat: add opt-in local OCR extraction for PDFs and EPUBs`）；交接快照自身的 HEAD 必须用 `git log -1` 查询，STATE 不自引用。Phase17 未主动 push，远端 CI 不可冒充本地验证。不要重复生成已有 DeepSeek/Gemini/Kokoro/Qwen 任务，不要下载大型模型，不要为了 OCR 改写内容或语音 Provider。
