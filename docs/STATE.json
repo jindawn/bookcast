@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-15",
-  "current_task": "V1 Release Engineering 工程验收完成",
+  "current_phase": "phase-16",
+  "current_task": "V1 Principal Engineer Audit 已完成；Critical 0、High 3 修复、Medium/Low backlog 与发布门槛已记录",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "ec1ad6f4e99526205ebb749ef472e7baef1fbcab",
+  "last_verified_commit": "acecfbfc336112d2a3fc226cd3ed334a6bfc0fa4",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -92,16 +92,60 @@
     "使用经官方 Gutenberg 元数据和原始 SHA 重新核验的美国公有领域《国富论》副本完成 67 章 Mock pipeline；1507 Step、20 个 M4B 节目章节，completed resume 新增 0 字节。",
     "完整书运行发现 Mock 在纯标点分析块产生永久业务错误；content_mock 跳过无词项并用安全占位证据处理，新增回归测试，断点恢复后全书生成通过。",
     "创建第三方许可兼容说明和逐项 verified/manual/optional/blocked 发布检查表；未选择 BookCast LICENSE，保持版本 0.1.0 / pre-1.0。",
-    "Phase 15功能提交验证完成：ec1ad6f；完整离线pytest 394 passed/5显式测试deselected/10 subtests，clean clone、Web、Mock MP3/M4B、全书Mock恢复、静态检查通过；项目保持0.1.0/pre-1.0，许可证与远端Actions运行留作人工发布门禁。"
+    "Phase 15功能提交验证完成：ec1ad6f；完整离线pytest 394 passed/5显式测试deselected/10 subtests，clean clone、Web、Mock MP3/M4B、全书Mock恢复、静态检查通过；项目保持0.1.0/pre-1.0，许可证与远端Actions运行留作人工发布门禁。",
+    "Phase 16全仓审计确认Critical 0、High 3；直接生成绕过来源校验、Kokoro可伪造收据、Qwen可加载未固定文件均以最小补丁和反例回归修复。",
+    "Phase 16审计记录Medium 7、Low 2与许可证/第三方资产发布阻塞；官方npm核心审计0，uv非Qwen依赖0，实验Qwen extra锁定依赖14条公告另列门槛。",
+    "Phase 16功能提交acecfbfc336112d2a3fc226cd3ed334a6bfc0fa4验证：完整离线398 passed/5 deselected/10 subtests，Web typecheck/build/3项Playwright、project validator、compileall、lock/diff通过；无AI调用、模型推理或下载。"
   ],
   "in_progress": [],
   "next_actions": [
-    "推送或创建 PR 后核对 GitHub Actions 的 Python Core、Web、Static validation 三个 job；当前分支尚未推送。",
-    "维护者选择 BookCast 项目许可证并确定 PyMuPDF AGPL/商业/替代方案；审查 Kokoro bundle 中 espeak-ng-data 独立许可及需要的 notices。",
-    "在正常公共 DNS 环境运行 BOOKCAST_RUN_RELEASE_LARGE_BOOK=1 uv run pytest -m large_model tests/test_release_large_book.py -v，验证完整目录获取后全书Mock链路。",
-    "发布前完成秘密扫描、平台依赖/FFmpeg notice审计；版本保持0.1.0，未声明1.0。"
+    "维护者确定 BookCast 项目 LICENSE、PyMuPDF AGPL/商业/替代路径和 Kokoro bundle 内 espeak-ng-data 通知；在此之前不得发布可再分发 V1 包。",
+    "按 docs/PHASE16_AUDIT.md 的 M-01～M-07、L-01～L-02 顺序评估后续原子修复；实验 Qwen extra 的上游公告解决前不得成为默认发行组件。",
+    "在正常公共 DNS 环境显式运行 BOOKCAST_RUN_RELEASE_LARGE_BOOK=1 uv run pytest -m large_model tests/test_release_large_book.py -v，复验全新官方目录获取。",
+    "若用户要求推送本次提交，随后核对新 HEAD 的 GitHub Actions 三个远端 job；当前已知基线 eb3bc6c 三项成功。",
+    "发布前审查目标平台 FFmpeg build/notices、最终包与 Web 构建产物的 secret scan；版本维持 0.1.0/pre-1.0。"
   ],
   "tests": [
+    {
+      "name": "phase16-full-offline",
+      "command": ".venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "功能提交acecfbfc336112d2a3fc226cd3ed334a6bfc0fa4：398 passed、5 deselected、10 subtests、7既有依赖warning；默认无收费API和大型模型推理",
+      "checked_at": "2026-09-24T00:08:28Z"
+    },
+    {
+      "name": "phase16-web-browser",
+      "command": "npm --prefix web run typecheck; npm --prefix web run build; npm --prefix web run test:e2e",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "类型/构建通过，Playwright 3 passed；初次沙箱禁止本地端口，按测试权限重跑成功",
+      "checked_at": "2026-09-24T00:08:28Z"
+    },
+    {
+      "name": "phase16-static",
+      "command": "python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; uv lock --check; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "项目校验、编译、lock一致性与diff格式通过",
+      "checked_at": "2026-09-24T00:08:28Z"
+    },
+    {
+      "name": "phase16-supply-core",
+      "command": "npm --prefix web audit --json --registry=https://registry.npmjs.org/; uv audit --locked --no-extra qwen",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "官方npm registry完整Web lock为0公告；uv非Qwen 36个包为0公告",
+      "checked_at": "2026-09-24T00:08:28Z"
+    },
+    {
+      "name": "phase16-supply-qwen-extra",
+      "command": "uv audit --locked",
+      "status": "failed",
+      "scope": "working_tree",
+      "summary": "可选Qwen extra锁定依赖含14条OSV记录（含别名），涉及accelerate/setuptools/torch/transformers；M-07与分发门槛，不作为默认Core失败",
+      "checked_at": "2026-09-24T00:08:28Z"
+    },
     {
       "name": "phase14-full-commit",
       "command": ".venv/bin/pytest -q",
@@ -457,10 +501,11 @@
     "正式demo质量needs_review：两处合理推论被归为source，未完成真人试听；不能以技术成功等同内容优秀",
     "独立真实测试在证据ID契约下曾出现1次schema_error，人工显式重试成功；原始响应未保存，不能断言具体坏字段或100%稳定",
     "真实402/限流/timeout/5xx未实际制造，仅官方协议及离线故障注入验证；小样本未比较推理强度或验收长书",
-    "Phase15长书Mock首次运行发现纯标点 chunk 令 Mock 内容分析抛 IndexError/business_error；已修复并加入回归，全书从最近失败 Step 恢复后完成。",
     "Phase15外部长书获取测试本机因代理/DNS将Gutenberg域名解析到非公开地址而被安全下载器拒绝；全书Mock pipeline已用来源哈希与US public-domain元数据核验的独立副本完成，source acquisition复验仍待公共DNS网络。",
-    "GitHub Actions workflow已提交并在干净克隆等效步骤本地验证，但本分支尚未push，远端Actions状态尚无证据。",
-    "BookCast尚无项目LICENSE；PyMuPDF许可兼容路径和Kokoro bundle内espeak-ng-data通知待维护者/资产级审查，禁止宣称当前二进制可再分发。"
+    "GitHub Actions基线eb3bc6c的三个远端job已成功；Phase16新提交尚未推送，其远端Actions状态仍待push后核对。",
+    "BookCast尚无项目LICENSE；PyMuPDF许可兼容路径和Kokoro bundle内espeak-ng-data通知待维护者/资产级审查，禁止宣称当前二进制可再分发。",
+    "Phase16审计Medium M-01～M-07、Low L-01～L-02仍在docs/PHASE16_AUDIT.md backlog，未在本阶段修复；其中M-06不能承诺服务端恰好一次计费。",
+    "可选实验Qwen extra的uv全锁审计有14条OSV记录（含别名）；不随默认/可再分发V1包分发，待上游兼容更新和本机复验。"
   ],
   "blockers": [],
   "important_files": [
@@ -839,7 +884,11 @@
     {
       "path": "tests/conftest.py",
       "purpose": "Central test-tier classification; unclassified new test modules fail collection"
+    },
+    {
+      "path": "docs/PHASE16_AUDIT.md",
+      "purpose": "全仓Critical/High审计反例与修复、Medium/Low backlog、发布判断和验证证据"
     }
   ],
-  "updated_at": "2026-09-23T05:18:35Z"
+  "updated_at": "2026-09-24T00:09:21Z"
 }

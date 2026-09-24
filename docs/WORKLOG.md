@@ -305,3 +305,12 @@
 - 本机 fresh source acquisition opt-in 因代理 DNS 把 Gutenberg 主机映射为非公开地址而被安全下载器拒绝，未下载或调用 AI；保留 normal-public-DNS 手工重跑项。
 - THIRD_PARTY_NOTICES 和 RELEASE_CHECKLIST 记录许可证证据与阻塞。未选择 BookCast 项目 LICENSE；PyMuPDF 许可路径、eSpeak 数据通知、远端 Actions 首次执行待处理，版本维持 0.1.0/pre-1.0。
 - 功能提交 fe6a75a644393042be206dcf377f8ab8f2d85525 与恢复修复提交 ec1ad6f4e99526205ebb749ef472e7baef1fbcab 已创建。最新功能提交完整测试 394 passed、5显式测试deselected、10 subtests、7既有warning；Web clean install/build、smoke、validator、compileall、lock、workflow YAML 和提交 diff 检查通过。没有 push。
+
+## 2026-09-24T00:10:55Z — Phase 16 全仓审计与高风险修复
+
+- 接手基线 `eb3bc6c64ebccb6e9b552a18a57e067e529c3a8e` 与当时 `origin/main` 相同、工作区干净；基线离线 pytest 394 passed。已推送基线 GitHub Actions 的 Python Core/Web/Static validation 三个 job 全部成功。
+- 审计确认 Critical 0、High 3、Medium 7、Low 2。High 反例为直接生成绕过 EPUB/文件大小校验、Kokoro 模型收据可随资产一同伪造、Qwen 固定文件外的可选配置可能被加载。三个 High 均用限定补丁与回归测试修复；Medium/Low 的文件、复现、风险及最小修复记录于 `docs/PHASE16_AUDIT.md`。
+- 核对已安装 Kokoro 官方 archive 与 377 个安装资产、Qwen 固定 12 个资产，均未下载/推理模型。注入 ENOSPC/rename/FFmpeg 失败，旧产物保持一致，显式恢复保留 11 条已完成 AI Attempt，无新增 AI 调用。
+- 完整离线 pytest 398 passed、5 deselected、10 subtests、7 个既有依赖 warning；Source/HTTP/Web 专项 100 passed，Qwen/TTS 专项 13 passed。Web typecheck/build、Playwright 3 passed；project validator、compileall、lock 和 diff 检查通过。
+- 官方 npm registry 的 Web lock 审计为 0；`uv audit --locked --no-extra qwen` 对 36 包为 0；全可选锁因实验 Qwen extra 返回 14 条 OSV 记录（含别名），列入 M-07，不将其纳入默认发行组件。秘密扫描未发现活动凭证进入 Git/manifest/log 或新构建产物；旧忽略 `.next/cache` 命中已清理，随机假凭证全新构建未复现。
+- 功能提交 `acecfbfc336112d2a3fc226cd3ed334a6bfc0fa4` 已创建；更新 STATE/HANDOFF/RELEASE_CHECKLIST 交接。没有推送，没有调用 DeepSeek/Gemini，也没有运行 Kokoro/Qwen 推理。BookCast LICENSE、PyMuPDF 许可路径、Kokoro bundle 中 eSpeak 数据通知仍阻止可再分发 V1 release candidate。
