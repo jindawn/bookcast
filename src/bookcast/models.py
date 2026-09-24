@@ -196,6 +196,7 @@ class Attempt(ExecutionModel):
     error_type: str | None = Field(default=None, exclude=True)
     validation_field: str | None = Field(default=None, exclude=True)
     validation_reason: str | None = Field(default=None, exclude=True)
+    finish_reason: str | None = Field(default=None, exclude=True)
 
     @computed_field
     @property

@@ -59,46 +59,53 @@ class ProviderChain:
             if index in self.disabled:
                 continue
             provider = provider_for_task(self.providers[index], task)
-            attempt = AIAttempt(id=uuid4().hex, task=task, kind=kind, provider=provider.name,
-                                model=provider.model, prompt_version=prompt_version, input_hash=input_hash,
-                                provider_config_hash=provider_config_hash(provider),
-                                generation=getattr(provider, 'generation_audit', None))
-            observe(attempt)
-            attempt.status, attempt.timestamp = "running", utc_now()
-            observe(attempt)
-            invoked = False
-            try:
-                result = invoke(provider)
-                invoked = True
-                # Validation and durable output happen before completion is recorded.
-                artifacts = persist(result)
-            except (Exception, KeyboardInterrupt, SystemExit) as exc:
+            for correction in range(2):
+                attempt = AIAttempt(id=uuid4().hex, task=task, kind=kind, provider=provider.name,
+                                    model=provider.model, prompt_version=prompt_version, input_hash=input_hash,
+                                    provider_config_hash=provider_config_hash(provider),
+                                    generation=getattr(provider, 'generation_audit', None))
+                observe(attempt)
+                attempt.status, attempt.timestamp = "running", utc_now()
+                observe(attempt)
+                invoked = False
+                try:
+                    result = invoke(provider)
+                    invoked = True
+                    # Validation and durable output happen before completion is recorded.
+                    artifacts = persist(result)
+                except (Exception, KeyboardInterrupt, SystemExit) as exc:
+                    attempt.provider_reported_usage = getattr(provider, 'last_usage', None)
+                    attempt.reported_model = getattr(provider, 'reported_model', None)
+                    attempt.finish_reason = getattr(provider, 'finish_reason', None)
+                    failure = classify_error(exc)
+                    if invoked and not isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        failure = ProviderError(ErrorKind.BUSINESS)
+                    prepare = getattr(provider, 'prepare_schema_retry', None)
+                    correct = correction == 0 and not invoked and callable(prepare) and prepare(failure)
+                    attempt.status = "failed_retryable" if failure.retryable or correct else "failed_permanent"
+                    attempt.error, attempt.retryable, attempt.timestamp = failure.kind.value, failure.retryable or correct, utc_now()
+                    attempt.error_type = failure.error_type or type(exc).__name__
+                    attempt.validation_field = failure.validation_field
+                    attempt.validation_reason = failure.validation_reason
+                    observe(attempt)
+                    self.statuses[provider.name] = ProviderStatus.from_error(provider.name, provider.model, failure)
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    if correct:
+                        continue
+                    if failure.kind not in self.failover_on:
+                        raise failure from None
+                    self.disabled.add(index)
+                    last_error = failure
+                    break
+                attempt.status, attempt.artifacts = "completed", artifacts
                 attempt.provider_reported_usage = getattr(provider, 'last_usage', None)
                 attempt.reported_model = getattr(provider, 'reported_model', None)
-                failure = classify_error(exc)
-                if invoked and not isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                    failure = ProviderError(ErrorKind.BUSINESS)
-                attempt.status = "failed_retryable" if failure.retryable else "failed_permanent"
-                attempt.error, attempt.retryable, attempt.timestamp = failure.kind.value, failure.retryable, utc_now()
-                attempt.error_type = failure.error_type or type(exc).__name__
-                attempt.validation_field = failure.validation_field
-                attempt.validation_reason = failure.validation_reason
+                attempt.finish_reason = getattr(provider, 'finish_reason', None)
+                attempt.output_hash = next(iter(artifacts.values())) if len(artifacts) == 1 else fingerprint(artifacts)
+                attempt.timestamp = utc_now()
                 observe(attempt)
-                self.statuses[provider.name] = ProviderStatus.from_error(provider.name, provider.model, failure)
-                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                    raise
-                if failure.kind not in self.failover_on:
-                    raise failure from None
-                self.disabled.add(index)
-                last_error = failure
-                continue
-            attempt.status, attempt.artifacts = "completed", artifacts
-            attempt.provider_reported_usage = getattr(provider, 'last_usage', None)
-            attempt.reported_model = getattr(provider, 'reported_model', None)
-            attempt.output_hash = next(iter(artifacts.values())) if len(artifacts) == 1 else fingerprint(artifacts)
-            attempt.timestamp = utc_now()
-            observe(attempt)
-            self.statuses[provider.name] = ProviderStatus(provider=provider.name, model=provider.model, availability="available")
-            self.index = index
-            return artifacts
+                self.statuses[provider.name] = ProviderStatus(provider=provider.name, model=provider.model, availability="available")
+                self.index = index
+                return artifacts
         raise last_error

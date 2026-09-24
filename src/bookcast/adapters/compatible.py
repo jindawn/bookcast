@@ -111,6 +111,9 @@ class CompatibleLLMProvider(CompatibleBase):
         self.generation_audit: GenerationAudit | None = None
         self.last_usage: ProviderUsage | None = None
         self.reported_model: str | None = None
+        self.finish_reason: str | None = None
+        self._schema_retry_guidance: str | None = None
+        self._last_schema: dict | None = None
 
     def for_task(self, task: str) -> 'CompatibleLLMProvider':
         # A call-scoped view prevents response metadata leaking between attempts.
@@ -134,7 +137,7 @@ class CompatibleLLMProvider(CompatibleBase):
         return ProviderCapabilities(text=True, structured=True, local=is_loopback(urlsplit(self.spec.base_url).hostname))
 
     def _chat(self, prompt: str, schema: dict | None = None) -> str:
-        self.last_usage, self.reported_model = None, None
+        self.last_usage, self.reported_model, self.finish_reason = None, None, None
         messages = [{"role": "user", "content": prompt}]
         payload = {"model": self.model, "messages": messages, "stream": False}
         audit = self.generation_audit or resolve_generation('', self.spec.reasoning_policy, self.spec.generation)
@@ -144,6 +147,13 @@ class CompatibleLLMProvider(CompatibleBase):
             if urlsplit(self.spec.base_url).hostname == 'api.deepseek.com':
                 # DeepSeek JSON mode guarantees syntax, not conformance to a supplied schema.
                 instruction += " Every listed property must have the schema type; use [] for empty arrays, never null. Do not omit required properties."
+                limits = {name: field['maxItems'] for name, field in schema.get('properties', {}).items()
+                          if isinstance(field, dict) and isinstance(field.get('maxItems'), int)}
+                if limits:
+                    instruction += ' Array limits (maximum items, never exceed): ' + json.dumps(limits, sort_keys=True) + '.'
+                if self._schema_retry_guidance:
+                    instruction += ' Previous response failed validation: ' + self._schema_retry_guidance
+            self._schema_retry_guidance = None
             messages.insert(0, {"role": "system", "content": instruction})
             payload["response_format"] = {"type": "json_object"}
         try:
@@ -153,7 +163,10 @@ class CompatibleLLMProvider(CompatibleBase):
             if isinstance(reported, str) and re.fullmatch(r'[a-zA-Z0-9_.:/-]{1,128}', reported):
                 self.reported_model = reported
             choice = response['choices'][0]
-            if choice.get('finish_reason') not in {None, 'stop'}:
+            finish_reason = choice.get('finish_reason')
+            if isinstance(finish_reason, str) and re.fullmatch(r'[a-z_]{1,32}', finish_reason):
+                self.finish_reason = finish_reason
+            if finish_reason not in {None, 'stop'}:
                 raise ValueError('incomplete response')
             text = choice['message']['content']
             if not isinstance(text, str) or not text.strip():
@@ -172,9 +185,25 @@ class CompatibleLLMProvider(CompatibleBase):
         return self._chat(prompt)
 
     def generate_structured(self, prompt: str, response_model: type[T]) -> T:
+        schema = response_model.model_json_schema()
+        self._last_schema = schema
         try:
-            return response_model.model_validate_json(self._chat(prompt, response_model.model_json_schema()))
+            return response_model.model_validate_json(self._chat(prompt, schema))
         except ValidationError as exc:
             failure = schema_failure(exc)
             self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
             raise failure from None
+
+    def prepare_schema_retry(self, failure: ProviderError) -> bool:
+        """Allow one journaled correction only for a known DeepSeek array limit violation."""
+        if (urlsplit(self.spec.base_url).hostname != 'api.deepseek.com'
+                or failure.kind != ErrorKind.SCHEMA or failure.error_type != 'ValidationError'
+                or failure.validation_reason != 'too_long' or not failure.validation_field
+                or not self._last_schema):
+            return False
+        field = self._last_schema.get('properties', {}).get(failure.validation_field)
+        limit = field.get('maxItems') if isinstance(field, dict) else None
+        if not isinstance(limit, int) or limit < 1:
+            return False
+        self._schema_retry_guidance = f'{failure.validation_field} must contain at most {limit} items. Regenerate the full JSON with all required fields.'
+        return True

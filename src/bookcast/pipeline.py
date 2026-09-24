@@ -389,7 +389,8 @@ class _Runner:
                             if attempt.task.startswith('analysis:') else None,
                             'error_type': attempt.error_type,
                             'validation_field': attempt.validation_field,
-                            'validation_reason': attempt.validation_reason})
+                            'validation_reason': attempt.validation_reason,
+                            'finish_reason': attempt.finish_reason})
 
     def ai_operation(self, name: str, kind: str, version: str, inputs: object, invoke: Callable) -> list[str]:
         digest = fingerprint(inputs)
