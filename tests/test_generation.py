@@ -171,11 +171,14 @@ def test_deepseek_invalid_analysis_reports_field_and_retry_preserves_chapters(tm
     job = next((tmp_path/'out').iterdir())
     before = {p.name: sha256_file(p) for p in (job/'analysis').glob('000*.json')}
     failed = load_manifest(job/'manifest.json').ai_calls[-1]
-    assert (failed.task, failed.error_type, failed.validation_field, failed.validation_reason) == (
-        'analysis:0003:0001', 'ValidationError', 'core_ideas', 'list_type')
+    assert failed.task == 'analysis:0003:0001'
+    raw_attempt = json.loads((job/'manifest.json').read_text())['ai_calls'][-1]
+    assert not {'error_type', 'validation_field', 'validation_reason'} & raw_attempt.keys()
     events = [json.loads(line) for line in (job/'logs/events.jsonl').read_text().splitlines()]
     assert any(e['event'] == 'attempt' and e['error_type'] == 'ValidationError'
-               and e['chapter'] == '0003' and e['model'] == 'deepseek-flash' for e in events)
+               and e['chapter'] == '0003' and e['model'] == 'deepseek-flash'
+               and e['validation_field'] == 'core_ideas' and e['validation_reason'] == 'list_type'
+               for e in events)
     count = len(requests)
     pipeline.resume_job(job, retry=True)
     assert all(sha256_file(job/'analysis'/name) == digest for name, digest in before.items())

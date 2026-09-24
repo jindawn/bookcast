@@ -329,3 +329,9 @@
 - 本地两份名为《狂人日记》的 Web 上传实际是 EPUB，均在 `analysis:0004:0001` 失败；前 3 章已完成。两次失败均有 DeepSeek usage 和 reported_model，表明收到服务响应。旧 Attempt 只记 `schema_error`，没有原始响应、ValidationError 字段或解析异常；当前进程没有 DeepSeek key，历史底层字段不可证实。
 - 追踪 `content.call` → `CompatibleLLMProvider._chat/generate_structured` → `ProviderChain` → `Pipeline`，确认请求仅使用 `response_format=json_object`，没有 `json_schema` 或 `strict`。JSON 解析、响应 envelope 和 Pydantic 错误原来被统一折叠。现在 DeepSeek 适配器补充 schema 类型/空数组指令，Attempt/events 持久化安全的错误类型、字段与 Pydantic 错误代码；不保存响应或凭证。
 - 离线注入 invalid `core_ideas: null` 覆盖字段诊断、显式 retry 与前章缓存；正常 DeepSeek/OpenAI 请求和 malformed 响应由相关测试覆盖。真实 API 未复验。
+
+## 2026-09-25 Web 误报三份损坏任务
+
+- 只读核验 `data/web/jobs` 六份 submission；三份 SUCCEEDED 通过 WebService.status，三份《狂人日记》FAILED_PERMANENT 也通过当前实现。无缺失文件、无无效 JSON、源路径存在；三份均为真实用户任务。
+- 三份失败 Job 的 manifest v3 Attempt 含上一修复新增的诊断字段。旧 Web 进程的 Attempt 继承 `extra=forbid` 且无这些字段，因此把校验失败吞为“记录损坏”；当前进程能读取全部六份。未操作任务文件。
+- 新代码保留事件日志诊断，禁止新字段写入 manifest v3；针对 DeepSeek 失败及 Web/Job 回归测试 74 passed。既有含字段的任务需重启 Web 服务以载入当前模型。

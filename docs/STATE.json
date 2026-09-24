@@ -2,7 +2,7 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-17",
-  "current_task": "DeepSeek chapter_analysis schema_error 诊断与恢复",
+  "current_task": "Web 旧进程读取 DeepSeek 诊断字段兼容性修复",
   "task_status": "completed",
   "branch": "main",
   "last_verified_commit": "54257b4883b6d82831fa7c20bbbd777bf4c73714",
@@ -99,7 +99,8 @@
     "Phase 17：按页检测text/image/mixed/blank，仅显式--ocr auto调用隔离Apple Vision识别PDF扫描区域和EPUB内嵌图片；不改内容/语音/导出链路。",
     "OCR源文本块保存源SHA、页/资源、区域、置信度和低置信warning；parse指纹含OCR模式/适配器版本，完成任务resume复用。",
     "Phase 17完整离线410 passed/1 skipped/5 deselected/10 subtests；真实本机Apple Vision中文、英文、90度页及隔离进程1 passed，无云API和模型下载。",
-    "DeepSeek schema_error 诊断：本地两份《狂人日记》EPUB Job 均在 analysis:0004:0001 失败；收到响应及 usage，但历史原始响应和校验异常未保存，当前环境无 DeepSeek key，不能还原历史具体坏字段。已在适配器强化 DeepSeek JSON schema 指令，保留严格校验；Attempt/events 保存安全错误类型/字段/原因，显式 retry 回归保留前章。"
+    "DeepSeek schema_error 诊断：本地两份《狂人日记》EPUB Job 均在 analysis:0004:0001 失败；收到响应及 usage，但历史原始响应和校验异常未保存，当前环境无 DeepSeek key，不能还原历史具体坏字段。已在适配器强化 DeepSeek JSON schema 指令，保留严格校验；Attempt/events 保存安全错误类型/字段/原因，显式 retry 回归保留前章。",
+    "核对data/web/jobs六份Web记录：三份SUCCEEDED正常，三份《狂人日记》FAILED_PERMANENT均有合法submission/manifest/schema v3与有效源路径；旧Web进程因新增Attempt诊断字段触发extra_forbidden，误报记录损坏。新代码保留诊断到events，停止在manifest v3写入新字段；未修改任何任务数据。"
   ],
   "in_progress": [],
   "next_actions": [
@@ -109,6 +110,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "web-manifest-diagnostic-compatibility",
+      "command": ".venv/bin/pytest -q tests/test_generation.py tests/test_web.py tests/test_job_cli.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "74 passed；校验诊断仍记录事件日志，manifest v3不写入新Attempt字段，Web/Job回归通过；未调用云API。",
+      "checked_at": "2026-09-24T19:27:50Z"
+    },
     {
       "name": "deepseek-schema-regression",
       "command": ".venv/bin/pytest -q tests/test_generation.py tests/test_providers.py tests/test_content.py tests/test_job_recovery.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'",
@@ -947,5 +956,5 @@
       "purpose": "PDF/EPUB检测、来源、恢复、安全反例与显式真实Vision验收"
     }
   ],
-  "updated_at": "2026-09-24T19:18:03Z"
+  "updated_at": "2026-09-24T19:27:50Z"
 }

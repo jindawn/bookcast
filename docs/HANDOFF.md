@@ -2,6 +2,10 @@
 
 更新时间：2026-09-25。先读 AGENTS.md 和项目文档并核对 Git。已验证功能提交：54257b4883b6d82831fa7c20bbbd777bf4c73714；未 push。
 
+## 2026-09-25 Web 历史记录兼容性追查
+
+`data/web/jobs` 六份submission均合法；三份成功任务当前WebService.status正常，另外三份是《狂人日记》失败任务，见本地被忽略的数据目录，非测试垃圾。旧Web进程不能解析上次补丁写入manifest v3 Attempt的error_type/validation_field/validation_reason（extra=forbid），页面误报损坏；当前代码的history可读全部六份。现将诊断字段从manifest序列化排除，保留events.jsonl日志；未修改任何任务数据。重启Web服务后刷新页面，失败任务应显示真实FAILED_PERMANENT。若需继续内容生成，显式retry，不删除目录。专项74 passed；提交以git log查询。
+
 ## 当前目标和证据
 
 用户报告《狂人日记》DeepSeek `schema_error`。本地两份对应 Web 上传实际是 EPUB（不是 PDF），均在 `analysis:0004:0001` 失败，前 3 章成功。失败段是《鸭的喜剧》。两次都有 DeepSeek `reported_model=deepseek-flash` 和 usage，HTTP 已收到响应。旧实现丢弃了响应解析/Pydantic 的底层异常；未保存原始响应。当前进程没有 DeepSeek key，因此无法还原历史的具体无效字段，不能声称真实 API 已修好。

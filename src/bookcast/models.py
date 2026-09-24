@@ -191,9 +191,11 @@ class Attempt(ExecutionModel):
     timestamp: str = Field(default_factory=utc_now)
     error: str | None = None
     retryable: bool = False
-    error_type: str | None = None
-    validation_field: str | None = None
-    validation_reason: str | None = None
+    # Diagnostics belong in events.jsonl. Do not extend manifest v3's wire
+    # shape: older running Web processes reject unknown Attempt fields.
+    error_type: str | None = Field(default=None, exclude=True)
+    validation_field: str | None = Field(default=None, exclude=True)
+    validation_reason: str | None = Field(default=None, exclude=True)
 
     @computed_field
     @property
