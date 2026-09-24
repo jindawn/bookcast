@@ -4,7 +4,7 @@
 
 ## 2026-09-25 Web 历史记录兼容性追查
 
-`data/web/jobs` 六份submission均合法；三份成功任务当前WebService.status正常，另外三份是《狂人日记》失败任务，见本地被忽略的数据目录，非测试垃圾。旧Web进程不能解析上次补丁写入manifest v3 Attempt的error_type/validation_field/validation_reason（extra=forbid），页面误报损坏；当前代码的history可读全部六份。现将诊断字段从manifest序列化排除，保留events.jsonl日志；未修改任何任务数据。重启Web服务后刷新页面，失败任务应显示真实FAILED_PERMANENT。若需继续内容生成，显式retry，不删除目录。专项74 passed；提交以git log查询。
+`data/web/jobs` 六份submission均合法；三份成功任务当前WebService.status正常，另外三份是《狂人日记》失败任务，见本地被忽略的数据目录，非测试垃圾。旧Web进程不能解析上次补丁写入manifest v3 Attempt的error_type/validation_field/validation_reason（extra=forbid），页面误报损坏；当前代码的history可读全部六份。现将诊断字段从manifest序列化排除，保留events.jsonl日志；未修改任何任务数据。重启Web服务后刷新页面，失败任务应显示真实FAILED_PERMANENT。若需继续内容生成，显式retry，不删除目录。专项74 passed；已验证功能提交18372283b55680d294d7c64f07b70a78fb5d6495，未push。
 
 ## 当前目标和证据
 

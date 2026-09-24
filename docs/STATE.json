@@ -5,7 +5,7 @@
   "current_task": "Web 旧进程读取 DeepSeek 诊断字段兼容性修复",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "54257b4883b6d82831fa7c20bbbd777bf4c73714",
+  "last_verified_commit": "18372283b55680d294d7c64f07b70a78fb5d6495",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -114,8 +114,8 @@
       "name": "web-manifest-diagnostic-compatibility",
       "command": ".venv/bin/pytest -q tests/test_generation.py tests/test_web.py tests/test_job_cli.py",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "74 passed；校验诊断仍记录事件日志，manifest v3不写入新Attempt字段，Web/Job回归通过；未调用云API。",
+      "scope": "commit",
+      "summary": "74 passed；校验诊断仍记录事件日志，manifest v3不写入新Attempt字段，Web/Job回归通过；未调用云API。 功能提交1837228后project validator与提交diff检查通过。",
       "checked_at": "2026-09-24T19:27:50Z"
     },
     {
@@ -956,5 +956,5 @@
       "purpose": "PDF/EPUB检测、来源、恢复、安全反例与显式真实Vision验收"
     }
   ],
-  "updated_at": "2026-09-24T19:27:50Z"
+  "updated_at": "2026-09-24T19:28:14Z"
 }
