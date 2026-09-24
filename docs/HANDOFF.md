@@ -2,6 +2,14 @@
 
 更新时间：2026-09-25。先读 AGENTS.md 和项目文档并核对 Git。已验证功能提交：54257b4883b6d82831fa7c20bbbd777bf4c73714；未 push。
 
+## 2026-09-25 Web 误认 Mock 音频与真实 TTS 恢复修复
+
+用户以为20分钟《狂人日记》retry完成并得到48秒Mock：实际本地两份20分钟《狂人日记》Web Job均FAILED_PERMANENT，保存的settings/manifest配置都是deepseek→kokoro，0次TTS attempt和0个audio WAV。页面显示的Mock完成任务是另一份20分钟PDF《分析师荐股能力评定与跟踪》；Web在选中任务缺席历史列表时回退到首项，造成错认。全局Provider状态不等于任务保存配置。
+
+修改`web/app/page.tsx`避免选中项缺席时展示别的任务音频，Web状态明确给出本任务LLM/TTS配置和“最近调用”。`pipeline.py`对TTS已删除Provider不复用缓存；`speech.py`禁止真实+Mock混链并在完成前校验每段audio_kind/活跃Attempt来源；`content.py`和legacy流程均调用；`jobs.py`对历史配置为真实TTS却留下Mock音频的completed Job只读标为可恢复，隐藏Web下载。没有修改现存用户Job。
+
+离线六模块189 passed，隔离cwd补测1 passed，Web typecheck/build与聚焦Playwright 1 passed。原书第3章短文本用当前保存配置的Kokoro独立合成7.13秒speech WAV，临时文件已删除；没有DeepSeek key，未启动整本retry，原任务manifest SHA保持不变。旧Web服务须重启并刷新前端构建。下一步有key时显式retry原Job；无需删Mock音频，因为原Job根本没有Mock音频。
+
 ## 2026-09-25 Web 历史记录兼容性追查
 
 `data/web/jobs` 六份submission均合法；三份成功任务当前WebService.status正常，另外三份是《狂人日记》失败任务，见本地被忽略的数据目录，非测试垃圾。旧Web进程不能解析上次补丁写入manifest v3 Attempt的error_type/validation_field/validation_reason（extra=forbid），页面误报损坏；当前代码的history可读全部六份。现将诊断字段从manifest序列化排除，保留events.jsonl日志；未修改任何任务数据。重启Web服务后刷新页面，失败任务应显示真实FAILED_PERMANENT。若需继续内容生成，显式retry，不删除目录。专项74 passed；已验证功能提交18372283b55680d294d7c64f07b70a78fb5d6495，未push。

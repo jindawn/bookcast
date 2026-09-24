@@ -226,12 +226,20 @@ def test_permanent_unit_failure_does_not_failover(tmp_path):
     assert load_manifest(next(tmp_path.glob('*/manifest.json'))).error_kind == "schema_error"
 
 
-def test_repair_only_damaged_unit_and_preserve_existing_mock(tmp_path):
+def test_repair_only_damaged_unit_and_replace_existing_mock_for_real_voice(tmp_path):
     mock_root = Pipeline(MockLLMProvider(), MockTTSProvider(), tmp_path / "old").generate(DEMO, minutes=1)
+    analysis = {p: sha256_file(p) for p in (mock_root / 'analysis').rglob('*.json')}
     native = UnitFake("new-provider")
     Pipeline(MockLLMProvider(), native, tmp_path / "old").resume_job(mock_root)
-    assert not native.calls
-    assert json.loads((mock_root / "audio/export.json").read_text())["audio_kind"] == "mock"
+    assert native.calls
+    assert json.loads((mock_root / "audio/export.json").read_text())["audio_kind"] == "speech"
+    assert all(sha256_file(p) == digest for p, digest in analysis.items())
+    assert all(call.provider == 'new-provider' for call in load_manifest(mock_root / 'manifest.json').ai_calls
+               if call.kind == 'tts' and call.status == 'completed' and call.task.startswith('tts:')
+               and call.artifacts == load_manifest(mock_root / 'manifest.json').steps[call.task].artifacts)
+    before = len(native.calls)
+    Pipeline(MockLLMProvider(), native, tmp_path / "old").resume_job(mock_root)
+    assert len(native.calls) == before
     root = Pipeline(MockLLMProvider(), native, tmp_path / "new").generate(DEMO, minutes=1)
     before = len(native.calls)
     audio = sorted((root / "audio/units").glob("*.wav"))
@@ -241,6 +249,23 @@ def test_repair_only_damaged_unit_and_preserve_existing_mock(tmp_path):
     assert len(native.calls) == before + 1
     assert (audio[0].stat().st_mtime_ns, sha256_file(audio[0])) == keep
     validate_wav(audio[-1])
+
+
+def test_real_voice_unavailable_never_completes_with_old_mock_audio(tmp_path):
+    root = Pipeline(MockLLMProvider(), MockTTSProvider(), tmp_path).generate(DEMO, minutes=1)
+    failing = UnitFake('kokoro', fail_at=1, error=ErrorKind.AUTH)
+    with pytest.raises(BookCastError, match='authentication_error'):
+        Pipeline(MockLLMProvider(), failing, tmp_path).resume_job(root)
+    manifest = load_manifest(root / 'manifest.json')
+    assert manifest.status == 'failed'
+    assert any(call.provider == 'kokoro' and call.error == 'authentication_error'
+               for call in manifest.ai_calls if call.kind == 'tts')
+    assert json.loads((root / 'audio/export.json').read_text())['audio_kind'] == 'mock'
+
+
+def test_real_tts_chain_rejects_mock_fallback(tmp_path):
+    with pytest.raises(BookCastError, match='禁止回退 Mock'):
+        Pipeline(MockLLMProvider(), ProviderChain([UnitFake('kokoro'), MockTTSProvider()]), tmp_path)
 
 
 KILL_SCRIPT = r'''

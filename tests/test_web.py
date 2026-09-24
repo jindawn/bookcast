@@ -16,7 +16,7 @@ from bookcast.export import export_m4b
 from bookcast.provider_api import ErrorKind, ProviderError
 from bookcast.providers import MockLLMProvider
 from bookcast.source_api import BookIdentity, EditionCandidate, SearchResult, SourceOffer
-from bookcast.storage import job_lock, sha256_file
+from bookcast.storage import job_lock, sha256_file, write_json
 from bookcast.web_api import create_app
 from bookcast.web_service import WebService, id_path
 from bookcast.web_worker import run_worker
@@ -248,6 +248,62 @@ def test_web_reads_actual_speech_kind_from_core(client, tmp_path, monkeypatch):
     # Historical audio type remains true even if the currently selected config changes.
     client.app.state.service.config = None
     assert client.get(f'/api/jobs/{identifier}').json()['audio_kind'] == 'speech'
+
+
+def test_web_retry_uses_saved_real_tts_and_keeps_completed_analysis(client, tmp_path, monkeypatch):
+    from bookcast.tts_setup import write_local_config
+    from test_tts import UnitFake
+    config = tmp_path / 'tts.toml'
+    write_local_config(config, tmp_path / 'models')
+    client.app.state.service.config = config
+    native = UnitFake('kokoro')
+    monkeypatch.setattr('bookcast.adapters.kokoro.KokoroTTSProvider', lambda spec: native)
+    identifier, _ = submit(client, minutes=1)
+    original = MockLLMProvider.generate_structured
+    def fail_second(self, prompt, response_model):
+        data = json.loads(prompt)
+        if data['operation'] == 'analysis' and data['chapter']['id'] == '0002':
+            raise ProviderError(ErrorKind.SCHEMA)
+        return original(self, prompt, response_model)
+    with patch.object(MockLLMProvider, 'generate_structured', fail_second):
+        failed = run(client, identifier)
+    assert failed['state'] == 'FAILED_PERMANENT' and not native.calls
+    path = Path(failed['directory'])
+    before = snapshot(path / 'analysis')
+    saved = client.app.state.service.read(identifier)
+    assert saved.settings['config']['tts_priority'] == ['kokoro']
+    assert failed['task_providers']['tts'] == ['kokoro']
+    assert client.post(f'/api/jobs/{identifier}/retry').status_code == 202
+    done = run(client, identifier)
+    assert done['state'] == 'SUCCEEDED' and done['audio_kind'] == 'speech' and native.calls
+    assert done['task_providers']['tts'] == ['kokoro']
+    assert {c.provider for c in load_manifest(path / 'manifest.json').ai_calls if c.kind == 'tts'} == {'kokoro'}
+    assert all((p.stat().st_mtime_ns, sha256_file(p)) == value for p, value in before.items())
+
+
+def test_web_hides_completed_mock_audio_when_saved_selection_is_real(client, tmp_path, monkeypatch):
+    from bookcast.tts_setup import write_local_config
+    from bookcast.provider_config import load_config
+    from test_tts import UnitFake
+    identifier, _ = submit(client, minutes=1)
+    mock = run(client, identifier)
+    assert mock['state'] == 'SUCCEEDED' and mock['audio_kind'] == 'mock'
+    path = Path(mock['directory'])
+    config = tmp_path / 'real-tts.toml'
+    write_local_config(config, tmp_path / 'models')
+    real_settings = {'config': load_config(config).model_dump(mode='json'),
+                     'llm_selection': 'auto', 'tts_selection': 'auto'}
+    manifest = load_manifest(path / 'manifest.json')
+    manifest.provider_settings = real_settings
+    write_json(path / 'manifest.json', manifest.model_dump(mode='json'))
+    status = client.get(f'/api/jobs/{identifier}').json()
+    assert status['state'] == 'FAILED_RETRYABLE' and status['audio_url'] is None
+    native = UnitFake('kokoro')
+    monkeypatch.setattr('bookcast.adapters.kokoro.KokoroTTSProvider', lambda spec: native)
+    assert client.post(f'/api/jobs/{identifier}/resume').status_code == 202
+    done = run(client, identifier)
+    assert done['state'] == 'SUCCEEDED' and done['audio_kind'] == 'speech'
+    assert native.calls and done['audio_url']
 
 
 def test_frontend_has_no_core_implementation_or_vendor_sdk():

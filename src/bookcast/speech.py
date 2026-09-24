@@ -79,8 +79,8 @@ def speech_tasks(r, script, inputs):
 
 def validate_tts_chain(chain):
     capabilities = [p.capabilities() for p in chain.providers]
-    if any(c.cloud for c in capabilities) and any(c.mock for c in capabilities):
-        raise BookCastError("云端 TTS 链禁止回退 Mock 音调；请配置真实语音 Provider。")
+    if any(c.mock for c in capabilities) and not all(c.mock for c in capabilities):
+        raise BookCastError("真实 TTS 链禁止回退 Mock 音调；请使用独立的显式 Mock 配置。")
     if any(c.speech_segments for c in capabilities) and not all(c.speech_segments for c in capabilities):
         raise BookCastError("片段 TTS 链要求所有成员支持 speech_segments；逐句和片段链请分别配置。")
 
@@ -171,3 +171,39 @@ def audio_summary(r, ids):
                      "mixed": "音频包含不同类型或历史来源，详见逐句语音记录。",
                      "unknown": "旧式整段音频未记录类型；内置 Mock TTS 生成测试音调（非人声）。",
                      "mock": "内置 Mock TTS 生成测试音调（非人声）。"}[kind]}
+
+
+def validate_completed_speech(r, ids):
+    """A finished job must match the selected speech chain and every segment."""
+    expected = 'mock' if all(p.capabilities().mock for p in r.tts.providers) else 'speech'
+    allowed = {p.name for p in r.tts.providers}
+    for segment in ids:
+        name = f'tts:{segment}'
+        record = r.manifest.steps.get(name)
+        sidecar = r.path(f'audio/{segment}.json')
+        if not record or record.status != 'completed' or not sidecar.is_file():
+            raise BookCastError(f'语音片段 {segment} 未完整生成；任务不能标记完成。')
+        try:
+            kind = json.loads(sidecar.read_text(encoding='utf-8'))['audio_kind']
+        except (OSError, ValueError, KeyError, TypeError):
+            raise BookCastError(f'语音片段 {segment} 来源记录无效；任务不能标记完成。') from None
+        if kind != expected:
+            raise BookCastError(f'语音片段 {segment} 来源与当前 TTS 配置不符；任务不能标记完成。')
+        tasks = [task for task in r.manifest.steps if task == name or task.startswith(name + ':')
+                 or task.startswith(f'tts_segment:{segment}:')]
+        sources = []
+        for task in tasks:
+            active = r.manifest.steps[task]
+            matching = next((call for call in reversed(r.manifest.ai_calls)
+                             if call.kind == 'tts' and call.task == task and call.status == 'completed'
+                             and call.artifacts == active.artifacts), None)
+            if matching:
+                sources.append(matching)
+            elif task != name and active.status == 'completed':
+                raise BookCastError(f'语音片段 {segment} 缺少 Provider 来源；任务不能标记完成。')
+        if not sources and r.manifest.legacy_config and r.manifest.provider_settings is None:
+            # Pre-v3 manifests can have verified audio without an Attempt journal.
+            # Their configured chain and sidecar kind still have to agree.
+            continue
+        if not sources or any(call.provider not in allowed or not r.config_valid(call) for call in sources):
+            raise BookCastError(f'语音片段 {segment} Provider 记录与当前配置不符；任务不能标记完成。')

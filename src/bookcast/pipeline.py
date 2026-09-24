@@ -288,10 +288,13 @@ class _Runner:
                 pass
 
     def config_valid(self, call: AIAttempt) -> bool:
-        if call.provider_config_hash is None:
-            return True  # No fabricated configuration for pre-v3 attempts.
         chain = self.llm if call.kind == 'llm' else self.tts
         same_name = [p for p in chain.providers if p.name == call.provider]
+        if call.kind == 'tts' and not same_name:
+            # Speech cannot be reused after switching from Mock to a real voice.
+            return False
+        if call.provider_config_hash is None:
+            return True  # No fabricated configuration for pre-v3 attempts.
         # Explicit replacement/failover may retain old results; an in-place configuration edit cannot.
         return not same_name or any(provider_config_hash(p, call.task) == call.provider_config_hash for p in same_name)
 
@@ -537,6 +540,8 @@ class _Runner:
             return ["audio/export.json"]
 
         self.step("output", {"mp3": sha256_file(self.path("podcast.mp3")), "metadata": sha256_file(self.path("metadata.json")), "audio_export": "v2"}, output)
+        from .speech import validate_completed_speech
+        validate_completed_speech(self, metadata.chapter_ids)
         if manifest.status != "completed":
             manifest.status, manifest.error, manifest.error_kind = "completed", None, None
             self.save()

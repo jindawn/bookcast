@@ -29,6 +29,7 @@ type Job = {
   m4b_url: string | null;
   audio_kind?: string;
   audio_seconds?: number | null;
+  task_providers?: { llm: string[]; tts: string[] };
   can_resume: boolean;
   can_retry: boolean;
   progress: {
@@ -157,7 +158,8 @@ export default function Home() {
   const [providerBusy, setProviderBusy] = useState(false);
   const [historyErrors, setHistoryErrors] = useState<string[]>([]);
   const submission = useRef<{ payload: string; key: string } | null>(null);
-  const current = jobs.find((job) => job.id === selected) ?? jobs[0];
+  const current = selected ? jobs.find((job) => job.id === selected) : jobs[0];
+  const selectedUnavailable = selected !== null && !current;
 
   async function refresh() {
     const data = await api<{ jobs: Job[]; errors: string[] }>("/api/jobs");
@@ -557,6 +559,11 @@ export default function Home() {
                     目标 {current.minutes} 分钟 ·{" "}
                     {modes.find((m) => m.id === current.mode)?.name}
                   </p>
+                  {current.task_providers && (
+                    <p className="muted">
+                      本任务配置：LLM {current.task_providers.llm.join(" → ") || "未知"} · TTS {current.task_providers.tts.join(" → ") || "未知"}
+                    </p>
+                  )}
                   {current.progress ? (
                     <div className="progress">
                       <div>
@@ -578,7 +585,7 @@ export default function Home() {
                         {current.progress.remaining} 步
                         {!current.progress.total_final && "（规划中）"}
                       </p>
-                      <p>Provider：{current.progress.provider || "等待调用"}</p>
+                      <p>最近调用：{current.progress.provider || "等待调用"}</p>
                     </div>
                   ) : (
                     <p className="hint">
@@ -716,6 +723,11 @@ export default function Home() {
               {e}
             </p>
           ))}
+          {selectedUnavailable && (
+            <p role="alert" className="notice error">
+              当前选中的任务暂时无法读取，请检查任务记录并刷新页面；不会显示其他任务的音频。
+            </p>
+          )}
           {!jobs.length ? (
             <div className="library-empty">你的第一期播客，将从这里开始。</div>
           ) : (

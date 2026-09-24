@@ -335,3 +335,9 @@
 - 只读核验 `data/web/jobs` 六份 submission；三份 SUCCEEDED 通过 WebService.status，三份《狂人日记》FAILED_PERMANENT 也通过当前实现。无缺失文件、无无效 JSON、源路径存在；三份均为真实用户任务。
 - 三份失败 Job 的 manifest v3 Attempt 含上一修复新增的诊断字段。旧 Web 进程的 Attempt 继承 `extra=forbid` 且无这些字段，因此把校验失败吞为“记录损坏”；当前进程能读取全部六份。未操作任务文件。
 - 新代码保留事件日志诊断，禁止新字段写入 manifest v3；针对 DeepSeek 失败及 Web/Job 回归测试 74 passed。既有含字段的任务需重启 Web 服务以载入当前模型。
+
+## 2026-09-25 真实 TTS 恢复及 Web 任务身份
+
+- 20分钟《狂人日记》两个Web Job `2bd86cd0...`、`3a591bfd...` 的提交配置和Core快照均为DeepSeek+Kokoro，失败停在分析，0 TTS Attempt/0 WAV。页面48秒Mock来自 `3bddce2b...` PDF任务，其配置明确为Mock。旧UI在选中任务不在列表时显示首条任务。
+- 修复选中项缺席时的UI回退，展示当前任务保存的LLM/TTS链并把进度Provider标为最近调用。真实+Mock TTS混链拒绝，真实链恢复时旧Mock音频缓存失效；完成和只读状态检查音频类型与活跃Provider来源。
+- 六模块Python回归189 passed，单项CLI受本机配置影响改在隔离cwd补测1 passed；Web typecheck/build通过，聚焦Playwright 1 passed。Kokoro对原书第3章32字符文本独立生成7.13秒有效speech WAV；无DeepSeek key，未实际retry原Job，现存manifest SHA不变。

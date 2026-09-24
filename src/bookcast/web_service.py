@@ -90,6 +90,11 @@ class WebService:
         active = active or bool(child is not None and child.poll() is None)
         path = self.core_path(identifier)
         core = job_status(str(path)) if path else None
+        saved = (core.get('provider_settings') if core else None) or record.settings
+        configuration = saved.get('config', {}) if isinstance(saved, dict) else {}
+        def selected_names(kind):
+            selection = saved.get(f'{kind}_selection', 'auto') if isinstance(saved, dict) else 'auto'
+            return configuration.get(f'{kind}_priority', []) if selection == 'auto' else [selection]
         state = core['effective_state'] if core else record.status
         active = active or bool(core and core['active'])
         if not active and state in {'RUNNING', 'PENDING'}:
@@ -116,6 +121,7 @@ class WebService:
                 audio_info = json.loads(export_path.read_text(encoding='utf-8'))
         return {'id': identifier, 'title': core['progress']['book'] if core else record.title,
                 'mode': record.request.mode, 'minutes': record.request.minutes, 'state': state,
+                'task_providers': {'llm': selected_names('llm'), 'tts': selected_names('tts')},
                 'active': active, 'created_at': record.created_at, 'updated_at': core['updated_at'] if core else record.updated_at,
                 'progress': core['progress'] if core else None, 'core_job_id': core['job_id'] if core else None,
                 'directory': str(path.parent) if path else str(id_path(self.root, 'jobs', identifier)),

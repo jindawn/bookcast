@@ -304,6 +304,8 @@ class ContentFlow:
                             'coverage': report['chapter_coverage'], 'quality': 'evaluation/quality.json',
                             'estimated_seconds': report['estimated_seconds'], 'sha256': sha256_file(r.path('podcast.mp3')),
                             **audio_summary(r, [s.id for s in plan.segments])})
+        from .speech import validate_completed_speech
+        validate_completed_speech(r, [s.id for s in plan.segments])
         if r.manifest.status != 'completed':
             r.manifest.status, r.manifest.error, r.manifest.error_kind = 'completed', None, None
             r.save()

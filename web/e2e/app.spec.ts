@@ -3,6 +3,30 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { resolve, join } from "node:path";
 
+test("a missing selected task never displays another task's completed audio", async ({ page }) => {
+  const job = (id: string, title: string) => ({
+    id, title, mode: "two_host", minutes: 20, state: "SUCCEEDED", active: false,
+    created_at: "2026-09-24T00:00:00Z", directory: "/tmp/bookcast-fixture",
+    core_job_id: id, error: null, warnings: [], audio_url: `/api/jobs/${id}/audio`,
+    m4b_url: null, audio_kind: "mock", audio_seconds: 48,
+    can_resume: false, can_retry: false, progress: null,
+  });
+  const other = job("other", "Other completed book");
+  const selected = job("selected", "Selected book");
+  let jobs = [other, selected];
+  await page.route("**/api/jobs", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    await route.fulfill({ json: { jobs, errors: [] } });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Selected book/ }).click();
+  await expect(page.getByRole("heading", { name: "Selected book" })).toBeVisible();
+  jobs = [other];
+  await expect(page.getByText("当前选中的任务暂时无法读取", { exact: false })).toBeVisible();
+  await expect(page.getByLabel("播客音频")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Other completed book" })).toHaveCount(0);
+});
+
 test("upload → Core generation → history → actual audio playback; mobile layout", async ({
   page,
 }) => {

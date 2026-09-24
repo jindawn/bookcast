@@ -1,4 +1,5 @@
 """Read-only discovery and projections of authoritative per-job manifests."""
+import json
 import os
 from pathlib import Path
 import re
@@ -6,6 +7,33 @@ import re
 from .errors import BookCastError
 from .models import BookMetadata, TaskState
 from .storage import artifact_path, job_is_locked
+
+
+def real_speech_provenance_valid(root, manifest) -> bool:
+    """Read-only guard for completed jobs whose saved TTS selection is real."""
+    saved = manifest.provider_settings or {}
+    config = saved.get('config') if isinstance(saved, dict) else None
+    if not isinstance(config, dict):
+        return True  # Old jobs have no trustworthy selected-provider snapshot.
+    selection = saved.get('tts_selection', 'auto')
+    names = config.get('tts_priority', []) if selection == 'auto' else [selection]
+    specs = {item.get('name'): item for item in config.get('providers', []) if isinstance(item, dict)}
+    selected = [specs.get(name) for name in names]
+    if not selected or any(item is None for item in selected):
+        return False
+    if all(item.get('type') == 'mock' for item in selected):
+        return True
+    if any(item.get('type') == 'mock' for item in selected):
+        return False
+    try:
+        report = json.loads(artifact_path(root, 'audio/export.json').read_text(encoding='utf-8'))
+        if report.get('audio_kind') != 'speech':
+            return False
+    except (OSError, ValueError):
+        return False
+    active = [call for call in manifest.ai_calls if call.kind == 'tts' and call.status == 'completed'
+              and call.task in manifest.steps and call.artifacts == manifest.steps[call.task].artifacts]
+    return bool(active) and all(call.provider in names for call in active)
 
 
 def manifest_paths(output_dir: Path):
@@ -61,6 +89,8 @@ def job_status(job: str, output_dir: Path = Path('output')) -> dict:
         s.status == 'running' for s in m.steps.values()) or any(c.status in {'pending','running'} for c in m.ai_calls))
     damaged = [name for name, record in m.steps.items()
                if record.status == 'completed' and not artifacts_valid(root, record)]
+    if m.status == 'completed' and not real_speech_provenance_valid(root, m):
+        damaged.append('audio_provenance')
     done = sum(s.status in {'completed','skipped'} and name not in damaged for name,s in m.steps.items())
     metadata = m.metadata_seed
     try:
@@ -84,7 +114,7 @@ def job_status(job: str, output_dir: Path = Path('output')) -> dict:
             'directory': str(root), 'active': active, 'stale': stale,
             'effective_state': ('FAILED_PERMANENT' if m.state == TaskState.FAILED_PERMANENT or any(
                 s.state == TaskState.FAILED_PERMANENT for s in m.steps.values()) else
-                'FAILED_RETRYABLE' if stale else m.state.value),
+                'FAILED_RETRYABLE' if stale or damaged else m.state.value),
             'integrity': 'damaged' if damaged else 'ok', 'damaged_steps': damaged, 'progress': progress}
 
 
