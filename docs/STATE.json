@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-16",
-  "current_task": "V1 Principal Engineer Audit 已完成；Critical 0、High 3 修复、Medium/Low backlog 与发布门槛已记录",
+  "current_phase": "phase-17",
+  "current_task": "Phase 17 本地 OCR 技术验收与接力收尾",
   "task_status": "completed",
   "branch": "main",
   "last_verified_commit": "acecfbfc336112d2a3fc226cd3ed334a6bfc0fa4",
@@ -95,17 +95,43 @@
     "Phase 15功能提交验证完成：ec1ad6f；完整离线pytest 394 passed/5显式测试deselected/10 subtests，clean clone、Web、Mock MP3/M4B、全书Mock恢复、静态检查通过；项目保持0.1.0/pre-1.0，许可证与远端Actions运行留作人工发布门禁。",
     "Phase 16全仓审计确认Critical 0、High 3；直接生成绕过来源校验、Kokoro可伪造收据、Qwen可加载未固定文件均以最小补丁和反例回归修复。",
     "Phase 16审计记录Medium 7、Low 2与许可证/第三方资产发布阻塞；官方npm核心审计0，uv非Qwen依赖0，实验Qwen extra锁定依赖14条公告另列门槛。",
-    "Phase 16功能提交acecfbfc336112d2a3fc226cd3ed334a6bfc0fa4验证：完整离线398 passed/5 deselected/10 subtests，Web typecheck/build/3项Playwright、project validator、compileall、lock/diff通过；无AI调用、模型推理或下载。"
+    "Phase 16功能提交acecfbfc336112d2a3fc226cd3ed334a6bfc0fa4验证：完整离线398 passed/5 deselected/10 subtests，Web typecheck/build/3项Playwright、project validator、compileall、lock/diff通过；无AI调用、模型推理或下载。",
+    "Phase 17：按页检测text/image/mixed/blank，仅显式--ocr auto调用隔离Apple Vision识别PDF扫描区域和EPUB内嵌图片；不改内容/语音/导出链路。",
+    "OCR源文本块保存源SHA、页/资源、区域、置信度和低置信warning；parse指纹含OCR模式/适配器版本，完成任务resume复用。",
+    "Phase 17完整离线410 passed/1 skipped/5 deselected/10 subtests；真实本机Apple Vision中文、英文、90度页及隔离进程1 passed，无云API和模型下载。"
   ],
   "in_progress": [],
   "next_actions": [
-    "维护者确定 BookCast 项目 LICENSE、PyMuPDF AGPL/商业/替代路径和 Kokoro bundle 内 espeak-ng-data 通知；在此之前不得发布可再分发 V1 包。",
-    "按 docs/PHASE16_AUDIT.md 的 M-01～M-07、L-01～L-02 顺序评估后续原子修复；实验 Qwen extra 的上游公告解决前不得成为默认发行组件。",
-    "在正常公共 DNS 环境显式运行 BOOKCAST_RUN_RELEASE_LARGE_BOOK=1 uv run pytest -m large_model tests/test_release_large_book.py -v，复验全新官方目录获取。",
-    "若用户要求推送本次提交，随后核对新 HEAD 的 GitHub Actions 三个远端 job；当前已知基线 eb3bc6c 三项成功。",
-    "发布前审查目标平台 FFmpeg build/notices、最终包与 Web 构建产物的 secret scan；版本维持 0.1.0/pre-1.0。"
+    "维护者确定BookCast LICENSE、PyMuPDF AGPL/商业/替代路径及Kokoro espeak-ng-data通知；解决前不发布可再分发V1包。",
+    "在用户授权的复杂排版、多栏、脚注及低质扫描样本上人工核对OCR顺序/漏字；跨平台OCR与逐页持久缓存需单独设计，不因Phase17技术通过而承诺质量。",
+    "按docs/PHASE16_AUDIT.md逐项处理Medium/Low backlog；实验Qwen extra公告未解决前不进入默认发行包。",
+    "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "phase17-full-offline",
+      "command": ".venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "410 passed、1个本地Vision显式测试默认跳过、5项live/large-model deselected、10 subtests、7既有依赖warning；不调用收费API",
+      "checked_at": "2026-09-24T05:11:47Z"
+    },
+    {
+      "name": "phase17-apple-vision-real",
+      "command": "BOOKCAST_RUN_OCR_LIVE=1 .venv/bin/pytest -q tests/test_ocr.py -k real_chinese",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "1 passed；自制中文/英文扫描图、90度PDF及隔离子进程均真实识别；Swift编译缓存需要本机权限，无云API",
+      "checked_at": "2026-09-24T05:11:47Z"
+    },
+    {
+      "name": "phase17-static",
+      "command": "python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "项目状态/链接/Git校验、编译与差异空白检查通过",
+      "checked_at": "2026-09-24T05:11:47Z"
+    },
     {
       "name": "phase16-full-offline",
       "command": ".venv/bin/pytest -q",
@@ -502,10 +528,11 @@
     "独立真实测试在证据ID契约下曾出现1次schema_error，人工显式重试成功；原始响应未保存，不能断言具体坏字段或100%稳定",
     "真实402/限流/timeout/5xx未实际制造，仅官方协议及离线故障注入验证；小样本未比较推理强度或验收长书",
     "Phase15外部长书获取测试本机因代理/DNS将Gutenberg域名解析到非公开地址而被安全下载器拒绝；全书Mock pipeline已用来源哈希与US public-domain元数据核验的独立副本完成，source acquisition复验仍待公共DNS网络。",
-    "GitHub Actions基线eb3bc6c的三个远端job已成功；Phase16新提交尚未推送，其远端Actions状态仍待push后核对。",
     "BookCast尚无项目LICENSE；PyMuPDF许可兼容路径和Kokoro bundle内espeak-ng-data通知待维护者/资产级审查，禁止宣称当前二进制可再分发。",
     "Phase16审计Medium M-01～M-07、Low L-01～L-02仍在docs/PHASE16_AUDIT.md backlog，未在本阶段修复；其中M-06不能承诺服务端恰好一次计费。",
-    "可选实验Qwen extra的uv全锁审计有14条OSV记录（含别名）；不随默认/可再分发V1包分发，待上游兼容更新和本机复验。"
+    "可选实验Qwen extra的uv全锁审计有14条OSV记录（含别名）；不随默认/可再分发V1包分发，待上游兼容更新和本机复验。",
+    "Phase17 OCR仅macOS Apple Vision显式可用；复杂多栏/脚注、矢量描边字及非macOS OCR未验收，低置信需核原页。",
+    "OCR parse Step在提交前崩溃会重新识别整份文档；完成后resume复用有效Artifact，尚无逐页OCR持久缓存。"
   ],
   "blockers": [],
   "important_files": [
@@ -888,7 +915,27 @@
     {
       "path": "docs/PHASE16_AUDIT.md",
       "purpose": "全仓Critical/High审计反例与修复、Medium/Low backlog、发布判断和验证证据"
+    },
+    {
+      "path": "docs/OCR.md",
+      "purpose": "Phase17候选评估、显式用法、安全边界、OCR来源和局限"
+    },
+    {
+      "path": "src/bookcast/document_extraction.py",
+      "purpose": "独立OCR契约与隔离解析/检测子进程"
+    },
+    {
+      "path": "src/bookcast/pdf_extraction.py",
+      "purpose": "PDF页类型检测、有界区域OCR和来源映射"
+    },
+    {
+      "path": "src/bookcast/adapters/apple_vision_ocr.py",
+      "purpose": "macOS本地Vision中英OCR可选适配器"
+    },
+    {
+      "path": "tests/test_ocr.py",
+      "purpose": "PDF/EPUB检测、来源、恢复、安全反例与显式真实Vision验收"
     }
   ],
-  "updated_at": "2026-09-24T00:09:21Z"
+  "updated_at": "2026-09-24T05:11:47Z"
 }

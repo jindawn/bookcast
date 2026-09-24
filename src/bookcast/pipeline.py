@@ -11,7 +11,7 @@ from uuid import uuid4
 from .audio import merge_audio
 from .errors import BookCastError
 from .content_models import ContentOptions
-from .models import (AIAttempt, Artifact, BookMetadata, Chapter, ChapterAnalysis, Manifest,
+from .models import (AIAttempt, Artifact, BookMetadata, Chapter, ChapterAnalysis, DocumentExtractionOptions, Manifest,
                      PodcastScript, RunOwner, StepRecord, TaskState, utc_now)
 from .parsers import parse_book
 from .provider_api import LLMProvider, TTSProvider, ProviderError, ProviderStatus, ErrorKind, classify_error
@@ -54,6 +54,7 @@ class Pipeline:
 
     def generate(self, source: Path, *, resume: bool = False, metadata_seed: BookMetadata | None = None,
                  mode: str | None = None, minutes: int | None = None, revise_segment: str | None = None,
+                 extraction_options: DocumentExtractionOptions | None = None,
                  _root: Path | None = None, _retry: bool = True, _by_id: bool = False) -> Path:
         if revise_segment and not resume:
             raise BookCastError("修订片段需要 --resume。")
@@ -64,6 +65,8 @@ class Pipeline:
         source_format = source.suffix.lower().lstrip(".")
         if source_format not in {"epub", "pdf", "txt"}:
             raise BookCastError("仅支持本地 EPUB、PDF 和 TXT 文件。")
+        if extraction_options and extraction_options.mode == "auto" and source_format == "txt":
+            raise BookCastError("OCR 仅适用于 PDF 或 EPUB。")
         if source.stat().st_size > MAX_INPUT_BYTES:
             raise BookCastError("源文件超过 100 MiB 大小上限。")
         digest = sha256_file(source)
@@ -83,6 +86,10 @@ class Pipeline:
                         or manifest.source_format != source_format):
                     raise BookCastError("任务输入不匹配，请使用另一个 --output-dir。")
                 cleanup_orphan_temporary_artifacts(root, manifest)
+                stored_extraction = manifest.extraction_options or DocumentExtractionOptions()
+                requested_extraction = extraction_options or stored_extraction
+                if requested_extraction != stored_extraction:
+                    raise BookCastError("文档提取/OCR 设置改变，请使用新的 --output-dir。")
                 if manifest.pipeline_version == "2":
                     stored = ContentOptions.model_validate(manifest.content_options)
                     requested = ContentOptions(mode=stored.mode if mode is None else mode, minutes=stored.minutes if minutes is None else minutes)
@@ -121,7 +128,8 @@ class Pipeline:
                 manifest = Manifest(job_id=uuid4().hex, book_id=book_id, source_sha256=digest, source_name=source.name,
                                     source_path=str(source), metadata_seed=metadata_seed, provider_settings=self.provider_settings,
                                     source_format=source_format, config=config, pipeline_version="2",
-                                    content_options=options.model_dump())
+                                    content_options=options.model_dump(),
+                                    extraction_options=extraction_options if extraction_options and extraction_options.mode == "auto" else None)
                 write_json(manifest_path, manifest.model_dump())
             changed = False
             if self.provider_settings is not None and manifest.provider_settings != self.provider_settings:
@@ -173,7 +181,8 @@ class Pipeline:
                 raise BookCastError('恢复源文件缺失或损坏，且原始文件不可用；请提供相同内容的原文件。')
             source = original
         return self.generate(source, resume=True, metadata_seed=manifest.metadata_seed,
-                             revise_segment=revise_segment, _root=root, _retry=retry, _by_id=True)
+                             revise_segment=revise_segment, extraction_options=manifest.extraction_options,
+                             _root=root, _retry=retry, _by_id=True)
 
 
 
@@ -411,7 +420,13 @@ class _Runner:
                 metadata = metadata_seed.model_copy(deep=True)
                 metadata.book_id = manifest.book_id
                 metadata.chapter_ids, metadata.warnings, metadata.coverage = [], [], "complete"
-            book = parse_book(self.path(source_relative), metadata)
+                metadata.document_extraction = None
+            if manifest.extraction_options and manifest.extraction_options.mode == "auto":
+                from .document_extraction import parse_with_ocr_isolated
+                book = parse_with_ocr_isolated(self.path(source_relative), metadata,
+                                               manifest.extraction_options.provider)
+            else:
+                book = parse_book(self.path(source_relative), metadata)
             outputs = []
             for chapter in book.chapters:
                 name = f"chapters/{chapter.id}.json"
@@ -421,6 +436,10 @@ class _Runner:
             return ["metadata.json", *outputs]
 
         parse_inputs = {"source": sha256_file(self.path(source_relative)), "format": manifest.source_format}
+        if manifest.extraction_options and manifest.extraction_options.mode == "auto":
+            from .document_extraction import ocr_cache_key
+            parse_inputs["extraction"] = {**manifest.extraction_options.model_dump(),
+                                           "adapter_cache_key": ocr_cache_key(manifest.extraction_options.provider)}
         if metadata_seed:
             parse_inputs["metadata_seed"] = metadata_seed.model_dump()
         old_parse = manifest.steps.get('parse')

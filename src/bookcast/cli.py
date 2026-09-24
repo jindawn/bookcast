@@ -11,6 +11,7 @@ import typer
 from . import composition
 from .errors import BookCastError
 from .pipeline import Pipeline, job_status, load_manifest
+from .models import DocumentExtractionOptions
 from .provider_config import load_config
 from .provider_registry import default_registry
 from .provider_api import ProviderStatus, classify_error
@@ -230,11 +231,18 @@ def generate(
     mode: Annotated[str | None, typer.Option(help="summary / deep_read / two_host；新任务默认 two_host")] = None,
     minutes: Annotated[int | None, typer.Option(min=1, max=120, help="脚本目标分钟数；新任务默认10")] = None,
     revise_segment: Annotated[str | None, typer.Option(help="与 --resume 配合，重新生成指定片段及受影响下游")] = None,
+    ocr: Annotated[str, typer.Option(help="off / auto；auto 仅在 macOS 显式使用本地 Apple Vision 处理图片文字")] = "off",
 ) -> None:
     """分块分析、全书综合、节目规划、脚本复核与音频；默认 Mock 离线运行。"""
     try:
+        if ocr not in {"off", "auto"}:
+            raise BookCastError("--ocr 仅支持 off 或 auto。")
+        if ocr == "auto" and source.suffix.lower() not in {".pdf", ".epub"}:
+            raise BookCastError("OCR 仅适用于 PDF 或 EPUB。")
+        extraction = DocumentExtractionOptions(mode="auto", provider="apple-vision") if ocr == "auto" else None
         pipeline = generation_pipeline(source, output_dir, config, provider, tts_provider, resume)
-        root = pipeline.generate(source, resume=resume, mode=mode, minutes=minutes, revise_segment=revise_segment)
+        root = pipeline.generate(source, resume=resume, mode=mode, minutes=minutes,
+                                 revise_segment=revise_segment, extraction_options=extraction)
         manifest = load_manifest(root / "manifest.json")
     except (BookCastError, OSError, ValueError) as exc:
         typer.echo(f"错误：{exc}", err=True)
@@ -248,6 +256,20 @@ def generate(
             typer.echo(f"内容提示：{warning}")
     for warning in manifest.warnings:
         typer.echo(f"解析警告：{warning}")
+
+
+@app.command("inspect-document")
+def inspect_document(source: Annotated[Path, typer.Argument(help="待检测的本地 PDF；只分类，不调用 OCR")]) -> None:
+    """识别文本页、图像页及混合 PDF，输出机器可读 JSON。"""
+    try:
+        if source.suffix.lower() != ".pdf":
+            raise BookCastError("inspect-document 当前仅支持 PDF。")
+        from .document_extraction import inspect_pdf_isolated
+
+        typer.echo(json.dumps(inspect_pdf_isolated(source), ensure_ascii=False, indent=2))
+    except (BookCastError, OSError) as exc:
+        typer.echo(f"错误：{exc if isinstance(exc, BookCastError) else '无法读取 PDF。'}", err=True)
+        raise typer.Exit(1) from None
 
 
 @config_app.command("providers")

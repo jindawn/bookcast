@@ -2,7 +2,7 @@
 
 BookCast 是计划开源的本地工具，帮助用户将一本书转化为高质量中文音频、精读内容或双人播客。用户可以从书名开始识别正确版本、寻找合法可获取的电子书，也可以直接提供自己的 EPUB、PDF 或 TXT，最终获得 MP3 或 M4B 音频。
 
-Phase 8 已提供本地中文双音色 TTS，CPU 合成、逐句缓存与恢复；默认仍为 Mock 测试音调。Phase 9 增加可控推理与 DeepSeek 验收入口，真实 DeepSeek + Kokoro 链路已跑通；内容仍有来源归属警告，人工试听待完成。外部 LLM 可收费，本地 TTS 免费不代表整条链免费。Phase 13 为完成任务提供独立 M4B 有声书导出，节目章节与原书章节明确区分。Web 是 Core 的客户端，Skill/CLI 独立可用；真实人声不等于已验收内容质量。OCR、桌面包未实现。实际状态见 [STATE.json](STATE.json)。
+Phase 8 已提供本地中文双音色 TTS，CPU 合成、逐句缓存与恢复；默认仍为 Mock 测试音调。Phase 9 增加可控推理与 DeepSeek 验收入口，真实 DeepSeek + Kokoro 链路已跑通；内容仍有来源归属警告，人工试听待完成。外部 LLM 可收费，本地 TTS 免费不代表整条链免费。Phase 13 为完成任务提供独立 M4B 有声书导出，节目章节与原书章节明确区分。Web 是 Core 的客户端，Skill/CLI 独立可用；真实人声不等于已验收内容质量。Phase 17 提供 macOS 显式可选本地 OCR，复杂排版质量尚未验收；桌面包未实现。实际状态见 [STATE.json](STATE.json)。
 
 ## 用户与使用场景
 

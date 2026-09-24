@@ -314,3 +314,11 @@
 - 完整离线 pytest 398 passed、5 deselected、10 subtests、7 个既有依赖 warning；Source/HTTP/Web 专项 100 passed，Qwen/TTS 专项 13 passed。Web typecheck/build、Playwright 3 passed；project validator、compileall、lock 和 diff 检查通过。
 - 官方 npm registry 的 Web lock 审计为 0；`uv audit --locked --no-extra qwen` 对 36 包为 0；全可选锁因实验 Qwen extra 返回 14 条 OSV 记录（含别名），列入 M-07，不将其纳入默认发行组件。秘密扫描未发现活动凭证进入 Git/manifest/log 或新构建产物；旧忽略 `.next/cache` 命中已清理，随机假凭证全新构建未复现。
 - 功能提交 `acecfbfc336112d2a3fc226cd3ed334a6bfc0fa4` 已创建；更新 STATE/HANDOFF/RELEASE_CHECKLIST 交接。没有推送，没有调用 DeepSeek/Gemini，也没有运行 Kokoro/Qwen 推理。BookCast LICENSE、PyMuPDF 许可路径、Kokoro bundle 中 eSpeak 数据通知仍阻止可再分发 V1 release candidate。
+
+## 2026-09-24T05:11:47Z — Phase 17 可选本地 OCR 与文档解析
+
+- 接手时 `main` 与 `origin/main` 同为 `da4ca8e465dfa5037f6c451b2348d689aa5d1638`；Phase16 旧交接的“未推送”描述已失效。
+- 本机 Apple Vision 报告中文简繁和英文可用，自制中英 PNG 最小试验成功。对照官方 Apple/Tesseract/PyMuPDF 文档后选择 macOS 显式 Vision 适配器；Tesseract 未安装、未实测。
+- 新增 PDF text/image/mixed/blank 页分类和扫描区域 OCR、EPUB 内嵌图片 OCR；OCR 块保留源 SHA、页/资源、归一化区域和置信度，低置信与未覆盖页给 warning。解析/检测在隔离进程，OCR 配置与适配器版本参与 parse Step 指纹；后续生成链路未分叉。
+- 默认完整离线 `410 passed、1 skipped、5 deselected、10 subtests`；显式真实本机 Vision `1 passed`，覆盖中文、英文、旋转页与隔离进程。没有云 AI/TTS 请求、模型下载或已有真实音频重生成。
+- 文档记录 OCR 当前仅 macOS、复杂版面/非 macOS 未验收、parse 未提交前恢复会重做整份识别；不改变 V1 发布许可阻塞。

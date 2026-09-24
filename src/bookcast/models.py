@@ -16,11 +16,52 @@ class Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class SourceTextBlock(Model):
+    """A piece of parsed text with a locator back to the supplied artifact."""
+
+    text: str = Field(min_length=1)
+    method: Literal["native", "ocr"]
+    source_artifact: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    resource_locator: str = Field(min_length=1)
+    page: int | None = Field(default=None, ge=1)
+    region: tuple[float, float, float, float] | None = None
+    region_space: Literal["page_display_normalized", "image_normalized"] | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def valid_provenance(self):
+        if self.method == "ocr" and (self.region is None or self.region_space is None or self.confidence is None):
+            raise ValueError("OCR 文本块必须包含区域、坐标空间和置信度。")
+        if self.region is not None:
+            x0, y0, x1, y1 = self.region
+            if not (0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1):
+                raise ValueError("来源文本块区域坐标无效。")
+        return self
+
+
+class DocumentExtractionInfo(Model):
+    kind: Literal["text", "image", "mixed", "blank"]
+    provider: str | None = None
+    ocr_pages: list[int] = Field(default_factory=list)
+
+
+class DocumentExtractionOptions(Model):
+    mode: Literal["native", "auto"] = "native"
+    provider: Literal["apple-vision"] | None = None
+
+    @model_validator(mode="after")
+    def validate_provider(self):
+        if (self.mode == "auto") != (self.provider == "apple-vision"):
+            raise ValueError("OCR auto 模式需要 apple-vision Provider；native 模式不能指定 OCR Provider。")
+        return self
+
+
 class Chapter(Model):
     id: str = Field(pattern=r"^[0-9]{4,}$")
     title: str = Field(min_length=1)
     text: str = Field(min_length=1)
     source_locator: str = Field(min_length=1)
+    source_blocks: list[SourceTextBlock] = Field(default_factory=list)
 
 
 class BookMetadata(Model):
@@ -36,6 +77,7 @@ class BookMetadata(Model):
     warnings: list[str] = Field(default_factory=list)
     coverage: Literal["complete", "partial"] = "complete"
     acquisition: dict | None = None
+    document_extraction: DocumentExtractionInfo | None = None
 
 
 class NormalizedBook(Model):
@@ -162,6 +204,7 @@ class Job(ExecutionModel):
     source_path: str | None = None
     metadata_seed: BookMetadata | None = None
     provider_settings: dict | None = None
+    extraction_options: DocumentExtractionOptions | None = None
     owner: RunOwner | None = None
     inventory_complete: bool = False
     error_kind: str | None = None

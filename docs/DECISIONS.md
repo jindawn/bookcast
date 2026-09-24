@@ -50,7 +50,7 @@
 | --- | --- | --- |
 | Tauri 桌面发行、数据库及自动调度（本地 Web 和 worker 已按 D-015 实现） | 后续产品阶段 | 安装复杂度、任务规模、维护成本 |
 | 真实 Provider 的成本预算与质量验收 | 后续真实服务验收 | 配置、外发边界与 failover 已由 D-009 确定；尚未验证付费服务 |
-| EPUB / PDF 深度解析与 OCR 策略 | 对应解析阶段 | 当前库已由 D-007 选定，后续依据授权样本、章节/页码保持、错误可见性 |
+| 跨平台 OCR 与复杂多栏/脚注解析 | 后续解析质量阶段 | Phase 17 已按 D-021 实现 macOS 显式本地 OCR；后续依据授权复杂样本、版面顺序与误识别率 |
 | 更多合法书目与资源服务 | 后续来源扩展 | 首批 Gutenberg/用户来源已由 D-011 确定；后续按元数据质量、许可及版本区分评估 |
 | 后续内容生成模型与真实 TTS 供应商 | 对应生成阶段 | M4B 封装已由 D-020 确定；后续模型仍需评估中文质量、成本、时长、一致性、外发边界 |
 | 开源许可证与贡献说明 | 首次公开发布前 | 维护者意愿、依赖与样本许可兼容性；目前未授予项目开源许可 |
@@ -186,3 +186,7 @@ Gemini 使用标准库调用官方、仍有文档的 generateContent REST TTS；
 ## D-020 — M4B 是已完成音频的独立导出
 
 状态：accepted；日期：2026-09-23。Phase 13 不修改 LLM/TTS 任务与 manifest，也不改变既有 MP3。用户显式调用 `bookcast export JOB_ID --format m4b`；独立 export 模块持同一 Job 锁，读取已完成 MP3、真实章节 WAV、元数据与节目规划，以 FFmpeg 编 AAC/M4B 并写 sidecar。新分层任务用 podcast segment 作章节并保留源书章节 ID 映射；无 episode plan 的旧任务才用 source chapter。章节起止由 WAV 实际帧长与最终 MP3 实测时长确定，禁止用预算或字数估算。封面仅用户显式提供可解码、大小受限的本地 JPEG/PNG。输入哈希含 MP3、WAV、规划、元数据、封面及编码契约；输出 SHA 校验后复用，Web 只暴露有效现存 M4B。这样避免重新消耗 AI 额度；代价是完成 Job 不会自动有 M4B，需用户显式导出，变更源音频后需重导出。
+
+## D-021 — 本地 OCR 是可选文档提取边界
+
+状态：accepted；日期：2026-09-24。先对 PDF 每页分类，再只在用户显式 `--ocr auto` 时对扫描页或混合页未覆盖的大图像区域做 OCR；EPUB 仅识别包内图片。OCR 不归入 LLMProvider/TTSProvider，也不分叉 Content/Pipeline；输出带源 SHA、页/资源、区域与置信度的 `SourceTextBlock`。本机 Apple Vision 在自制中英/旋转样本通过技术试验，作为 macOS 可选实现；Tesseract 在本机未安装、未实测，不提前注册。识别进程和不可信 PDF 检测进程隔离，不传 AI 凭证；源大小、页数、像素、区域、时间和结果大小有边界。OCR 设置和实现版本进入 parse Step 指纹，已完成结果按原 Job/Artifact 恢复，同一 Job 不切换原生/OCR 模式。代价是 parse 未提交时恢复可能重做整份 OCR，复杂版面和非 macOS OCR 暂不承诺。依据与可复现实验见 [OCR.md](OCR.md)。

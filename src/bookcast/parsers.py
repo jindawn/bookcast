@@ -2,14 +2,18 @@
 
 import codecs
 from pathlib import Path
+import posixpath
 import re
+from urllib.parse import unquote, urlsplit
 
 from bs4 import BeautifulSoup
 from ebooklib import ITEM_DOCUMENT, epub
 import pymupdf
 
+from .document_extraction import OCRProvider
 from .errors import BookCastError
-from .models import BookMetadata, Chapter, NormalizedBook
+from .models import BookMetadata, Chapter, DocumentExtractionInfo, NormalizedBook, SourceTextBlock
+from .pdf_extraction import LOW_CONFIDENCE, extract_pdf
 
 
 HEADING = re.compile(r"^(?:第[0-9零〇一二三四五六七八九十百千两]+[章回节卷部].*|chapter\s+\S+.*|#{1,3}\s+.+)$", re.I)
@@ -44,7 +48,7 @@ def parse_txt(path: Path, metadata: BookMetadata) -> NormalizedBook:
     return _book(metadata, chapters)
 
 
-def parse_epub(path: Path, metadata: BookMetadata) -> NormalizedBook:
+def parse_epub(path: Path, metadata: BookMetadata, ocr: OCRProvider | None = None) -> NormalizedBook:
     book = epub.read_epub(str(path), options={"ignore_ncx": True})
     titles = book.get_metadata("DC", "title")
     languages = book.get_metadata("DC", "language")
@@ -65,7 +69,10 @@ def parse_epub(path: Path, metadata: BookMetadata) -> NormalizedBook:
             ordered.append(item)
             metadata.warnings.append(f"非 spine 文档追加到末尾：{item.get_name()}")
     chapters = []
-    for item in ordered:
+    resources = {item.get_name(): item for item in book.get_items()}
+    image_items = 0
+    ocr_pages = []
+    for position, item in enumerate(ordered, 1):
         if isinstance(item, epub.EpubNav) or "nav" in getattr(item, "properties", []):
             continue
         if item.get_type() != ITEM_DOCUMENT:
@@ -78,37 +85,70 @@ def parse_epub(path: Path, metadata: BookMetadata) -> NormalizedBook:
         heading = soup.find(["h1", "h2", "h3"])
         title = heading.get_text(" ", strip=True) if heading else item.get_name()
         text = soup.get_text("\n", strip=True)
-        if not text:
+        blocks = ([SourceTextBlock(text=text, method="native", page=position,
+                                   source_artifact=f"sha256:{metadata.source_sha256}",
+                                   resource_locator=f"epub:{item.get_name()}")]
+                  if text else [])
+        images = soup.find_all("img")
+        image_items += len(images)
+        if ocr:
+            for image in images:
+                raw_src = str(image.get("src") or "")
+                parsed_src = urlsplit(raw_src)
+                if parsed_src.scheme or parsed_src.netloc or not parsed_src.path or parsed_src.path.startswith("/"):
+                    metadata.warnings.append(f"EPUB 跳过外部或无效图片引用：{item.get_name()}")
+                    metadata.coverage = "partial"
+                    continue
+                name = posixpath.normpath(posixpath.join(posixpath.dirname(item.get_name()),
+                                                         unquote(parsed_src.path)))
+                resource = resources.get(name) if not name.startswith("../") else None
+                if resource is None or resource.media_type not in {"image/png", "image/jpeg"}:
+                    metadata.warnings.append(f"EPUB 图片不可 OCR：{name}")
+                    metadata.coverage = "partial"
+                    continue
+                data = resource.get_content()
+                if len(data) > 16 * 1024 * 1024:
+                    raise BookCastError("EPUB OCR 图片超过 16 MiB 上限。")
+                pixmap = pymupdf.Pixmap(data)
+                if pixmap.width * pixmap.height > 16_000_000:
+                    raise BookCastError("EPUB OCR 图片像素超出安全上限。")
+                if pixmap.colorspace != pymupdf.csRGB or pixmap.alpha:
+                    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pixmap)
+                recognized = ocr.recognize(pixmap.tobytes("png"))
+                if position not in ocr_pages:
+                    ocr_pages.append(position)
+                for line in recognized:
+                    blocks.append(SourceTextBlock(text=line.text, method="ocr", page=position,
+                                                   source_artifact=f"sha256:{metadata.source_sha256}",
+                                                   resource_locator=f"epub:{name}", region=line.region,
+                                                   region_space="image_normalized", confidence=line.confidence))
+                if not recognized:
+                    metadata.warnings.append(f"EPUB 图片 OCR 未识别出文字：{name}")
+                    metadata.coverage = "partial"
+                elif any(line.confidence < LOW_CONFIDENCE for line in recognized):
+                    metadata.warnings.append(f"EPUB 图片有低置信 OCR 文字，需核对原图：{name}")
+                    metadata.coverage = "partial"
+        if not blocks:
             metadata.warnings.append(f"无可提取文本，可能是图片页：{item.get_name()}")
             metadata.coverage = "partial"
             continue
-        if soup.find("img"):
+        if images and not ocr:
             metadata.warnings.append(f"图片内容未 OCR：{item.get_name()}")
             metadata.coverage = "partial"
-        chapters.append(_chapter(len(chapters) + 1, title, text, f"epub:{item.get_name()}"))
+        chapters.append(Chapter(id=f"{len(chapters) + 1:04d}", title=title,
+                                text="\n".join(block.text for block in blocks),
+                                source_locator=f"epub:{item.get_name()}", source_blocks=blocks))
     if not chapters:
-        raise BookCastError("EPUB 没有可解析正文；图片书和 DRM 加密书不受支持。")
+        raise BookCastError("EPUB 没有可解析正文；图片书需显式启用 OCR，DRM 文件不受支持。")
+    has_native = any(block.method == "native" for chapter in chapters for block in chapter.source_blocks)
+    kind = "mixed" if image_items and has_native else "image" if image_items else "text"
+    metadata.document_extraction = DocumentExtractionInfo(
+        kind=kind, provider=ocr.name if ocr_pages and ocr else None, ocr_pages=ocr_pages)
     return _book(metadata, chapters)
 
 
-def parse_pdf(path: Path, metadata: BookMetadata) -> NormalizedBook:
-    chapters = []
-    with pymupdf.open(path) as document:
-        if document.needs_pass:
-            raise BookCastError("PDF 需要密码，本阶段不支持加密 PDF。")
-        metadata.title = document.metadata.get("title") or metadata.title
-        author = document.metadata.get("author")
-        metadata.authors = [author] if author else []
-        for page in document:
-            text = page.get_text("text", sort=True).strip()
-            if not text:
-                metadata.warnings.append(f"PDF 第 {page.number + 1} 页没有文本，可能需要 OCR。")
-                metadata.coverage = "partial"
-                continue
-            chapters.append(_chapter(len(chapters) + 1, f"第 {page.number + 1} 页", text, f"page:{page.number + 1}"))
-    if not chapters:
-        raise BookCastError("PDF 没有可提取文本，可能是扫描件；本阶段未实现 OCR。")
-    return _book(metadata, chapters)
+def parse_pdf(path: Path, metadata: BookMetadata, ocr: OCRProvider | None = None) -> NormalizedBook:
+    return extract_pdf(path, metadata, ocr)
 
 
 def _book(metadata: BookMetadata, chapters: list[Chapter]) -> NormalizedBook:
@@ -116,10 +156,13 @@ def _book(metadata: BookMetadata, chapters: list[Chapter]) -> NormalizedBook:
     return NormalizedBook(metadata=metadata, chapters=chapters)
 
 
-def parse_book(path: Path, metadata: BookMetadata) -> NormalizedBook:
-    parsers = {"txt": parse_txt, "epub": parse_epub, "pdf": parse_pdf}
+def parse_book(path: Path, metadata: BookMetadata, ocr: OCRProvider | None = None) -> NormalizedBook:
     try:
-        return parsers[metadata.source_format](path, metadata)
+        if metadata.source_format == "txt":
+            return parse_txt(path, metadata)
+        if metadata.source_format == "epub":
+            return parse_epub(path, metadata, ocr)
+        return parse_pdf(path, metadata, ocr)
     except BookCastError:
         raise
     except Exception as exc:

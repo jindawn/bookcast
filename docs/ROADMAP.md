@@ -204,6 +204,14 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 3. 重新验证基线远端 Actions、全量离线测试、Web/Playwright、Python/npm 锁定依赖公告、秘密与资产完整性；收费服务和大型推理不在本审计中重跑。
 4. 保持 0.1.0/pre-1.0；维护者先解决项目 LICENSE、PyMuPDF 许可路径和 Kokoro 数据通知，再判断可分发 release candidate。Qwen 继续 experimental。
 
+### Phase 17：可选 OCR 与复杂文档解析
+
+**状态：本地 Apple Vision 技术路径已实现；复杂版面/跨平台质量未验收，不阻塞 V1 既有主流程。**
+
+1. PDF 先检测 text/image/mixed/blank；只在显式 `--ocr auto` 时使用 macOS 本地 Vision 识别扫描区域，EPUB 仅处理内嵌图片，不访问文档链接。
+2. 独立 OCR 契约与隔离进程把页码、区域、源 SHA、置信度写入原 `NormalizedBook`；低置信给 warning，后续 Content/LLM/TTS/Export 完全复用既有流水线。
+3. 默认离线假适配器测试和显式本机真实中英/旋转试验；完成任务 parse 缓存恢复无重复 OCR。复杂多栏/脚注、跨平台适配器及 parse 未提交前的逐页检查点列为后续改善，见 [OCR.md](OCR.md)。
+
 ### 后续候选
 
 **状态：规划中。**

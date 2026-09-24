@@ -1,6 +1,8 @@
 # 架构
 
-## 当前实际实现（Phase 14）
+## 当前实际实现（Phase 17）
+
+Phase 17 在 Source 与 NormalizedBook 之间增加独立文档提取/OCR 边界。`inspect-document` 先分类 PDF 文本/图像/混合/空白页；只有显式 `--ocr auto` 才由隔离子进程调用 Apple Vision 处理扫描区域或 EPUB 内嵌图片。`SourceTextBlock` 将页码、资源、区域、置信度及源 SHA 映射回书稿；低置信和遗漏通过 metadata warning/coverage 显示。OCR 选项和实现版本进入 parse Step 指纹；其余 Content/LLM/TTS/Export 任务不分叉。细节和限制见 [OCR.md](OCR.md)、D-021。
 
 Phase 14 在 CLI/Web 的组合边界增加 `onboarding.py`：由四个固定、严格校验的现有 Provider 配置方案创建本地 TOML，只保存环境变量名；`doctor` 原 JSON 契约不变，`--human` 提供可读检查，`/api/providers` 增加同源安全摘要供页面显示当前 LLM/TTS、真人语音与缺失步骤。方案选择不修改 Provider Registry、Core、Job 快照或缓存。Gemini 云端语音与 Qwen 实验语音需要额外显式标志。Web 不接收凭证。
 
@@ -12,7 +14,7 @@ Phase 10 在中立 TTS 契约增加 SpeechTurn/SpeechSegment/SegmentSpeechInfo �
 
 Phase 9 复用 CompatibleLLMProvider，增加 generation.py 严格契约与集中任务策略、可选调用视图、服务端 usage 和有效配置哈希审计。ProviderChain 绑定任务后调用中立接口，Pipeline 只使用任务级配置校验；不新增厂商 SDK 或改写 Core。真实 LLM + Kokoro 技术链路已验收；内容保留来源归属警告，尚未进行人工试听，见 [PHASE9_REAL_LLM.md](PHASE9_REAL_LLM.md)。旧未配置推理选项的请求与缓存保持兼容。
 
-Phase 8 增加可选 Kokoro CPU 中文 TTS：显式安装模型，Registry 注入适配器，Core 通过中立语音单元接口保存逐句 Step/Attempt 和音频。默认仍为 Mock，业务代码不 import sherpa-onnx。UI → Application API → Core；CLI 与 worker 共用 composition.py 注入 Provider，原有解析、内容、质量与恢复流程保持可用。Phase 13 增加独立 M4B 导出层；OCR 与桌面包未实现。语音细节见 [TTS.md](TTS.md)，Web 接口、进程与存储见 [WEB.md](WEB.md)。
+Phase 8 增加可选 Kokoro CPU 中文 TTS：显式安装模型，Registry 注入适配器，Core 通过中立语音单元接口保存逐句 Step/Attempt 和音频。默认仍为 Mock，业务代码不 import sherpa-onnx。UI → Application API → Core；CLI 与 worker 共用 composition.py 注入 Provider，原有解析、内容、质量与恢复流程保持可用。Phase 13 增加独立 M4B 导出层；桌面包未实现。语音细节见 [TTS.md](TTS.md)，Web 接口、进程与存储见 [WEB.md](WEB.md)。
 
 ```text
 AGENTS.md / CLAUDE.md      Agent 统一入口
@@ -49,7 +51,10 @@ src/bookcast/
   web_worker.py           独立持锁进程，只调用既有 Acquirer/Pipeline
   jobs.py                 只读任务发现、ID 解析、持锁/stale 与完整性投影
   models.py               Pydantic Job/Step/Artifact/Attempt、六态与书稿模型
-  parsers.py              TXT/EPUB/PDF 本地解析
+  parsers.py              TXT/EPUB/PDF 本地解析及可选 EPUB 图片 OCR
+  pdf_extraction.py       PDF 页分类、按区域提取及有界 OCR
+  document_extraction.py  中立 OCR 契约和隔离子进程
+  adapters/apple_vision_ocr.py  macOS 本地 Vision 适配器
   source_api.py           BookIdentity、BookSourceProvider 与获取记录契约
   sources.py              Gutenberg/用户来源适配器、Source Registry
   source_http.py          有界 HTTPS、固定公网 IP、TLS 与重定向校验
@@ -114,7 +119,7 @@ examples/
 | 封装导出 | WAV 片段 → MP3；已完成音频 → M4B | MP3 继续由原 Pipeline 生成；M4B 由独立 export 模块用 FFmpeg、实际 WAV/MP3 时长及节目规划封装，`exports/m4b.json` 审计/缓存 |
 | 任务编排 | 输入与配置 → manifest.json | 已实现 Job/Step/Artifact/Attempt、原子写入、六态恢复、缓存与任务命令 |
 
-正常流程为“书名识别 → 版本确认 → 合法来源/用户导入 → 解析 → 内容生成 → TTS → 导出”；直接导入用户文件也是独立入口，不强迫先联网搜书。扫描型 PDF 的 OCR 需求必须显式检测与报告，具体实现排期见 ROADMAP。
+正常流程为“书名识别 → 版本确认 → 合法来源/用户导入 → 解析 → 内容生成 → TTS → 导出”；直接导入用户文件也是独立入口，不强迫先联网搜书。扫描型 PDF 先显式检测，再由用户选择本地 OCR；非 macOS 平台和复杂排版的后续策略见 ROADMAP/OCR。
 
 Provider 依赖方向为 CLI / Application composition → Registry → 具体适配器，Pipeline → 中立接口/ProviderChain。前端仅调用 Application API，业务代码不导入厂商实现。配置与错误策略见 [PROVIDERS.md](PROVIDERS.md)。
 
