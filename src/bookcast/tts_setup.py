@@ -16,6 +16,10 @@ MODEL = "kokoro-multi-lang-v1_0"
 MODEL_URL = f"https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/{MODEL}.tar.bz2"
 MODEL_SHA256 = "c5f7e2d2caf082bc1d20fb70334a61d99d20b484500aad32e7cf84c128ea3298"
 MODEL_BYTES = 349906910
+# SHA-256 of the canonical JSON file-hash map extracted from the pinned archive.
+# The installation receipt is mutable local data, so its claimed archive digest
+# alone cannot authenticate a model directory supplied by a user or another tool.
+OFFICIAL_ASSET_FINGERPRINT = "b42e0a65e66a80dcd574c123530073f8f4dd64a153562b5bab7628d4ded1df1e"
 MAX_UNPACKED = 1024 * 1024 * 1024
 REQUIRED = {"model.onnx", "voices.bin", "tokens.txt", "lexicon-us-en.txt", "lexicon-zh.txt",
             "date-zh.fst", "number-zh.fst", "phone-zh.fst", "LICENSE"}
@@ -83,7 +87,8 @@ def verify_model(root: Path) -> str:
         receipt = json.loads((root / RECEIPT).read_text(encoding="utf-8"))
         files = receipt["files"]
         if (receipt["model"] != MODEL or receipt["archive_sha256"] != MODEL_SHA256
-                or not isinstance(files, dict) or not REQUIRED.issubset(files) or len(files) > 10000):
+                or not isinstance(files, dict) or not REQUIRED.issubset(files) or len(files) > 10000
+                or fingerprint(files) != OFFICIAL_ASSET_FINGERPRINT):
             raise ValueError("invalid receipt")
         actual = {}
         for path in root.rglob("*"):

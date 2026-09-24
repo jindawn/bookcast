@@ -18,7 +18,7 @@ from bookcast.acquisition import Acquirer, choose_edition
 from bookcast.cli import app
 from bookcast.errors import BookCastError
 from bookcast.models import BookMetadata
-from bookcast.pipeline import Pipeline
+from bookcast.pipeline import Pipeline, load_manifest
 from bookcast.providers import MockLLMProvider, MockTTSProvider
 from bookcast.source_api import BookIdentity, EditionCandidate, SearchResult, SourceOffer
 from bookcast.source_validation import validate_source
@@ -272,6 +272,54 @@ def test_epub_symlink_zip_bomb_and_entities_rejected(tmp_path, attack):
                              text.encode("utf-16" if attack == "utf16-entity" else "utf-8"))
     with pytest.raises(BookCastError):
         validate_source(path, "epub", 1024 * 1024)
+
+
+def unsafe_epub(path):
+    book = epub.EpubBook()
+    book.set_identifier("audit-unsafe-epub")
+    book.set_title("Audit fixture")
+    book.set_language("en")
+    page = epub.EpubHtml(title="One", file_name="one.xhtml", lang="en")
+    page.content = "<h1>Chapter 1</h1><p>A concrete idea about trade.</p>"
+    book.add_item(page)
+    book.spine = [page]
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    epub.write_epub(str(path), book)
+    # The extra member does not affect ordinary EPUB parsing, so a parser-only
+    # check would silently accept this unsafe archive on the primary CLI path.
+    with zipfile.ZipFile(path, "a") as archive:
+        archive.writestr("../escape.xhtml", "<p>outside</p>")
+
+
+def test_direct_generate_rejects_unsafe_epub_before_parsing(tmp_path):
+    path = tmp_path / "unsafe.epub"
+    unsafe_epub(path)
+    with pytest.raises(BookCastError, match="EPUB"):
+        Pipeline(MockLLMProvider(), MockTTSProvider(), tmp_path / "output").generate(path)
+    assert not list((tmp_path / "output").glob("*/podcast.mp3"))
+
+
+def test_pre_fix_completed_parse_cannot_skip_source_validation_on_resume(tmp_path):
+    path = tmp_path / "unsafe.epub"
+    unsafe_epub(path)
+    pipeline = Pipeline(MockLLMProvider(), MockTTSProvider(), tmp_path / "output")
+    # Simulate a completed job created before source validation covered direct
+    # generation. Its parse result and audio are valid according to old hashes.
+    with patch("bookcast.pipeline.validate_source"):
+        job = pipeline.generate(path)
+    assert load_manifest(job / "manifest.json").steps["parse"].status == "completed"
+    with pytest.raises(BookCastError, match="EPUB"):
+        pipeline.generate(path, resume=True)
+
+
+def test_direct_generate_rejects_source_over_100_mib_before_import(tmp_path):
+    path = tmp_path / "oversized.txt"
+    with path.open("wb") as stream:
+        stream.truncate(100 * 1024 * 1024 + 1)
+    with pytest.raises(BookCastError, match="大小|上限"):
+        Pipeline(MockLLMProvider(), MockTTSProvider(), tmp_path / "output").generate(path)
+    assert not list((tmp_path / "output").glob("*/source/input.txt"))
 
 
 @pytest.mark.parametrize("body,fmt", [(b"<html>Login</html>", "txt"), (b"binary\x00", "txt"),

@@ -25,12 +25,26 @@ FILES = {
 
 
 def verify_assets(root: Path) -> dict[str, str]:
+    # Transformers may read optional files (for example processor_config.json)
+    # before falling back to the pinned preprocessor_config.json.  A directory
+    # with all required hashes plus extra files is therefore not a fixed model.
+    expected_dirs = {parent.as_posix() for name in FILES
+                     for parent in list(Path(name).parents)[:-1]}
+    try:
+        if not root.is_dir() or root.is_symlink():
+            raise ValueError("invalid model directory")
+        for path in root.rglob("*"):
+            relative = path.relative_to(root).as_posix()
+            if (path.is_symlink() or
+                    not ((relative in FILES and path.is_file()) or
+                         (relative in expected_dirs and path.is_dir()))):
+                raise ValueError("unexpected model asset")
+    except (OSError, ValueError):
+        raise BookCastError("Qwen本地模型缺失或校验失败；请按TTS指南准备固定官方快照，generate不会下载模型。") from None
     for name, expected in FILES.items():
         path = root / name
         try:
-            if (not path.is_file() or path.is_symlink()
-                    or (root / "speech_tokenizer").is_symlink()
-                    or sha256_file(path) != expected):
+            if not path.is_file() or path.is_symlink() or sha256_file(path) != expected:
                 raise ValueError("invalid asset")
         except (OSError, ValueError):
             raise BookCastError("Qwen本地模型缺失或校验失败；请按TTS指南准备固定官方快照，generate不会下载模型。") from None

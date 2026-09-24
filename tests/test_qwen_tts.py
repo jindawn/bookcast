@@ -60,6 +60,26 @@ def test_assets_reject_corruption_and_symlinks(tmp_path, monkeypatch):
         qwen_assets.verify_assets(tmp_path)
 
 
+def test_assets_reject_unpinned_optional_processor_and_symlinks(tmp_path, monkeypatch):
+    asset = tmp_path / "preprocessor_config.json"
+    asset.write_text('{"processor": "official"}')
+    monkeypatch.setattr(qwen_assets, "FILES", {asset.name: sha256_file(asset)})
+    assert qwen_assets.verify_assets(tmp_path)
+
+    # Transformers looks for this optional name ahead of the pinned one.
+    optional = tmp_path / "processor_config.json"
+    optional.write_text('{"processor": "attacker"}')
+    with pytest.raises(BookCastError, match="校验失败"):
+        qwen_assets.verify_assets(tmp_path)
+    optional.unlink()
+
+    outside = tmp_path.parent / f"{tmp_path.name}-outside-processor.json"
+    outside.write_text('{}')
+    optional.symlink_to(outside)
+    with pytest.raises(BookCastError, match="校验失败"):
+        qwen_assets.verify_assets(tmp_path)
+
+
 @pytest.fixture
 def runtime(monkeypatch):
     np = pytest.importorskip("numpy")

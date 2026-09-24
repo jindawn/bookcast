@@ -16,7 +16,7 @@ UV_PROJECT_ENVIRONMENT=data/qwen-env uv sync --frozen --extra qwen
 
 qwen extra才安装PyTorch和Qwen依赖；普通CLI和Kokoro不需要。精确复现本次研究环境可用[冻结依赖](../scripts/spikes/qwen-macos-requirements.txt)，再在该环境安装本项目。模型约4.52GB，单独保存在被Git忽略的data目录，**generate不会联网下载**。
 
-按[选型记录中的固定下载清单](TTS_PROVIDER_EVALUATION.md)从官方HF仓库准备`data/phase11/model`。必须固定修订`0c0e3051f131929182e2c023b9537f8b1c68adfe`、保留声明Apache-2.0的README及两个safetensors。Adapter在首次使用时校验全部配置/词表/权重SHA，任何缺失、篡改或资产符号链接都会停止；不允许下载自定义Python代码或替换成第三方量化权重。代码LICENSE和模型许可依据见选型记录。
+按[选型记录中的固定下载清单](TTS_PROVIDER_EVALUATION.md)从官方HF仓库准备`data/phase11/model`。必须固定修订`0c0e3051f131929182e2c023b9537f8b1c68adfe`、保留声明Apache-2.0的README及两个safetensors。Adapter在首次使用时校验全部配置/词表/权重SHA，任何缺失、篡改、额外文件或资产符号链接都会停止；特别不能放入未固定的 `processor_config.json`。不允许下载自定义Python代码或替换成第三方量化权重。代码LICENSE和模型许可依据见选型记录；锁定运行时的上游安全公告及可分发限制见 [Phase 16 审计](PHASE16_AUDIT.md)。
 
 ```sh
 data/qwen-env/bin/bookcast doctor --config examples/qwen-local.toml
@@ -59,7 +59,7 @@ Web 需要先按 [WEB.md](WEB.md) 构建页面；不使用 Web 时只需 `uv syn
 
 `tts setup` 默认安装到 data/models，并尝试新建 bookcast.toml；使用 `--config-output` 可以保留已有 LLM 配置。文件已存在则停止，不覆盖。手工合并时参考 [examples/tts-local.toml](../examples/tts-local.toml)。示例 LLM 仍是 Mock，真实人声不意味着已经使用真实语言模型理解书籍。付费 LLM/TTS 没有被自动启用，也不作为隐式失败回退。
 
-模型包约 350 MB，安装建议至少留 1 GB 空间。固定官方发布 URL、字节上限、SHA-256，限量展开且拒绝路径穿越、链接、特殊文件与重复成员。保留上游 LICENSE 和逐文件校验收据 bookcast-model.json；不运行包内脚本。已安装完整模型可复用；损坏时报告错误，安装到新的 `--model-dir` 后更新配置，不覆盖原文件。下载安装中断只重试安装，不支持包下载 Range 续传。
+模型包约 350 MB，安装建议至少留 1 GB 空间。固定官方发布 URL、字节上限、SHA-256，限量展开且拒绝路径穿越、链接、特殊文件与重复成员。保留上游 LICENSE 和逐文件校验收据 bookcast-model.json；校验时还与独立固定的官方资产 fingerprint 比对，修改文件后伪造收据也不能通过。不运行包内脚本。已安装完整模型可复用；损坏时报告错误，安装到新的 `--model-dir` 后更新配置，不覆盖原文件。下载安装中断只重试安装，不支持包下载 Range 续传。
 
 网络无法访问 GitHub 时可在有网络的环境取得相同官方包，传入 `bookcast tts setup --archive /path/to/kokoro-multi-lang-v1_0.tar.bz2 --config-output data/tts-local.toml`，仍验证固定校验值。
 

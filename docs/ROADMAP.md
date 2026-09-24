@@ -187,13 +187,22 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 
 ### Phase 15：V1 Release Engineering 与完整链路验收
 
-**状态：工程验收完成并提交；当前包版本保持 0.1.0 / pre-1.0。首次 GitHub Actions 远程执行、维护者项目许可证选择和分发资产审查仍是发布前人工事项。**
+**状态：工程验收完成并提交；当前包版本保持 0.1.0 / pre-1.0。基线提交 `eb3bc6c` 的首次 GitHub Actions 三个 job 已通过；维护者项目许可证选择和分发资产审查仍是发布前人工事项。**
 
 1. GitHub Actions 分开验证 Python Core、Web 与静态状态/文档；默认只运行 unit/integration、compileall、project validator 和 Mock MP3/M4B 冒烟，不访问收费 API、不下载 Qwen。
 2. pytest 默认选择 `unit` / `integration`；`live`、`large_model`、`manual_listening` 明确隔离并由人工 opt-in。
 3. 临时干净检出验证 install、doctor、Mock、Web、MP3、M4B；67 章、2.47 MB 公有领域样本完成 Mock pipeline、manifest、0 字节增长恢复及 20 个 M4B 节目章节验证。全新获取该长书的测试保留为 opt-in，当前网络 DNS/代理阻止了来源地址校验。
 4. 记录第三方组件与模型许可边界，不替维护者选择 BookCast 许可证；在 PyMuPDF 与 Kokoro 数据许可确认前保持发布阻塞。
 5. 建立按 verified/manual/optional/blocked 区分证据的 Release Checklist；发布前保持 0.1.0/pre-1.0，直到分发阻塞解决。
+
+### Phase 16：V1 Principal Engineer Audit
+
+**状态：已完成全仓审计与确认的 High 最小修复；V1 可分发 release candidate 仍受许可证与资产通知门槛阻塞。证据和逐项 backlog 见 [PHASE16_AUDIT.md](PHASE16_AUDIT.md)。**
+
+1. 对 Source/LLM/TTS/Jobs/Export/Web/Secrets/Supply chain 按实际 HEAD 构造反例，不以测试数量代替架构审查。
+2. 修复直接 `generate` 绕过本地文件安全校验、Kokoro 可伪造安装收据、Qwen 可加载未固定可选模型配置，新增回归；其余 Medium/Low 记录而不扩大 Core 修改。
+3. 重新验证基线远端 Actions、全量离线测试、Web/Playwright、Python/npm 锁定依赖公告、秘密与资产完整性；收费服务和大型推理不在本审计中重跑。
+4. 保持 0.1.0/pre-1.0；维护者先解决项目 LICENSE、PyMuPDF 许可路径和 Kokoro 数据通知，再判断可分发 release candidate。Qwen 继续 experimental。
 
 ### 后续候选
 

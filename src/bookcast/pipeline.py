@@ -17,8 +17,12 @@ from .parsers import parse_book
 from .provider_api import LLMProvider, TTSProvider, ProviderError, ProviderStatus, ErrorKind, classify_error
 from .provider_chain import ProviderChain, provider_config_hash
 from .prompts import ANALYSIS_VERSION, SCRIPT_VERSION, TTS_VERSION, analysis_prompt, script_prompt
+from .source_validation import validate_source
 from .storage import (artifact_path, atomic_target, cleanup_orphan_temporary_artifacts,
                       fingerprint, job_lock, sha256_file, write_json)
+
+
+MAX_INPUT_BYTES = 100 * 1024 * 1024
 
 
 def load_manifest(path: Path) -> Manifest:
@@ -60,6 +64,8 @@ class Pipeline:
         source_format = source.suffix.lower().lstrip(".")
         if source_format not in {"epub", "pdf", "txt"}:
             raise BookCastError("仅支持本地 EPUB、PDF 和 TXT 文件。")
+        if source.stat().st_size > MAX_INPUT_BYTES:
+            raise BookCastError("源文件超过 100 MiB 大小上限。")
         digest = sha256_file(source)
         if metadata_seed and (metadata_seed.source_sha256 != digest or metadata_seed.source_format != source_format):
             raise BookCastError("获取元数据与源文件不一致。")
@@ -393,6 +399,9 @@ class _Runner:
             return [source_relative]
 
         self.step("input", manifest.source_sha256, import_source)
+        # A pre-audit parse checkpoint may have accepted an unsafe container.
+        # Recheck the imported bytes before either parsing or reusing that checkpoint.
+        validate_source(self.path(source_relative), manifest.source_format, MAX_INPUT_BYTES)
 
         def parse() -> list[str]:
             metadata = BookMetadata(book_id=manifest.book_id, title=Path(manifest.source_name).stem,

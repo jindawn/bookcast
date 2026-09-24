@@ -22,7 +22,7 @@ from bookcast.provider_chain import ProviderChain
 from bookcast.provider_config import ProviderSpec, LocalTTSConfig, load_config
 from bookcast.providers import MockLLMProvider, MockTTSProvider
 from bookcast.speech import split_text
-from bookcast.storage import cleanup_orphan_temporary_artifacts, sha256_file
+from bookcast.storage import cleanup_orphan_temporary_artifacts, fingerprint, sha256_file
 from bookcast import tts_setup
 
 DEMO = Path(__file__).resolve().parents[1] / "examples/content-demo.txt"
@@ -158,12 +158,21 @@ def test_installer_atomic_integrity_and_reuse(tmp_path, monkeypatch):
     monkeypatch.setattr(tts_setup, "MODEL_SHA256", sha256_file(archive))
     monkeypatch.setattr(tts_setup, "MODEL_BYTES", archive.stat().st_size)
     root = tts_setup.install_model(tmp_path / "models", archive)
+    receipt_path = root / tts_setup.RECEIPT
+    official_files = json.loads(receipt_path.read_text())["files"]
+    monkeypatch.setattr(tts_setup, "OFFICIAL_ASSET_FINGERPRINT", fingerprint(official_files))
     before = (root / "model.onnx").stat().st_mtime_ns
     assert tts_setup.install_model(root.parent) == root  # no download on repeat
     assert (root / "model.onnx").stat().st_mtime_ns == before
     (root / "model.onnx").write_text("corrupt")
     with pytest.raises(BookCastError, match="校验失败"):
         tts_setup.install_model(root.parent)
+    # Rewriting the mutable receipt used to make tampered weights appear official.
+    forged_receipt = json.loads(receipt_path.read_text())
+    forged_receipt["files"]["model.onnx"] = sha256_file(root / "model.onnx")
+    receipt_path.write_text(json.dumps(forged_receipt))
+    with pytest.raises(BookCastError, match="校验失败"):
+        tts_setup.verify_model(root)
     assert (root / "model.onnx").read_text() == "corrupt"  # never overwrite user data
 
 
