@@ -5,7 +5,7 @@
   "current_task": "DeepSeek chapter_analysis schema_error 诊断与恢复",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "3ff4eb360e4fcf9ecfffd7cafa280be4246a769c",
+  "last_verified_commit": "54257b4883b6d82831fa7c20bbbd777bf4c73714",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -113,8 +113,8 @@
       "name": "deepseek-schema-regression",
       "command": ".venv/bin/pytest -q tests/test_generation.py tests/test_providers.py tests/test_content.py tests/test_job_recovery.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "144 passed、1 deselected；覆盖DeepSeek字段错误诊断及retry保留章节，OpenAI兼容请求与畸形响应。另一次未隔离运行144 passed/1 failed：既有CLI测试受本机bookcast.toml指向DeepSeek且无key影响。 该CLI测试从隔离cwd运行另有1 passed，确认是本机配置干扰。",
+      "scope": "commit",
+      "summary": "144 passed、1 deselected；覆盖DeepSeek字段错误诊断及retry保留章节，OpenAI兼容请求与畸形响应。另一次未隔离运行144 passed/1 failed：既有CLI测试受本机bookcast.toml指向DeepSeek且无key影响。 该CLI测试从隔离cwd运行另有1 passed，确认是本机配置干扰。 功能提交54257b4在提交后project validator及diff check通过；专项101 passed。",
       "checked_at": "2026-09-24T19:17:06Z"
     },
     {
@@ -947,5 +947,5 @@
       "purpose": "PDF/EPUB检测、来源、恢复、安全反例与显式真实Vision验收"
     }
   ],
-  "updated_at": "2026-09-24T19:17:23Z"
+  "updated_at": "2026-09-24T19:18:03Z"
 }
