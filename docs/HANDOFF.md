@@ -8,7 +8,7 @@
 
 修改`web/app/page.tsx`避免选中项缺席时展示别的任务音频，Web状态明确给出本任务LLM/TTS配置和“最近调用”。`pipeline.py`对TTS已删除Provider不复用缓存；`speech.py`禁止真实+Mock混链并在完成前校验每段audio_kind/活跃Attempt来源；`content.py`和legacy流程均调用；`jobs.py`对历史配置为真实TTS却留下Mock音频的completed Job只读标为可恢复，隐藏Web下载。没有修改现存用户Job。
 
-离线六模块189 passed，隔离cwd补测1 passed，Web typecheck/build与聚焦Playwright 1 passed。原书第3章短文本用当前保存配置的Kokoro独立合成7.13秒speech WAV，临时文件已删除；没有DeepSeek key，未启动整本retry，原任务manifest SHA保持不变。旧Web服务须重启并刷新前端构建。下一步有key时显式retry原Job；无需删Mock音频，因为原Job根本没有Mock音频。
+离线六模块189 passed，隔离cwd补测1 passed，Web typecheck/build与聚焦Playwright 1 passed。原书第3章短文本用当前保存配置的Kokoro独立合成7.13秒speech WAV，临时文件已删除；没有DeepSeek key，未启动整本retry，原任务manifest SHA保持不变。旧Web服务须重启并刷新前端构建。已验证功能提交589479fcdca65356347b363f15d0aac997198f48，未push。下一步有key时显式retry原Job；无需删Mock音频，因为原Job根本没有Mock音频。
 
 ## 2026-09-25 Web 历史记录兼容性追查
 

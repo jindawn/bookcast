@@ -5,7 +5,7 @@
   "current_task": "Web 任务身份与真实 TTS 来源恢复校验",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "18372283b55680d294d7c64f07b70a78fb5d6495",
+  "last_verified_commit": "589479fcdca65356347b363f15d0aac997198f48",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -115,8 +115,8 @@
       "name": "web-real-tts-resume-and-identity",
       "command": ".venv/bin/pytest -q tests/test_content.py tests/test_tts.py tests/test_web.py tests/test_job_recovery.py tests/test_generation.py tests/test_providers.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'; npm --prefix web run typecheck; npm --prefix web run build; npm --prefix web run test:e2e -- --grep 'missing selected task'",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "Python 189 passed/1 deselected；隔离cwd补测该既有CLI用例1 passed。Web typecheck/build通过，聚焦Playwright 1 passed。原书短文本Kokoro实际本地合成7.13秒speech；未调DeepSeek或修改原Job。",
+      "scope": "commit",
+      "summary": "Python 189 passed/1 deselected；隔离cwd补测该既有CLI用例1 passed。Web typecheck/build通过，聚焦Playwright 1 passed。原书短文本Kokoro实际本地合成7.13秒speech；未调DeepSeek或修改原Job。 功能提交589479f后project validator与提交diff检查通过。",
       "checked_at": "2026-09-24T19:41:16Z"
     },
     {
@@ -966,5 +966,5 @@
       "purpose": "PDF/EPUB检测、来源、恢复、安全反例与显式真实Vision验收"
     }
   ],
-  "updated_at": "2026-09-24T19:41:16Z"
+  "updated_at": "2026-09-24T19:41:39Z"
 }
