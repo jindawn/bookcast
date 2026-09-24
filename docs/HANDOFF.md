@@ -1,5 +1,25 @@
 # 给下一位 Coding Agent
 
+更新时间：2026-09-25。先读 AGENTS.md 和项目文档并核对 Git。
+
+## 当前目标和证据
+
+用户报告《狂人日记》DeepSeek `schema_error`。本地两份对应 Web 上传实际是 EPUB（不是 PDF），均在 `analysis:0004:0001` 失败，前 3 章成功。失败段是《鸭的喜剧》。两次都有 DeepSeek `reported_model=deepseek-flash` 和 usage，HTTP 已收到响应。旧实现丢弃了响应解析/Pydantic 的底层异常；未保存原始响应。当前进程没有 DeepSeek key，因此无法还原历史的具体无效字段，不能声称真实 API 已修好。
+
+## 修改和验证
+
+- `src/bookcast/adapters/compatible.py`：确认当前仅发送 `response_format=json_object`，未发 OpenAI `json_schema/strict`；DeepSeek 端补充 JSON schema 类型、空数组和必填项指令。响应错误转为安全的 `error_type`、`validation_field`、`validation_reason`，保留严格 Pydantic 校验。
+- `provider_api.py`、`provider_chain.py`、`models.py`、`pipeline.py`：错误元数据沿真实调用链进入 Attempt 和 events，不保存响应内容或密钥。`tests/test_generation.py` 覆盖正常请求、错误字段、显式 retry 保留前章及 OpenAI 不变；已有 malformed 测试仍通过。
+- 专项 `tests/test_generation.py tests/test_providers.py` 100 passed；扩展四模块隔离本地配置后 144 passed、1 deselected。未隔离运行有一项既有 CLI 测试失败，因为本机 `bookcast.toml` 选择 DeepSeek 且无 key，和本次改动无关。项目 validator、compileall、diff check 待最终提交前复验。
+
+## 下一步
+
+在有 `DEEPSEEK_API_KEY` 的原服务环境对现存 Web Job 显式 retry。检查 `logs/events.jsonl` 的 `error_type`、`validation_field`、`validation_reason`；若仍失败，针对确切字段继续修复，不要保存/输出原始响应或 key。不要从当前证据推断旧失败的具体字段，不要重新生成前 3 章。任务 ID 见本地 `data/web/jobs`（被 Git 忽略）。其他 Phase17 发布阻塞仍见 STATE.json。
+
+---
+
+# 给下一位 Coding Agent
+
 更新时间：2026-09-24T05:16:45Z。按 [AGENTS.md](../AGENTS.md) 阅读项目文档并核对实际代码与 Git。OCR 详情见 [OCR.md](OCR.md)，架构决定见 D-021；聊天记录不是项目状态。
 
 ## 当前目标与代码状态

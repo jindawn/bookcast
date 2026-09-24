@@ -323,3 +323,9 @@
 - 默认完整离线 `410 passed、1 skipped、5 deselected、10 subtests`；显式真实本机 Vision `1 passed`，覆盖中文、英文、旋转页与隔离进程。没有云 AI/TTS 请求、模型下载或已有真实音频重生成。
 - 文档记录 OCR 当前仅 macOS、复杂版面/非 macOS 未验收、parse 未提交前恢复会重做整份识别；不改变 V1 发布许可阻塞。
 - 功能提交 `3ff4eb360e4fcf9ecfffd7cafa280be4246a769c` 上再次通过完整410项离线回归、显式真实Vision 1项、validator、compileall、提交差异检查；STATE按D-006记录已验证提交，交接快照将另行提交。未推送。
+
+## 2026-09-25 DeepSeek chapter analysis schema_error
+
+- 本地两份名为《狂人日记》的 Web 上传实际是 EPUB，均在 `analysis:0004:0001` 失败；前 3 章已完成。两次失败均有 DeepSeek usage 和 reported_model，表明收到服务响应。旧 Attempt 只记 `schema_error`，没有原始响应、ValidationError 字段或解析异常；当前进程没有 DeepSeek key，历史底层字段不可证实。
+- 追踪 `content.call` → `CompatibleLLMProvider._chat/generate_structured` → `ProviderChain` → `Pipeline`，确认请求仅使用 `response_format=json_object`，没有 `json_schema` 或 `strict`。JSON 解析、响应 envelope 和 Pydantic 错误原来被统一折叠。现在 DeepSeek 适配器补充 schema 类型/空数组指令，Attempt/events 持久化安全的错误类型、字段与 Pydantic 错误代码；不保存响应或凭证。
+- 离线注入 invalid `core_ideas: null` 覆盖字段诊断、显式 retry 与前章缓存；正常 DeepSeek/OpenAI 请求和 malformed 响应由相关测试覆盖。真实 API 未复验。

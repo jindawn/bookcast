@@ -33,15 +33,19 @@ FAILOVER_ERRORS = frozenset({ErrorKind.RATE_LIMIT, ErrorKind.QUOTA, ErrorKind.UN
 class ProviderError(BookCastError):
     """No upstream exception/body/header is interpolated into persisted errors."""
 
-    def __init__(self, kind: ErrorKind):
+    def __init__(self, kind: ErrorKind, *, error_type: str | None = None,
+                 validation_field: str | None = None, validation_reason: str | None = None):
         self.kind = ErrorKind(kind)
+        self.error_type = error_type
+        self.validation_field = validation_field
+        self.validation_reason = validation_reason
         self.retryable = self.kind in FAILOVER_ERRORS or self.kind == ErrorKind.INTERRUPTED
         super().__init__(f"Provider 调用失败：{self.kind.value}")
 
 
 def classify_error(exc: BaseException) -> ProviderError:
     if isinstance(exc, ProviderError):
-        return ProviderError(exc.kind)
+        return exc
     if isinstance(exc, (KeyboardInterrupt, SystemExit)):
         return ProviderError(ErrorKind.INTERRUPTED)
     if isinstance(exc, TimeoutError):

@@ -191,6 +191,9 @@ class Attempt(ExecutionModel):
     timestamp: str = Field(default_factory=utc_now)
     error: str | None = None
     retryable: bool = False
+    error_type: str | None = None
+    validation_field: str | None = None
+    validation_reason: str | None = None
 
     @computed_field
     @property

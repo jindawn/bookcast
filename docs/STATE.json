@@ -2,7 +2,7 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-17",
-  "current_task": "Phase 17 本地 OCR 技术验收与接力收尾",
+  "current_task": "DeepSeek chapter_analysis schema_error 诊断与恢复",
   "task_status": "completed",
   "branch": "main",
   "last_verified_commit": "3ff4eb360e4fcf9ecfffd7cafa280be4246a769c",
@@ -98,7 +98,8 @@
     "Phase 16功能提交acecfbfc336112d2a3fc226cd3ed334a6bfc0fa4验证：完整离线398 passed/5 deselected/10 subtests，Web typecheck/build/3项Playwright、project validator、compileall、lock/diff通过；无AI调用、模型推理或下载。",
     "Phase 17：按页检测text/image/mixed/blank，仅显式--ocr auto调用隔离Apple Vision识别PDF扫描区域和EPUB内嵌图片；不改内容/语音/导出链路。",
     "OCR源文本块保存源SHA、页/资源、区域、置信度和低置信warning；parse指纹含OCR模式/适配器版本，完成任务resume复用。",
-    "Phase 17完整离线410 passed/1 skipped/5 deselected/10 subtests；真实本机Apple Vision中文、英文、90度页及隔离进程1 passed，无云API和模型下载。"
+    "Phase 17完整离线410 passed/1 skipped/5 deselected/10 subtests；真实本机Apple Vision中文、英文、90度页及隔离进程1 passed，无云API和模型下载。",
+    "DeepSeek schema_error 诊断：本地两份《狂人日记》EPUB Job 均在 analysis:0004:0001 失败；收到响应及 usage，但历史原始响应和校验异常未保存，当前环境无 DeepSeek key，不能还原历史具体坏字段。已在适配器强化 DeepSeek JSON schema 指令，保留严格校验；Attempt/events 保存安全错误类型/字段/原因，显式 retry 回归保留前章。"
   ],
   "in_progress": [],
   "next_actions": [
@@ -108,6 +109,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "deepseek-schema-regression",
+      "command": ".venv/bin/pytest -q tests/test_generation.py tests/test_providers.py tests/test_content.py tests/test_job_recovery.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "144 passed、1 deselected；覆盖DeepSeek字段错误诊断及retry保留章节，OpenAI兼容请求与畸形响应。另一次未隔离运行144 passed/1 failed：既有CLI测试受本机bookcast.toml指向DeepSeek且无key影响。 该CLI测试从隔离cwd运行另有1 passed，确认是本机配置干扰。",
+      "checked_at": "2026-09-24T19:17:06Z"
+    },
     {
       "name": "phase17-full-offline",
       "command": ".venv/bin/pytest -q",
@@ -532,7 +541,8 @@
     "Phase16审计Medium M-01～M-07、Low L-01～L-02仍在docs/PHASE16_AUDIT.md backlog，未在本阶段修复；其中M-06不能承诺服务端恰好一次计费。",
     "可选实验Qwen extra的uv全锁审计有14条OSV记录（含别名）；不随默认/可再分发V1包分发，待上游兼容更新和本机复验。",
     "Phase17 OCR仅macOS Apple Vision显式可用；复杂多栏/脚注、矢量描边字及非macOS OCR未验收，低置信需核原页。",
-    "OCR parse Step在提交前崩溃会重新识别整份文档；完成后resume复用有效Artifact，尚无逐页OCR持久缓存。"
+    "OCR parse Step在提交前崩溃会重新识别整份文档；完成后resume复用有效Artifact，尚无逐页OCR持久缓存。",
+    "《狂人日记》两份现存 Web Job 的历史 schema_error 具体字段无法追溯：旧日志仅有类型和 usage，未保存响应；当前进程无 DeepSeek key。修复后需显式 retry 获得真实响应与安全字段诊断，尚未宣称真实 API 复验。"
   ],
   "blockers": [],
   "important_files": [
@@ -937,5 +947,5 @@
       "purpose": "PDF/EPUB检测、来源、恢复、安全反例与显式真实Vision验收"
     }
   ],
-  "updated_at": "2026-09-24T05:16:45Z"
+  "updated_at": "2026-09-24T19:17:23Z"
 }

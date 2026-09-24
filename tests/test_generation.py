@@ -143,6 +143,64 @@ def install_mock_wire(monkeypatch, fail_second=False):
     return calls
 
 
+def test_deepseek_invalid_analysis_reports_field_and_retry_preserves_chapters(tmp_path, monkeypatch):
+    source = Path(__file__).parents[1]/'examples/content-demo.txt'
+    requests = []
+    fail = [True]
+    models = {'analysis': EvidenceAnalysis, 'synthesis': Synthesis, 'dialogue': SegmentScript,
+              'consistency': ConsistencyReview}
+    class Transport:
+        def open(self, req, timeout):
+            sent = json.loads(req.data)
+            data = json.loads(sent['messages'][-1]['content'])
+            requests.append(data)
+            content = MockLLMProvider().generate_structured(sent['messages'][-1]['content'],
+                                                              models[data['operation']]).model_dump()
+            if data['operation'] == 'analysis' and data['chapter']['id'] == '0003' and fail[0]:
+                fail[0] = False
+                content['core_ideas'] = None
+            return io.BytesIO(json.dumps({'choices': [{'message': {'content': json.dumps(content)},
+                'finish_reason': 'stop'}], 'model': 'deepseek-flash',
+                'usage': {'prompt_tokens': 10, 'completion_tokens': 5}}).encode())
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    provider = CompatibleLLMProvider(ProviderSpec(name='deepseek', kind='llm', type='openai-compatible',
+        model='deepseek-flash', base_url='https://api.deepseek.com'))
+    pipeline = Pipeline(provider, MockTTSProvider(), tmp_path/'out')
+    with pytest.raises(Exception, match='schema_error'):
+        pipeline.generate(source)
+    job = next((tmp_path/'out').iterdir())
+    before = {p.name: sha256_file(p) for p in (job/'analysis').glob('000*.json')}
+    failed = load_manifest(job/'manifest.json').ai_calls[-1]
+    assert (failed.task, failed.error_type, failed.validation_field, failed.validation_reason) == (
+        'analysis:0003:0001', 'ValidationError', 'core_ideas', 'list_type')
+    events = [json.loads(line) for line in (job/'logs/events.jsonl').read_text().splitlines()]
+    assert any(e['event'] == 'attempt' and e['error_type'] == 'ValidationError'
+               and e['chapter'] == '0003' and e['model'] == 'deepseek-flash' for e in events)
+    count = len(requests)
+    pipeline.resume_job(job, retry=True)
+    assert all(sha256_file(job/'analysis'/name) == digest for name, digest in before.items())
+    assert all(r.get('chapter', {}).get('id') not in {'0001', '0002'}
+               for r in requests[count:] if r['operation'] == 'analysis')
+
+
+def test_deepseek_schema_guidance_is_adapter_only(monkeypatch):
+    sent = []
+    class Transport:
+        def open(self, req, timeout):
+            sent.append(json.loads(req.data))
+            return io.BytesIO(json.dumps({'choices': [{'message': {'content':
+                '{"themes":[{"title":"题","summary":"说明","claim_ids":["c1"],"importance":2}]}'},
+                'finish_reason': 'stop'}]}).encode())
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    for base_url in ('https://api.deepseek.com', 'https://api.openai.com/v1'):
+        provider = CompatibleLLMProvider(ProviderSpec(name='remote', kind='llm', type='openai-compatible',
+            model='test-model', base_url=base_url))
+        assert provider.generate_structured('Return JSON', Synthesis).themes[0].title == '题'
+    assert sent[0]['response_format'] == sent[1]['response_format'] == {'type': 'json_object'}
+    assert 'Every listed property' in sent[0]['messages'][0]['content']
+    assert 'Every listed property' not in sent[1]['messages'][0]['content']
+
+
 def test_completed_calls_resume_and_only_effective_changes_invalidate(tmp_path, monkeypatch):
     calls = install_mock_wire(monkeypatch)
     source = Path(__file__).parents[1]/'examples/content-demo.txt'

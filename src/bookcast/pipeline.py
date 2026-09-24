@@ -250,7 +250,7 @@ class _Runner:
         if changed:
             self.save()
 
-    def event(self, event, *, state=None, error=None):
+    def event(self, event, *, state=None, error=None, details=None):
         m = self.manifest
         completed = sum(s.status in {'completed', 'skipped'} for s in m.steps.values())
         chapter_ids = []
@@ -269,6 +269,8 @@ class _Runner:
                 'chapters_completed': sum(m.steps.get(f'analysis:{cid}', StepRecord()).status in {'completed','skipped'}
                                           for cid in chapter_ids),
                 'chapters_total': len(chapter_ids), 'error': error or m.error_kind or self.last_error}
+        if details:
+            data.update(details)
         # Log I/O and a detached terminal must never convert durable success into a failed AI call.
         if self.log_enabled:
             try:
@@ -379,7 +381,12 @@ class _Runner:
         self.manifest.provider_status[f"{attempt.kind}:{attempt.provider}"] = report.model_dump(mode="json")
         self.current_provider = attempt.provider
         self.save()
-        self.event("attempt", state=attempt.state.value, error=attempt.error)
+        self.event("attempt", state=attempt.state.value, error=attempt.error,
+                   details={'model': attempt.model, 'chapter': attempt.task.split(':')[1]
+                            if attempt.task.startswith('analysis:') else None,
+                            'error_type': attempt.error_type,
+                            'validation_field': attempt.validation_field,
+                            'validation_reason': attempt.validation_reason})
 
     def ai_operation(self, name: str, kind: str, version: str, inputs: object, invoke: Callable) -> list[str]:
         digest = fingerprint(inputs)

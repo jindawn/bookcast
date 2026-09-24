@@ -80,6 +80,9 @@ class ProviderChain:
                     failure = ProviderError(ErrorKind.BUSINESS)
                 attempt.status = "failed_retryable" if failure.retryable else "failed_permanent"
                 attempt.error, attempt.retryable, attempt.timestamp = failure.kind.value, failure.retryable, utc_now()
+                attempt.error_type = failure.error_type or type(exc).__name__
+                attempt.validation_field = failure.validation_field
+                attempt.validation_reason = failure.validation_reason
                 observe(attempt)
                 self.statuses[provider.name] = ProviderStatus.from_error(provider.name, provider.model, failure)
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):

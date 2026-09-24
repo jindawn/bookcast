@@ -18,6 +18,18 @@ QUOTA_CODES = {"insufficient_quota", "quota_exceeded", "quota_exhausted", "credi
                "organization_spend_limit_exceeded", "project_spend_limit_exceeded", "organization_usage_limit_exceeded"}
 
 
+def schema_failure(exc: Exception) -> ProviderError:
+    """Keep only Pydantic field names and error codes, never response values."""
+    if isinstance(exc, ValidationError):
+        first = exc.errors(include_url=False, include_context=False, include_input=False)[0]
+        field = '.'.join(str(part) for part in first['loc'] if isinstance(part, int)
+                         or (isinstance(part, str) and re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', part)))
+        reason = first['type'] if re.fullmatch(r'[a-z_]+', first['type']) else 'invalid'
+        return ProviderError(ErrorKind.SCHEMA, error_type='ValidationError',
+                             validation_field=field[:160] or '$', validation_reason=reason)
+    return ProviderError(ErrorKind.SCHEMA, error_type=type(exc).__name__)
+
+
 def classify_http(status: int, body: bytes) -> ProviderError:
     try:
         failure = json.loads(body).get("error", {})
@@ -128,7 +140,11 @@ class CompatibleLLMProvider(CompatibleBase):
         audit = self.generation_audit or resolve_generation('', self.spec.reasoning_policy, self.spec.generation)
         payload.update(audit.options.request_fields())
         if schema:
-            messages.insert(0, {"role": "system", "content": "Return only JSON matching this schema: " + json.dumps(schema)})
+            instruction = "Return only JSON matching this schema: " + json.dumps(schema)
+            if urlsplit(self.spec.base_url).hostname == 'api.deepseek.com':
+                # DeepSeek JSON mode guarantees syntax, not conformance to a supplied schema.
+                instruction += " Every listed property must have the schema type; use [] for empty arrays, never null. Do not omit required properties."
+            messages.insert(0, {"role": "system", "content": instruction})
             payload["response_format"] = {"type": "json_object"}
         try:
             response = json.loads(self._request("chat/completions", payload))
@@ -145,8 +161,10 @@ class CompatibleLLMProvider(CompatibleBase):
             return text
         except ProviderError:
             raise
-        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
-            failure = ProviderError(ErrorKind.SCHEMA)
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+            failure = schema_failure(exc)
+            if isinstance(exc, ValueError) and str(exc) == 'incomplete response':
+                failure.validation_reason = 'finish_reason'
             self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
             raise failure from None
 
@@ -156,7 +174,7 @@ class CompatibleLLMProvider(CompatibleBase):
     def generate_structured(self, prompt: str, response_model: type[T]) -> T:
         try:
             return response_model.model_validate_json(self._chat(prompt, response_model.model_json_schema()))
-        except ValidationError:
-            failure = ProviderError(ErrorKind.SCHEMA)
+        except ValidationError as exc:
+            failure = schema_failure(exc)
             self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
             raise failure from None
