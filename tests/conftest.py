@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import pytest
+import socket
+from types import SimpleNamespace
+from pathlib import Path
+import os
 
 
 # Keep each module in one tier. Provider contract, filesystem, and CLI compositions
@@ -41,3 +45,51 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             "Tests must be assigned to a cost tier in tests/conftest.py: "
             + ", ".join(sorted(set(unknown)))
         )
+
+
+@pytest.fixture(autouse=True)
+def forbid_offline_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail immediately if an offline test reaches a real socket."""
+    if request.node.get_closest_marker("live") or request.node.get_closest_marker("large_model"):
+        return
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Offline test attempted real network access")
+
+    monkeypatch.setattr(socket.socket, "connect", forbidden)
+    monkeypatch.setattr(socket.socket, "connect_ex", forbidden)
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    monkeypatch.setattr(socket, "getaddrinfo", forbidden)
+    guard_dir = str(Path(__file__).parent / "offline_guard")
+    monkeypatch.setenv("BOOKCAST_TEST_OFFLINE", "1")
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join(filter(None, (guard_dir, os.environ.get("PYTHONPATH")))))
+
+
+@pytest.fixture(autouse=True)
+def fake_gemini_time(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Offline tests keep the production interval but advance virtual time."""
+    if request.node.get_closest_marker("live") or request.node.get_closest_marker("large_model"):
+        return
+    from bookcast.adapters import gemini
+
+    current = [1000.0]
+
+    def clock() -> float:
+        return current[0]
+
+    def sleeper(seconds: float) -> None:
+        current[0] += seconds
+
+    monkeypatch.setattr(gemini, "time", SimpleNamespace(time=clock, sleep=sleeper))
+    monkeypatch.setattr(gemini.GeminiTTSProvider, "_last_request_time", 0.0)
+
+
+@pytest.fixture(autouse=True)
+def isolate_default_cli_config(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """CLI tests that exercise the implicit Mock default ignore a user's TOML."""
+    if request.node.name in {
+        "test_cli_modes_invalid_config_and_acquire_bridge",
+        "test_cli_generate_and_status",
+        "test_cli_local_file_generate_and_resume",
+    }:
+        monkeypatch.chdir(request.getfixturevalue("tmp_path"))

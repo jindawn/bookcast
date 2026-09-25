@@ -116,7 +116,7 @@ git diff --check
 
 用 `--resume --revise-segment 0002` 可重写指定片段，保留分析和规划，并按输入变化重建下游。旧 pipeline_version=1 任务保持原流水线；分层任务的提示/schema升级会使相关缓存失效，下游按实际依赖传播。规则、缓存和限制见 [CONTENT.md](docs/CONTENT.md)，实际运行样本见 [PHASE4_DEMO.md](docs/PHASE4_DEMO.md)。
 
-`python3 scripts/validate_project.py` 校验项目文档/状态。安装 dev 和 web extras 后，`.venv/bin/python -m pytest -q` 运行 Core、CLI、Skill 与 API 全部测试，不需要互联网。仅使用 CLI 时 `uv sync` 即可，不需要 Node 或 Web extras。
+`python3 scripts/validate_project.py` 校验项目文档/状态。安装 dev 和 web extras 后，`.venv/bin/python -m pytest -q` 运行 Core、CLI、Skill 与 API 全部测试。默认只运行 `unit` 与离线 `integration`，测试及其 Python 子进程意外打开网络连接会立即失败；Gemini 重试和限流测试使用虚拟时间，不等待生产的 10/20/25/40/60 秒。真实 Provider smoke 属 `live`，需要显式 marker 和对应环境变量，普通 `pytest` 不运行。仅使用 CLI 时 `uv sync` 即可，不需要 Node 或 Web extras。
 
 Mock TTS 生成的是主持人/嘉宾可区分的测试音调，并在导出元数据中标注“非人声”；它用于验证音频管线，不是自然语言朗读。PDF 当前按页形成章节，扫描页会产生 OCR 警告；EPUB 按 spine 顺序提取 HTML 正文。联网获取只走明确的公开来源，不绕过 DRM 或访问控制。
 

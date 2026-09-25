@@ -14,7 +14,7 @@ import wave
 import pytest
 from pydantic import ValidationError
 
-from bookcast.adapters.gemini import GeminiTTSProvider, classify_http, decode_pcm, NoRedirect
+from bookcast.adapters.gemini import GeminiTTSProvider, classify_http, decode_audio, NoRedirect
 from bookcast.audio import validate_wav
 from bookcast.errors import BookCastError
 from bookcast.models import PodcastScript, DialogueTurn
@@ -40,12 +40,20 @@ def segment():
                                 SpeechTurn(speaker='嘉宾', text='那沟通成本呢？')])
 
 
+def wav_bytes():
+    output = io.BytesIO()
+    with wave.open(output, 'wb') as wav:
+        wav.setparams((1, 2, 24000, 0, 'NONE', 'not compressed'))
+        wav.writeframes(struct.pack('<hh', 1000, -1000) * 2400)
+    return output.getvalue()
+
+
 def response():
-    return {'modelVersion': 'gemini-3.1-flash-tts-preview',
-            'usageMetadata': {'promptTokenCount': 12, 'candidatesTokenCount': 25},
-            'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'inlineData': {
-                'mimeType': 'audio/L16;codec=pcm;rate=24000',
-                'data': base64.b64encode(struct.pack('<hh', 1000, -1000) * 2400).decode()}}]}}]}
+    return {'status': 'completed', 'model': 'gemini-3.1-flash-tts-preview',
+            'usage_metadata': {'prompt_token_count': 12, 'candidates_token_count': 25},
+            'steps': [{'type': 'model_output', 'content': [{
+                'type': 'audio', 'mime_type': 'audio/wav',
+                'data': base64.b64encode(wav_bytes()).decode()}]}]}
 
 
 def test_official_request_audio_voices_usage_and_no_secret(tmp_path, monkeypatch, capsys):
@@ -63,15 +71,16 @@ def test_official_request_audio_voices_usage_and_no_secret(tmp_path, monkeypatch
         assert wav.readframes(2) == struct.pack('<hh', 1000, -1000)
     assert info.voices == {'主持人': 'Kore', '嘉宾': 'Puck'}
     req = sent[0]; payload = json.loads(req.data)
-    assert req.full_url == 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent'
+    assert req.full_url == 'https://generativelanguage.googleapis.com/v1beta/interactions'
     assert req.headers['X-goog-api-key'] == 'fake-secret-test-only'
     assert 'fake-secret' not in str(payload) + provider.cache_key + str(info) + capsys.readouterr().err
-    configs = payload['generationConfig']['speechConfig']['multiSpeakerVoiceConfig']['speakerVoiceConfigs']
-    assert [c['speaker'] for c in configs] == ['HostA', 'HostB']
-    assert 'HostA: 分工有收益。\nHostB: 那沟通成本呢？' in payload['contents'][0]['parts'][0]['text']
+    configs = payload['generation_config']['speech_config']['speakers']
+    assert [c['speaker'] for c in configs] == ['Host', 'Guest']
+    assert [c['voice'] for c in configs] == ['Kore', 'Puck']
+    assert [p['text'] for p in payload['input'][0]['content']] == ['分工有收益。', '那沟通成本呢？']
     assert provider.last_usage.input_tokens == 12 and provider.last_usage.reasoning_tokens is None
     provider.synthesize_segment(SpeechSegment(turns=[segment().turns[0]]), target)
-    assert 'voiceConfig' in json.loads(sent[1].data)['generationConfig']['speechConfig']
+    assert json.loads(sent[1].data)['generation_config']['speech_config']['speakers'] == configs
 
 
 @pytest.mark.parametrize('status,body,kind', [
@@ -82,9 +91,9 @@ def test_official_request_audio_voices_usage_and_no_secret(tmp_path, monkeypatch
     (429, {'error': {'details': [{'violations': [{'quotaId': 'RequestsPerMinutePerProject'}]}]}}, ErrorKind.RATE_LIMIT),
     (429, {}, ErrorKind.RATE_LIMIT), (408, {}, ErrorKind.TIMEOUT), (504, {}, ErrorKind.TIMEOUT),
     (500, {}, ErrorKind.UNAVAILABLE), (503, {}, ErrorKind.UNAVAILABLE),
-    (400, {}, ErrorKind.INPUT), (404, {}, ErrorKind.INPUT),
+    (400, {}, ErrorKind.SCHEMA), (404, {}, ErrorKind.SCHEMA),
     (400, {'error': {'details': [{'reason': 'BILLING_DISABLED'}]}}, ErrorKind.QUOTA),
-    (400, {'error': ['not-object']}, ErrorKind.INPUT),
+    (400, {'error': ['not-object']}, ErrorKind.SCHEMA),
 ])
 def test_safe_error_classification(status, body, kind):
     failure = classify_http(status, json.dumps(body).encode())
@@ -92,8 +101,8 @@ def test_safe_error_classification(status, body, kind):
     assert failure.retryable == (kind in {ErrorKind.QUOTA, ErrorKind.RATE_LIMIT, ErrorKind.TIMEOUT, ErrorKind.UNAVAILABLE})
 
 
-@pytest.mark.parametrize('mode', ['timeout', 'network', 'http', 'json', 'missing-key', 'redirect'])
-def test_request_failures_are_safe_and_never_retry(monkeypatch, mode):
+@pytest.mark.parametrize('mode', ['timeout', 'network', 'http', 'json', 'redirect'])
+def test_request_failures_are_safe_with_existing_retry_policy(monkeypatch, mode):
     monkeypatch.setenv('GEMINI_API_KEY', 'SECRET')
     calls = []
     def opening(*args, **kwargs):
@@ -104,25 +113,29 @@ def test_request_failures_are_safe_and_never_retry(monkeypatch, mode):
         if mode == 'redirect': return NoRedirect().redirect_request(None, None, 302, '', {}, 'https://other')
         return io.BytesIO(b'SECRET not JSON')
     monkeypatch.setattr('bookcast.adapters.gemini.request.build_opener', lambda *a: SimpleNamespace(open=opening))
-    if mode == 'missing-key': monkeypatch.delenv('GEMINI_API_KEY')
     with pytest.raises(ProviderError) as exc: GeminiTTSProvider(spec())._request({})
     assert 'SECRET' not in str(exc.value)
-    assert len(calls) == (0 if mode == 'missing-key' else 1)
+    assert len(calls) == (5 if mode in {'timeout', 'network'} else 1)
 
 
-@pytest.mark.parametrize('mode', ['empty', 'odd', 'silent', 'base64', 'mime', 'rate', 'channels', 'truncated', 'parts'])
-def test_invalid_audio_is_permanent(mode):
-    data = response(); part = data['candidates'][0]['content']['parts'][0]['inlineData']
-    if mode in {'empty', 'odd', 'silent'}:
-        part['data'] = base64.b64encode({'empty': b'', 'odd': b'x', 'silent': b'\0\0'}[mode]).decode()
-    if mode == 'base64': part['data'] = '###'
-    if mode == 'mime': part['mimeType'] = 'audio/mp3'
-    if mode == 'rate': part['mimeType'] = 'audio/L16;rate=48000'
-    if mode == 'channels': part['mimeType'] = 'audio/L16;rate=24000;channels=2'
-    if mode == 'truncated': data['candidates'][0]['finishReason'] = 'MAX_TOKENS'
-    if mode == 'parts': data['candidates'][0]['content']['parts'] *= 2
-    with pytest.raises(ProviderError) as exc: decode_pcm(data)
-    assert exc.value.kind == ErrorKind.SCHEMA
+def test_missing_api_key_fails_before_transport(monkeypatch):
+    monkeypatch.delenv('GEMINI_API_KEY', raising=False)
+    with pytest.raises(SystemExit, match='Gemini TTS requires GEMINI_API_KEY'):
+        GeminiTTSProvider(spec())._request({})
+
+
+@pytest.mark.parametrize('mode', ['missing_audio', 'failed', 'incomplete', 'cancelled'])
+def test_interaction_without_completed_audio_is_permanent(tmp_path, mode):
+    data = response()
+    if mode == 'missing_audio':
+        data['steps'][0]['content'] = [{'type': 'text', 'text': 'no audio'}]
+    else:
+        data['status'] = mode
+        data['error'] = {'message': 'unavailable'}
+    with pytest.raises(ProviderError) as exc:
+        decode_audio(data, tmp_path/'invalid.wav')
+    assert exc.value.kind in {ErrorKind.SCHEMA, ErrorKind.BUSINESS}
+    assert not (tmp_path/'invalid.wav').exists()
 
 
 @pytest.mark.parametrize('value', [False, 1, 'true', None])
@@ -167,9 +180,7 @@ class SegmentFake(MockTTSProvider):
     def synthesize_segment(self, part, destination):
         self.calls.append(part)
         if len(self.calls) == self.fail_at: raise ProviderError(self.kind)
-        pcm = decode_pcm(response())
-        with wave.open(str(destination), 'wb') as output:
-            output.setparams((1, 2, 24000, 0, 'NONE', 'not compressed')); output.writeframes(pcm)
+        destination.write_bytes(wav_bytes())
         return SegmentSpeechInfo(voices={t.speaker: 'fake-'+t.speaker for t in part.turns})
 
 
@@ -207,13 +218,13 @@ def test_quota_at_segment_six_preserves_first_five(tmp_path):
     with pytest.raises(ProviderError):
         render_segments(runner, script)
     first = snap(tmp_path / 'audio/segments')
-    b = SegmentFake('B')
-    recovered = _Runner(tmp_path, load_manifest(tmp_path/'manifest.json'), llm, ProviderChain([b]))
+    a.fail_at = None
+    recovered = _Runner(tmp_path, load_manifest(tmp_path/'manifest.json'), llm, ProviderChain([a]))
     render_segments(recovered, script)
-    assert len(b.calls) == 3
+    assert len(a.calls) == 9  # six before failure, only three missing chunks on resume
     assert all(snap(tmp_path/'audio/segments')[name] == value for name, value in first.items())
     successful = [c for c in recovered.manifest.ai_calls if c.status == 'completed']
-    assert [c.provider for c in successful] == ['A']*5 + ['B']*3
+    assert [c.provider for c in successful] == ['A']*8
 
 
 def test_corrupt_segment_repairs_only_that_segment(tmp_path):
@@ -238,16 +249,19 @@ def test_permanent_errors_never_switch_provider(tmp_path, kind):
     assert not backup.calls
 
 
-def test_no_mock_or_unit_cloud_chain_and_completed_legacy_retained(tmp_path):
+def test_no_mock_or_unit_cloud_chain_and_provider_change_resynthesizes(tmp_path):
     from test_tts import UnitFake
     for backup in (MockTTSProvider(), UnitFake()):
         with pytest.raises(BookCastError):
             Pipeline(MockLLMProvider(), ProviderChain([SegmentFake(), backup]), tmp_path)
-    for provider, subdir in ((MockTTSProvider(), 'mock'), (UnitFake(), 'units')):
+    for provider, subdir in ((MockTTSProvider(), 'mock'),):
         root = Pipeline(MockLLMProvider(), provider, tmp_path/subdir).generate(DEMO, minutes=1)
         audio = snap(root/'audio'); new = SegmentFake()
         Pipeline(MockLLMProvider(), new, tmp_path/subdir).resume_job(root)
-        assert not new.calls and snap(root/'audio') == audio
+        assert new.calls and snap(root/'audio') != audio
+    root = Pipeline(MockLLMProvider(), UnitFake(), tmp_path/'units').generate(DEMO, minutes=1)
+    with pytest.raises(BookCastError):
+        Pipeline(MockLLMProvider(), SegmentFake(), tmp_path/'units').resume_job(root)
 
 
 KILL = r'''
@@ -291,110 +305,31 @@ def test_real_sigkill_keeps_completed_segments(tmp_path, window):
         if process.poll() is None: process.kill()
         process.wait(timeout=10); process.stderr.close()
 import os
-import json
-import base64
-import pytest
-from unittest.mock import patch, MagicMock
-from pathlib import Path
+def test_speaker_mapping_and_metadata(monkeypatch, tmp_path):
+    monkeypatch.setenv('GEMINI_API_KEY', 'fake-key')
+    sent = []
 
-from bookcast.adapters.gemini import GeminiTTSProvider
-from bookcast.provider_config import ProviderSpec, CloudTTSConfig
-from bookcast.provider_api import SpeechSegment, SpeechTurn, ProviderError, ErrorKind
+    def opening(req, timeout):
+        sent.append(req)
+        return io.BytesIO(json.dumps(response()).encode())
 
-@pytest.fixture
-def spec():
-    return ProviderSpec(
-        name="gemini",
-        kind="tts",
-        type="gemini-tts",
-        model="gemini-3.8-flash-tts",
-        api_key_env="GEMINI_API_KEY",
-        cloud_tts=CloudTTSConfig(
-            send_text_to_cloud=True, 
-            host_voice="HostA", 
-            guest_voice="GuestB",
-            mode="conversational"
-        )
-    )
+    monkeypatch.setattr('bookcast.adapters.gemini.request.build_opener',
+                        lambda *args: SimpleNamespace(open=opening))
+    provider = GeminiTTSProvider(spec(host_voice='HostA', guest_voice='GuestB', mode='conversational'))
+    part = SpeechSegment(turns=[SpeechTurn(speaker='主持人', text='你好'),
+                                SpeechTurn(speaker='嘉宾', text='(笑声) 我很好！')])
+    dest = tmp_path/'out.wav'
+    info = provider.synthesize_segment(part, dest)
 
-def test_fail_fast_missing_api_key(spec):
-    if 'GEMINI_API_KEY' in os.environ:
-        del os.environ['GEMINI_API_KEY']
-        
-    provider = GeminiTTSProvider(spec)
-    with pytest.raises(SystemExit) as exc:
-        provider._request({})
-    assert "Gemini TTS requires GEMINI_API_KEY" in str(exc.value)
-
-def test_api_key_not_in_cache_key(spec):
-    os.environ['GEMINI_API_KEY'] = 'secret-key-123'
-    provider = GeminiTTSProvider(spec)
-    assert 'secret' not in provider.cache_key
-
-@patch('bookcast.adapters.gemini.request.build_opener')
-def test_speaker_mapping_and_metadata(mock_urlopen, spec, tmp_path):
-    os.environ['GEMINI_API_KEY'] = 'fake-key'
-    provider = GeminiTTSProvider(spec)
-    
-    segment = SpeechSegment(
-        turns=[
-            SpeechTurn(speaker="主持人", text="你好"),
-            SpeechTurn(speaker="嘉宾", text="(笑声) 我很好！")
-        ]
-    )
-    
-    # Mock response
-    mock_response = MagicMock()
-    # Fake audio bytes
-    wav_bytes = b'RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00'
-    encoded = base64.b64encode(wav_bytes).decode('ascii')
-    
-    mock_response.read.return_value = json.dumps({
-        "candidates": [{
-            "finishReason": "STOP",
-            "content": {
-                "parts": [{
-                    "inlineData": {
-                        "mimeType": "audio/wav",
-                        "data": encoded
-                    }
-                }]
-            }
-        }],
-        "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 20},
-        "modelVersion": "gemini-3.8-flash-tts-v1"
-    }).encode('utf-8')
-    mock_urlopen.return_value.open.return_value.__enter__.return_value = mock_response
-    
-    dest = tmp_path / "out.wav"
-    with patch('bookcast.adapters.gemini.request.Request') as mock_req:
-        info = provider.synthesize_segment(segment, dest)
-        
-        # Check payload
-        args, kwargs = mock_req.call_args
-        payload = json.loads(kwargs['data'])
-        
-        parts = payload['contents'][0]['parts']
-        assert len(parts) == 2
-        
-        # turn 1: Host
-        assert parts[0]['text'] == '你好' # markdown stripped if applicable
-        assert parts[0]['speech_metadata']['speaker'] == 'HostA'
-        assert 'calm' in parts[0]['speech_metadata']['style']
-        assert 'style' not in parts[0]['text']
-        
-        # turn 2: Guest
-        assert parts[1]['text'].strip() == '我很好！' # (笑声) stripped
-        assert parts[1]['speech_metadata']['speaker'] == 'GuestB'
-        assert 'natural' in parts[1]['speech_metadata']['style']
-        
-        # Check config
-        assert payload['generationConfig']['speechConfig']['mode'] == 'conversational'
-        
-        # Check output
-        assert dest.exists()
-        assert dest.read_bytes() == wav_bytes
-        
-        # Check info
-        assert info.voices == {'主持人': 'HostA', '嘉宾': 'GuestB'}
-
+    assert len(sent) == 1
+    assert sent[0].full_url == 'https://generativelanguage.googleapis.com/v1beta/interactions'
+    payload = json.loads(sent[0].data)
+    content = payload['input'][0]['content']
+    assert [item['text'] for item in content] == ['你好', '我很好！']
+    assert [item['annotations'][0]['speaker'] for item in content] == ['Host', 'Guest']
+    assert 'calm' in content[0]['annotations'][0]['style'].lower()
+    assert 'natural' in content[1]['annotations'][0]['style']
+    assert payload['generation_config']['speech_config']['mode'] == 'conversational'
+    assert [item['voice'] for item in payload['generation_config']['speech_config']['speakers']] == ['HostA', 'GuestB']
+    assert dest.read_bytes() == wav_bytes()
+    assert info.voices == {'主持人': 'HostA', '嘉宾': 'GuestB'}

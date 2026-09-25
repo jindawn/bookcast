@@ -1,4 +1,3 @@
-import os
 import json
 import base64
 import pytest
@@ -26,8 +25,8 @@ def spec():
     )
 
 @patch('bookcast.adapters.gemini.request.build_opener')
-def test_interactions_api_payload(mock_urlopen, spec, tmp_path):
-    os.environ['GEMINI_API_KEY'] = 'fake-key'
+def test_interactions_api_payload(mock_urlopen, spec, tmp_path, monkeypatch):
+    monkeypatch.setenv('GEMINI_API_KEY', 'fake-key')
     provider = GeminiTTSProvider(spec)
 
     segment = SpeechSegment(
@@ -43,11 +42,9 @@ def test_interactions_api_payload(mock_urlopen, spec, tmp_path):
     encoded = base64.b64encode(wav_bytes).decode('ascii')
 
     mock_response.read.return_value = json.dumps({
-        "output": {
-            "audio": {
-                "data": encoded
-            }
-        },
+        "status": "completed",
+        "steps": [{"type": "model_output", "content": [
+            {"type": "audio", "data": encoded, "mime_type": "audio/wav"}]}],
         "usage_metadata": {"prompt_token_count": 10, "candidates_token_count": 20}
     }).encode('utf-8')
     mock_urlopen.return_value.open.return_value.__enter__.return_value = mock_response
@@ -76,7 +73,7 @@ def test_interactions_api_payload(mock_urlopen, spec, tmp_path):
         assert parts[0]['text'] == '你好'
         assert parts[0]['annotations'][0]['type'] == 'speech_metadata'
         assert parts[0]['annotations'][0]['speaker'] == 'Host'
-        assert 'calm' in parts[0]['annotations'][0]['style']
+        assert 'calm' in parts[0]['annotations'][0]['style'].lower()
 
         # turn 2: Guest
         assert parts[1]['text'].strip() == '我很好！'
@@ -98,8 +95,8 @@ def test_interactions_api_payload(mock_urlopen, spec, tmp_path):
 
 
 @patch('bookcast.adapters.gemini.request.build_opener')
-def test_decoder_new_schema_audio(mock_urlopen, spec, tmp_path):
-    os.environ['GEMINI_API_KEY'] = 'fake-key'
+def test_decoder_new_schema_audio(mock_urlopen, spec, tmp_path, monkeypatch):
+    monkeypatch.setenv('GEMINI_API_KEY', 'fake-key')
     provider = GeminiTTSProvider(spec)
     segment = SpeechSegment(turns=[SpeechTurn(speaker="主持人", text="你好")])
     
@@ -125,8 +122,8 @@ def test_decoder_new_schema_audio(mock_urlopen, spec, tmp_path):
     assert dest.read_bytes() == wav_bytes
 
 @patch('bookcast.adapters.gemini.request.build_opener')
-def test_decoder_mixed_content_and_late_audio(mock_urlopen, spec, tmp_path):
-    os.environ['GEMINI_API_KEY'] = 'fake-key'
+def test_decoder_mixed_content_and_late_audio(mock_urlopen, spec, tmp_path, monkeypatch):
+    monkeypatch.setenv('GEMINI_API_KEY', 'fake-key')
     provider = GeminiTTSProvider(spec)
     segment = SpeechSegment(turns=[SpeechTurn(speaker="主持人", text="你好")])
     
@@ -157,8 +154,8 @@ def test_decoder_mixed_content_and_late_audio(mock_urlopen, spec, tmp_path):
     assert dest.read_bytes() == wav_bytes
 
 @patch('bookcast.adapters.gemini.request.build_opener')
-def test_decoder_failed_status(mock_urlopen, spec, tmp_path):
-    os.environ['GEMINI_API_KEY'] = 'fake-key'
+def test_decoder_failed_status(mock_urlopen, spec, tmp_path, monkeypatch):
+    monkeypatch.setenv('GEMINI_API_KEY', 'fake-key')
     provider = GeminiTTSProvider(spec)
     segment = SpeechSegment(turns=[SpeechTurn(speaker="主持人", text="你好")])
     
@@ -176,8 +173,8 @@ def test_decoder_failed_status(mock_urlopen, spec, tmp_path):
     assert exc.value.validation_reason == "Content policy violation"
 
 @patch('bookcast.adapters.gemini.request.build_opener')
-def test_decoder_completed_no_audio(mock_urlopen, spec, tmp_path):
-    os.environ['GEMINI_API_KEY'] = 'fake-key'
+def test_decoder_completed_no_audio(mock_urlopen, spec, tmp_path, monkeypatch):
+    monkeypatch.setenv('GEMINI_API_KEY', 'fake-key')
     provider = GeminiTTSProvider(spec)
     segment = SpeechSegment(turns=[SpeechTurn(speaker="主持人", text="你好")])
     

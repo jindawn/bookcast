@@ -1,8 +1,4 @@
-"""Optional official Gemini REST TTS. One request per Attempt, no SDK retries.
-
-The documented generateContent TTS endpoint is stateless. No App cookies,
-sessions, arbitrary endpoints, headers, or raw upstream failures are persisted.
-"""
+"""Optional official Gemini Interactions REST TTS, with no SDK retries."""
 import base64
 import binascii
 import json
@@ -10,6 +6,9 @@ import os
 from pathlib import Path
 import re
 import sys
+import time
+import random
+from collections.abc import Callable
 from urllib import error, request
 import wave
 
@@ -86,13 +85,13 @@ class NoRedirect(request.HTTPRedirectHandler):
         raise ProviderError(ErrorKind.INPUT)
 
 
-import time
-import random
-
 class GeminiTTSProvider:
     _last_request_time = 0.0
-    def __init__(self, spec):
+    def __init__(self, spec, *, clock: Callable[[], float] | None = None,
+                 sleeper: Callable[[float], None] | None = None):
         self.spec, self.name, self.model = spec, spec.name, spec.model
+        self.clock = clock if clock is not None else time.time
+        self.sleeper = sleeper if sleeper is not None else time.sleep
         self.settings = spec.cloud_tts
         self.last_status = ProviderStatus(provider=self.name, model=self.model)
         self.last_usage = None
@@ -117,15 +116,15 @@ class GeminiTTSProvider:
         
         while True:
             # Active RPM throttling
-            now = time.time()
+            now = self.clock()
             interval = getattr(self.settings, 'min_request_interval', 25)
             if payload is not None and now - GeminiTTSProvider._last_request_time < interval:
                 sleep_time = interval - (now - GeminiTTSProvider._last_request_time)
-                time.sleep(sleep_time)
+                self.sleeper(sleep_time)
             
             try:
                 if payload is not None:
-                    GeminiTTSProvider._last_request_time = time.time()
+                    GeminiTTSProvider._last_request_time = self.clock()
                     
                 req = request.Request(url, headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
                     data=json.dumps(payload, ensure_ascii=False).encode() if payload is not None else None)
@@ -153,12 +152,11 @@ class GeminiTTSProvider:
                 delay = getattr(failure, 'retry_after', None)
                 if not delay:
                     delay = backoffs[attempts] + random.uniform(0, 2)
-                import sys
                 print(f"Gemini 限流/临时错误，正在等待自动重试... 下一次重试约 {int(delay)} 秒后", file=sys.stderr)
-                time.sleep(delay)
+                self.sleeper(delay)
                 attempts += 1
                 # reset request time so we don't double sleep on next loop iteration
-                GeminiTTSProvider._last_request_time = time.time() - interval
+                GeminiTTSProvider._last_request_time = self.clock() - interval
                 continue
                 
             raise failure from None
