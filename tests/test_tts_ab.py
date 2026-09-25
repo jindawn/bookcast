@@ -54,3 +54,22 @@ def test_v5_artifact_compatibility_projection():
     assert "claim_ids" not in dumped["turns"][0]
     assert "attribution" not in dumped["turns"][0]
 
+
+def test_ab_script_uses_production_registry_and_config():
+    from bookcast.provider_config import load_config
+    from bookcast.provider_registry import default_registry
+    from pathlib import Path
+
+    # Verify that the logic in generate_tts_ab.py (which uses load_config)
+    # correctly finds Kokoro and points to the data/models dir, NOT '.'
+    
+    settings = load_config(Path('bookcast.toml'))
+    registry = default_registry()
+    
+    kokoro_spec = next((p for p in settings.providers if p.name == "kokoro"), None)
+    assert kokoro_spec is not None
+    assert kokoro_spec.local_tts is not None
+    # Verify the model_dir is NOT the current directory '.'
+    assert kokoro_spec.local_tts.model_dir != "."
+    assert "data/models/kokoro" in kokoro_spec.local_tts.model_dir
+

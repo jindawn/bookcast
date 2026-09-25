@@ -5,12 +5,14 @@ from bookcast.provider_api import ProviderError, ErrorKind
 from bookcast.content_models import SegmentScript
 from bookcast.adapters.gemini import GeminiTTSProvider
 from bookcast.adapters.kokoro import KokoroTTSProvider
-from bookcast.provider_config import ProviderSpec, CloudTTSConfig, LocalTTSConfig
+from bookcast.provider_config import ProviderSpec, CloudTTSConfig, LocalTTSConfig, load_config
+from bookcast.provider_registry import default_registry
 from bookcast.speech_segments import render_segments, speech_segments
 from bookcast.audio import concat_wav
 
 
-def synthesize_mock_runner(provider, script, output_dir, prefix):
+
+def synthesize_mock_runner(provider, script, output_dir, prefix, reuse_audio_dir=None):
     import shutil
     from unittest.mock import MagicMock
     from bookcast.pipeline import _Runner
@@ -18,6 +20,15 @@ def synthesize_mock_runner(provider, script, output_dir, prefix):
     from bookcast.speech import speech_units
     from bookcast.provider_api import ProviderError, ErrorKind
     
+    # Check if we can safely reuse an existing wav file (for Kokoro baseline)
+    if reuse_audio_dir:
+        existing_wav = reuse_audio_dir / f"{script.chapter_id}.wav"
+        if existing_wav.exists():
+            print(f"Reusing existing {prefix} audio for {script.chapter_id}...")
+            final_dest = output_dir / f"{prefix}_{script.chapter_id}.wav"
+            shutil.copy2(existing_wav, final_dest)
+            return final_dest
+            
     if hasattr(provider, 'synthesize_segment'):
         from bookcast.speech_segments import speech_segments
         parts = list(speech_segments(script))
@@ -42,8 +53,11 @@ def synthesize_mock_runner(provider, script, output_dir, prefix):
     with atomic_target(final_dest) as temporary:
         pauses = []
         for i in range(1, len(audio_files)):
-            prev_turn = int(audio_files[i-1].name.split('_')[-1].split('-')[0])
-            curr_turn = int(audio_files[i].name.split('_')[-1].split('-')[0])
+            try:
+                prev_turn = int(audio_files[i-1].name.split('_')[-1].split('.')[0].split('-')[0])
+                curr_turn = int(audio_files[i].name.split('_')[-1].split('.')[0].split('-')[0])
+            except ValueError:
+                prev_turn = 0; curr_turn = 0
             pauses.append(0.5 if prev_turn != curr_turn else 0.2)
         concat_wav(audio_files, temporary, pause_seconds=pauses if pauses else 0.18)
     return final_dest
@@ -68,12 +82,13 @@ if __name__ == '__main__':
         print("Scripts not found")
         exit(1)
         
-    # Kokoro Baseline
-    kokoro_spec = ProviderSpec(
-        name="kokoro", kind="tts", type="kokoro-local", model="kokoro-multi-lang-v1_0",
-        local_tts=LocalTTSConfig(host_voice="47", guest_voice="52", speed=1.05, model_dir=".")
-    )
-    kokoro_provider = KokoroTTSProvider(kokoro_spec)
+    settings = load_config(Path('bookcast.toml'))
+    registry = default_registry()
+    kokoro_spec = next((p for p in settings.providers if p.name == "kokoro"), None)
+    if not kokoro_spec:
+        print("Kokoro provider not found in bookcast.toml")
+        exit(1)
+    kokoro_provider = registry.create(kokoro_spec)
     
     # Gemini 3.8 Flash
     gemini_spec = ProviderSpec(
@@ -86,14 +101,14 @@ if __name__ == '__main__':
             mode="conversational"
         )
     )
-    gemini_provider = GeminiTTSProvider(gemini_spec)
+    gemini_provider = registry.create(gemini_spec)
     
     kokoro_wavs = []
     gemini_wavs = []
     
     try:
         for script in scripts:
-            kokoro_wavs.append(synthesize_mock_runner(kokoro_provider, script, out_dir, 'kokoro'))
+            kokoro_wavs.append(synthesize_mock_runner(kokoro_provider, script, out_dir, 'kokoro', reuse_audio_dir=base_dir / 'audio'))
             gemini_wavs.append(synthesize_mock_runner(gemini_provider, script, out_dir, 'gemini'))
             
         concat_wav(kokoro_wavs, out_dir / 'kokoro-baseline.mp3', pause_seconds=1.0)
