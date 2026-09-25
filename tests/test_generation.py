@@ -896,3 +896,56 @@ def test_consistency_reasoning_effort_low(monkeypatch):
     sent_ext = json.loads(calls[0].data)
     assert sent_ext.get('thinking') == {'type': 'disabled'}
     assert sent_ext.get('reasoning_effort') is None
+
+def test_deepseek_too_short_correction(monkeypatch):
+    monkeypatch.setenv('TEST_DEEPSEEK_KEY', 'sk-wire-only')
+    sent = []
+    
+    # 1. 第一次请求返回过短的 array (core_ideas = [])
+    call1_payload = {
+        'chapter_id': '0057',
+        'chunk_id': '0001',
+        'core_ideas': [],
+        'arguments': [],
+        'evidence': [],
+        'examples': [],
+        'people': [],
+        'concepts': [],
+        'counter_arguments': [],
+        'connections': [],
+        'key_passages': []
+    }
+    
+    # 2. 第二次请求返回正常的 array
+    call2_payload = call1_payload.copy()
+    call2_payload['core_ideas'] = [{'text': 'Idea', 'evidence_id': 'e0001'}]
+    
+    class Transport:
+        def open(self, req, timeout):
+            sent.append(json.loads(req.data))
+            payload = call1_payload if len(sent) == 1 else call2_payload
+            return io.BytesIO(json.dumps({'choices': [{'message': {'content': json.dumps(payload)},
+                'finish_reason': 'stop'}], 'model': 'deepseek-flash',
+                'usage': {'prompt_tokens': 953, 'completion_tokens': 148}}).encode())
+
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    provider = CompatibleLLMProvider(ProviderSpec(name='deepseek', kind='llm', type='openai-compatible',
+        model='deepseek-flash', base_url='https://api.deepseek.com'))
+    history = []
+    chain = ProviderChain([provider])
+    
+    def invoke(p):
+        return p.generate_structured('prompt', EvidenceAnalysis)
+        
+    chain.execute(task='analysis:0057:0001', kind='llm', prompt_version='test', input_hash='h',
+                  invoke=invoke, persist=lambda _: {'result.json': 'a'}, observe=lambda a: history.append(a.model_copy(deep=True)))
+                  
+    assert len(sent) == 2
+    # Check that second request got the guidance
+    assert 'core_ideas must contain at least 1 items' in sent[1]['messages'][0]['content']
+    assert len(history) >= 2
+    failed_attempt = next(h for h in history if h.status == 'failed_retryable')
+    assert failed_attempt.error_type == 'ValidationError'
+    assert failed_attempt.validation_field == 'core_ideas'
+    assert failed_attempt.validation_reason == 'too_short'
+

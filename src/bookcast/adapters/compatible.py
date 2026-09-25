@@ -315,6 +315,11 @@ class CompatibleLLMProvider(CompatibleBase):
             if not isinstance(limit, int) or limit < 1:
                 return False
             self._schema_retry_guidance = f'{field_name} must contain at most {limit} items. Regenerate the full JSON with all required fields.'
+        elif reason == 'too_short':
+            limit = field_schema.get('minItems') if isinstance(field_schema, dict) else None
+            if not isinstance(limit, int) or limit < 1:
+                return False
+            self._schema_retry_guidance = f'{field_name} must contain at least {limit} items. Regenerate the full JSON with all required fields.'
         elif reason == 'model_type':
             req = field_schema.get('required') if isinstance(field_schema, dict) else None
             props = list(field_schema.get('properties', {}).keys()) if isinstance(field_schema, dict) else []
