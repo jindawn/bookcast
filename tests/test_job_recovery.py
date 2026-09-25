@@ -241,3 +241,139 @@ def test_changed_plan_retires_obsolete_failed_tasks_as_skipped(tmp_path):
     provider.calls.clear()
     Pipeline(provider,MockTTSProvider(),tmp_path/'out').resume_job(job)
     assert not provider.calls
+
+
+def test_active_error_state_failed_permanent(tmp_path):
+    source = tmp_path / "b.txt"
+    source.write_text("Chapter 1\nA point.")
+    def fail(d):
+        if d["operation"] == "dialogue":
+            raise ProviderError(ErrorKind.SCHEMA)
+    with pytest.raises(BookCastError):
+        Pipeline(Recording(fail=fail), MockTTSProvider(), tmp_path / "out").generate(source)
+    job = next((tmp_path / "out").iterdir())
+    status = job_status(str(job))
+    assert status["effective_state"] == "FAILED_PERMANENT"
+    assert status["active_error"] == "schema_error"
+    assert status["error"] == "schema_error"
+    assert status["progress"]["error"] == "schema_error"
+    assert status["progress"]["active_error"] == "schema_error"
+
+
+def test_active_error_state_failed_retryable(tmp_path):
+    source = tmp_path / "b.txt"
+    source.write_text("Chapter 1\nA point.")
+    def fail(d):
+        if d["operation"] == "dialogue":
+            raise ProviderError(ErrorKind.RATE_LIMIT)
+    with pytest.raises(BookCastError):
+        Pipeline(Recording(fail=fail), MockTTSProvider(), tmp_path / "out").generate(source)
+    job = next((tmp_path / "out").iterdir())
+    status = job_status(str(job))
+    assert status["effective_state"] == "FAILED_RETRYABLE"
+    assert status["active_error"] == "rate_limit"
+    assert status["error"] == "rate_limit"
+    assert status["progress"]["error"] == "rate_limit"
+    assert status["progress"]["active_error"] == "rate_limit"
+
+
+def test_active_error_state_resume_success_clears_active_error_retaining_history(tmp_path):
+    source = tmp_path / "book.txt"
+    source.write_text("Chapter 1\nPoint 1.\nChapter 2\nPoint 2.")
+    def fail(d):
+        if d["operation"] == "analysis" and d["chapter"]["id"] == "0002":
+            raise ProviderError(ErrorKind.RATE_LIMIT)
+    with pytest.raises(BookCastError):
+        Pipeline(Recording(fail=fail), MockTTSProvider(), tmp_path / "out").generate(source)
+    job = next((tmp_path / "out").iterdir())
+
+    # 1. Verify failed state has active_error
+    failed_status = job_status(str(job))
+    assert failed_status["effective_state"] == "FAILED_RETRYABLE"
+    assert failed_status["active_error"] == "rate_limit"
+    assert failed_status["error"] == "rate_limit"
+    assert failed_status["progress"]["error"] == "rate_limit"
+    assert failed_status["progress"]["active_error"] == "rate_limit"
+
+    # 2. Resume with successful provider
+    success_provider = Recording("B")
+    Pipeline(success_provider, MockTTSProvider(), tmp_path / "out").resume_job(job)
+
+    # 3. Verify completed state has active_error = null
+    completed_status = job_status(str(job))
+    assert completed_status["effective_state"] == "SUCCEEDED"
+    assert completed_status["active_error"] is None
+    assert completed_status["error"] is None
+    assert completed_status["error_kind"] is None
+    assert completed_status["progress"]["error"] is None
+    assert completed_status["progress"]["active_error"] is None
+
+    # 4. Verify historical failed attempt survives in ai_calls
+    m = load_manifest(job / "manifest.json")
+    rate_limit_calls = [c for c in m.ai_calls if c.error == "rate_limit"]
+    assert len(rate_limit_calls) >= 1
+    assert any(c.task == "analysis:0002:0001" and c.error == "rate_limit" for c in rate_limit_calls)
+    success_calls = [c for c in m.ai_calls if c.task == "analysis:0002:0001" and c.error is None]
+    assert len(success_calls) >= 1
+
+    # 5. Verify events log job_finished event has error = null
+    events = [json.loads(line) for line in (job / "logs/events.jsonl").read_text().splitlines()]
+    finish_events = [e for e in events if e.get("event") == "job_finished"]
+    assert len(finish_events) == 1
+    assert finish_events[0]["state"] == "SUCCEEDED"
+    assert finish_events[0]["error"] is None
+    assert finish_events[0]["active_error"] is None
+
+
+def test_active_error_state_completed_job_active_error_is_null(tmp_path):
+    source = tmp_path / "b.txt"
+    source.write_text("Chapter 1\nA point.")
+    job = Pipeline(Recording(), MockTTSProvider(), tmp_path / "out").generate(source)
+    status = job_status(str(job))
+    assert status["effective_state"] == "SUCCEEDED"
+    assert status["active_error"] is None
+    assert status["error"] is None
+    assert status["error_kind"] is None
+    assert status["progress"]["error"] is None
+    assert status["progress"]["active_error"] is None
+
+
+def test_active_error_state_multiple_failures_then_success(tmp_path):
+    source = tmp_path / "book.txt"
+    source.write_text("Chapter 1\nPoint 1.\nChapter 2\nPoint 2.")
+
+    # Failure 1: rate limit
+    def fail_rate(d):
+        if d["operation"] == "analysis" and d["chapter"]["id"] == "0002":
+            raise ProviderError(ErrorKind.RATE_LIMIT)
+    with pytest.raises(BookCastError):
+        Pipeline(Recording("F1", fail=fail_rate), MockTTSProvider(), tmp_path / "out").generate(source)
+    job = next((tmp_path / "out").iterdir())
+
+    # Failure 2: quota exhaustion on resume
+    def fail_quota(d):
+        if d["operation"] == "analysis" and d["chapter"]["id"] == "0002":
+            raise ProviderError(ErrorKind.QUOTA)
+    with pytest.raises(BookCastError):
+        Pipeline(Recording("F2", fail=fail_quota), MockTTSProvider(), tmp_path / "out").resume_job(job)
+
+    status_f2 = job_status(str(job))
+    assert status_f2["effective_state"] == "FAILED_RETRYABLE"
+    assert status_f2["active_error"] == ErrorKind.QUOTA.value
+
+    # Now succeed
+    success_provider = Recording("Success")
+    Pipeline(success_provider, MockTTSProvider(), tmp_path / "out").resume_job(job)
+
+    final_status = job_status(str(job))
+    assert final_status["effective_state"] == "SUCCEEDED"
+    assert final_status["active_error"] is None
+    assert final_status["error"] is None
+    assert final_status["progress"]["error"] is None
+    assert final_status["progress"]["active_error"] is None
+
+    # Verify both historical errors remain in ai_calls
+    m = load_manifest(job / "manifest.json")
+    errors_in_history = [c.error for c in m.ai_calls if c.error]
+    assert "rate_limit" in errors_in_history
+    assert ErrorKind.QUOTA.value in errors_in_history

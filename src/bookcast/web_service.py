@@ -120,13 +120,16 @@ class WebService:
             export_path = artifact_path(path.parent, 'audio/export.json')
             if state == 'SUCCEEDED' and integrity == 'ok' and export_path.is_file():
                 audio_info = json.loads(export_path.read_text(encoding='utf-8'))
+        is_failed = state in {'FAILED_PERMANENT', 'FAILED_RETRYABLE', 'BLOCKED'}
+        active_error = ((core.get('active_error') if core else None) or (core.get('error') if core else None) or record.error) if is_failed else None
         return {'id': identifier, 'title': core['progress']['book'] if core else record.title,
                 'mode': record.request.mode, 'minutes': record.request.minutes, 'state': state,
                 'task_providers': {'llm': selected_names('llm'), 'tts': selected_names('tts')},
                 'active': active, 'created_at': record.created_at, 'updated_at': core['updated_at'] if core else record.updated_at,
                 'cost_summary': core.get('cost_summary') if core else None, 'progress': core['progress'] if core else None, 'core_job_id': core['job_id'] if core else None,
                 'directory': str(path.parent) if path else str(id_path(self.root, 'jobs', identifier)),
-                'error': None if state == 'SUCCEEDED' else (core['error'] if core else None) or record.error,
+                'error': active_error,
+                'active_error': active_error,
                 'warnings': list(dict.fromkeys(warnings)),
                 'audio_kind': audio_info.get('audio_kind', 'unknown'),
                 'audio_seconds': audio_info.get('duration_seconds'),

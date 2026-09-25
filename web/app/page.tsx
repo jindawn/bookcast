@@ -24,6 +24,7 @@ type Job = {
   directory: string;
   core_job_id: string | null;
   error: string | null;
+  active_error?: string | null;
   warnings: string[];
   audio_url: string | null;
   m4b_url: string | null;
@@ -40,7 +41,10 @@ type Job = {
     total_final: boolean;
     chapters_completed: number;
     chapters_total: number;
+    error?: string | null;
+    active_error?: string | null;
   } | null;
+  cost_summary?: any;
 };
 type Provider = {
   provider: string;
@@ -147,6 +151,7 @@ export default function Home() {
   } | null>(null);
   const [edition, setEdition] = useState("");
   const [mode, setMode] = useState<Mode>("two_host");
+  const [ttsEngine, setTtsEngine] = useState<"auto" | "gemini" | "kokoro">("auto");
   const [minutes, setMinutes] = useState(40);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -630,8 +635,8 @@ export default function Home() {
                       正在准备输入或获取书籍；中间结果会自动保存。
                     </p>
                   )}
-                  {current.error && (
-                    <p className="notice error">{current.error}</p>
+                  {(current.active_error || (current.state !== "SUCCEEDED" && current.error)) && (
+                    <p className="notice error">{current.active_error || current.error}</p>
                   )}
                   {current.can_resume && (
                     <button
@@ -736,11 +741,11 @@ export default function Home() {
                         </div>
                       </details>
                       
-                      {current.cost_summary.diagnostics?.map((msg, idx) => (
+                      {current.cost_summary.diagnostics?.map((msg: string, idx: number) => (
                         <p key={idx} className="notice error" style={{ marginTop: '0.5rem', marginBottom: 0 }}>{msg}</p>
                       ))}
                     </div>
-                  )}}
+                  )}
                   <details>
                     <summary>产物与任务信息</summary>
                     <p>Core ID：{current.core_job_id || "尚未创建"}</p>

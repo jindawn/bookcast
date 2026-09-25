@@ -103,19 +103,44 @@ def job_status(job: str, output_dir: Path = Path('output')) -> dict:
     recent = max(running or failed, key=lambda item:item[1].updated_at)[0] if running or failed else m.status
     last_call = m.ai_calls[-1] if m.ai_calls else None
     last_error = next((c.error for c in reversed(m.ai_calls) if c.error), None)
+
+    effective_state = ('FAILED_PERMANENT' if m.state == TaskState.FAILED_PERMANENT or any(
+        s.state == TaskState.FAILED_PERMANENT for s in m.steps.values()) else
+        'FAILED_RETRYABLE' if stale or damaged else m.state.value)
+
+    is_failed_state = (effective_state in {'FAILED_PERMANENT', 'FAILED_RETRYABLE', 'BLOCKED'}
+                       or m.status in {'failed', 'failed_retryable', 'blocked'})
+
+    active_error = (
+        (m.error_kind or m.error or
+         (f"产物损坏：{', '.join(damaged)}" if damaged else None) or
+         ('interrupted' if stale else None) or
+         next((s.error_kind or s.error for _, s in failed), None) or
+         last_error)
+        if is_failed_state else None
+    )
+
     progress = {'book': metadata.title if metadata else Path(m.source_name).stem,
                 'stage': recent, 'provider': last_call.provider if last_call else None,
                 'completed': done, 'remaining': len(m.steps)-done, 'total_final': m.inventory_complete,
                 'chapters_total': len(chapters), 'chapters_completed': sum(
                     f'analysis:{cid}' in m.steps and m.steps[f'analysis:{cid}'].status in {'completed','skipped'}
                     and f'analysis:{cid}' not in damaged for cid in chapters),
-                'error': m.error_kind or m.error or last_error}
-    return {**m.model_dump(mode='json'), 'job_id': m.job_id or m.book_id,
+                'error': active_error,
+                'active_error': active_error}
+
+    dump = m.model_dump(mode='json')
+    if not is_failed_state:
+        dump['error'] = None
+        dump['error_kind'] = None
+
+    return {**dump, 'job_id': m.job_id or m.book_id,
             'directory': str(root), 'active': active, 'stale': stale,
-            'effective_state': ('FAILED_PERMANENT' if m.state == TaskState.FAILED_PERMANENT or any(
-                s.state == TaskState.FAILED_PERMANENT for s in m.steps.values()) else
-                'FAILED_RETRYABLE' if stale or damaged else m.state.value),
-            'integrity': 'damaged' if damaged else 'ok', 'damaged_steps': damaged, 'progress': progress}
+            'effective_state': effective_state,
+            'integrity': 'damaged' if damaged else 'ok', 'damaged_steps': damaged,
+            'error': active_error, 'active_error': active_error,
+            'error_kind': m.error_kind if is_failed_state else None,
+            'progress': progress}
 
 
 def list_jobs(output_dir: Path = Path('output')) -> dict:
@@ -124,7 +149,7 @@ def list_jobs(output_dir: Path = Path('output')) -> dict:
         try:
             result = job_status(str(path), output_dir)
             found.append({key:result[key] for key in ('job_id','book_id','directory','state','effective_state',
-                'active','stale','integrity','progress','updated_at')})
+                'active','stale','integrity','error','active_error','progress','updated_at')})
         except (BookCastError,OSError,ValueError):
             errors.append({'directory': str(path.parent), 'error': '任务记录或产物无效；未修改文件'})
     return {'jobs': sorted(found,key=lambda j:j['updated_at'],reverse=True), 'errors': errors}

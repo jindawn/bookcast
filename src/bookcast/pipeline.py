@@ -236,8 +236,12 @@ class _Runner:
                 step.status, step.skip_reason = 'skipped', 'not_in_current_plan'
                 step.error, step.error_kind, step.updated_at = None, None, utc_now()
                 changed = True
+        if self.manifest.status != "completed":
+            self.manifest.status, self.manifest.error, self.manifest.error_kind = "completed", None, None
+            changed = True
         if changed:
             self.save()
+        self.last_error = None
         self.event('job_finished', state='SUCCEEDED')
 
     def register(self, names, *, final=False):
@@ -264,13 +268,16 @@ class _Runner:
             pass
         if error:
             self.last_error = error
+        current_state = state or m.state.value
+        is_failed = current_state in {'FAILED_PERMANENT', 'FAILED_RETRYABLE', 'BLOCKED'}
+        active_error = (error or m.error_kind or self.last_error) if is_failed else None
         data = {'timestamp': utc_now(), 'event': event, 'job_id': m.job_id or m.book_id, 'book': title,
                 'stage': self.current_stage, 'provider': self.current_provider,
-                'state': state or m.state.value, 'completed': completed,
+                'state': current_state, 'completed': completed,
                 'remaining': len(m.steps)-completed, 'total_final': m.inventory_complete,
                 'chapters_completed': sum(m.steps.get(f'analysis:{cid}', StepRecord()).status in {'completed','skipped'}
                                           for cid in chapter_ids),
-                'chapters_total': len(chapter_ids), 'error': error or m.error_kind or self.last_error}
+                'chapters_total': len(chapter_ids), 'error': active_error, 'active_error': active_error}
         if details:
             data.update(details)
         # Log I/O and a detached terminal must never convert durable success into a failed AI call.
@@ -438,8 +445,8 @@ class _Runner:
                     "tts_usage_path": str(self.path('usage/tts_usage.json'))
                 }
             }
-            # We don't have the web job ID in the pure pipeline, but the web layer will inject it if needed.
-            cost_summary = calculate_cost_summary(self.manifest.ai_calls, load_config(self.config), self.root, self.manifest.provider_settings, manifest_info)
+            config_obj = load_config(getattr(self, 'config', None) or getattr(self.manifest, 'config', None))
+            cost_summary = calculate_cost_summary(self.manifest.ai_calls, config_obj, self.root, self.manifest.provider_settings, manifest_info)
             write_json(self.path('usage/cost_summary.json'), cost_summary)
         except Exception as exc:
             import sys

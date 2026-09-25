@@ -2,7 +2,7 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-18",
-  "current_task": "RC Stage 3: Kokoro 长连续句与 Gemini 缺失 API Key 异常分类修复",
+  "current_task": "RC Stage 4: Job Resume 与 Active Error 状态解耦收口",
   "task_status": "blocked",
   "branch": "main",
   "last_verified_commit": "4f841063a320da78f4b20c94471f49809fbb75c3",
@@ -105,13 +105,14 @@
     "读取3a591bfd Web Job 最近真实失败事件：analysis:0003:0001 的 DeepSeek ValidationError core_ideas too_long，前一次 evidence too_long；两者均超出 EvidenceAnalysis 每类最多6项。DeepSeek JSON mode 仅保证JSON语法。适配器明确列表上限，并在此类错误时同一Provider最多一次独立记账纠错调用；保留严格校验和已完成章节缓存。离线相关147 passed/1 deselected；本进程无DeepSeek key，尚未真实复验第3、4章。",
     "真实 DeepSeek 凭证环境验证《狂人日记》现存任务：第3章首块（analysis:0003:0001）成功通过；次块（analysis:0003:0002）初次调用因 evidence 超限触发重试，重试时 DeepSeek 修复 evidence 但 core_ideas 随机超限（7项），因适配器未做安全截断导致二次调用失败。在适配器补齐纠错轮次对未被针对警告的次级数组属性的有界安全截断（上限6项），保留严格域校验与首轮失败审计。真实复验第3章两块与综合、第4章一块与综合全部成功，连续两章通过后安全中断；相关测试 148 passed、1 deselected。",
     "真实 DeepSeek content synthesis 跨块 claim_ids 归约 business_error 修复：第30章归约因外推claim_ids超出allowed集合报business_error，在content层通过resolve_synthesis清洗有效子集，保持严格业务不变式且已有157步指纹不变。回归测试通过，真实API复验synthesis/chapters/0030/00-0001及后续00-0002均成功，累计完成159步后安全暂停。",
-    "真实 DeepSeek chapter analysis 通用有界 schema 纠错与第 43～45 章有界验证：消除此前仅对 too_long 特判纠错的架构缺陷，实现通用 schema 纠错提示引导与有界单次模型 repair；增加可选数组 null 安全归一化与单元素提升。真实 API 复验第 43、44、45 连续三章（共 11 个 steps 全部成功，含第 45 章实测命中 schema 漂移并经单次纠错自动恢复成功），累计完成 246 步后安全暂停。",
+    "真实 DeepSeek chapter analysis 通用有界 schema 纠错与第 43～45 章有界验证：消除此前仅对 too_long 特判纠错的架构缺陷，实现通用 schema 纠错提示引导与有界单次模型 repair；增加可选数组 null 安全归一化与单元素提升。真实 API 复验第 43、44、45 连续三章（共 11 个 steps 全部成功，含第 45 章实测命中 schema 漂移并经单次纠错自动恢复成功），累计完成 246 步有界验证通过。",
     "实现 quality gate 矛盾/待核验发言局部定向修复（targeted repair）：当 quality gate 发现一致性 review 存在 contradicted 时，精确定位受影响 segment 及 turn_index，仅改写受影响段落并注入原引用证据及争议上下文；仅对修复段重跑 consistency review 并重新评估 quality；每个 segment 严格限制最多 2 次修复防止死循环；离线测试 157 passed / 1 deselected 验证 targeted repair、持久化 cache hit 与有界上限止损。",
     "EPUB来源过滤在Chapter/LLM前排除确定性封面/目录/广告及正文推广段落，source_filter.json审计保留和移除单元；quality-v2脚本推广门禁在TTS前阻断，未改变targeted repair。真实源只读核对旧72个XHTML单元/96分析chunk，净化后69/93；未调用DeepSeek或改动已完成Job。功能提交a65f77d经相关113 passed/1 skipped、validator/compileall/diff复验。",
     "Phase18 离线审计真实已完成任务的 361 个唯一 LLM 步骤/429 次尝试；全源证据分析保留，逐章综合有界合批、全书综合前按时长跨书序选候选、20分钟最多16个脚本/复核片段；增加阶段用量视图和显式 Mock 成本烟测。未调用 DeepSeek/TTS 真人模型或修改原 Job。",
     "只读审计独立 5 分钟真实任务：analysis:0003:0001 两次 DeepSeek 正常 stop/JSON 解析成功，EvidenceAnalysis.evidence 超过 maxItems=6，第二次仍超限；实现 DeepSeek 有界可选数组归约并保留严格验证，事件增加 task_id/schema_model；未调用真实 API。",
     "RC Stage 0：Gemini虚拟时间、默认suite主/子进程禁网、Interactions fixture和chunk恢复真实回归；核心58通过，未调用真实API",
-    "RC Stage 3: 修复 Kokoro 长连续句 80 字符 Pydantic 越界（split_text/speech_units 限制 80）与 Gemini 缺 Key 时抛 ProviderError(AUTH) 而非 sys.exit/UnboundLocalError"
+    "RC Stage 3: 修复 Kokoro 长连续句 80 字符 Pydantic 越界（split_text/speech_units 限制 80）与 Gemini 缺 Key 时抛 ProviderError(AUTH) 而非 sys.exit/UnboundLocalError",
+    "RC Stage 4: 严格区分 active_error 与 historical_attempt_errors；只有 failed/failed_retryable/blocked 状态存在 active_error；completed/SUCCEEDED 状态下 active_error 与 top-level error 为 null，同时在 manifest.ai_calls 与 events.jsonl 中完整保留历史 failed attempts 审计。"
   ],
   "in_progress": [],
   "next_actions": [
@@ -125,6 +126,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "rc-stage-4-active-error-state-lifecycle",
+      "command": ".venv/bin/pytest tests/test_job_recovery.py tests/test_job_cli.py tests/test_web.py -q; npm --prefix web run typecheck; python3 scripts/validate_project.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "39 passed；覆盖 failed、failed_retryable、resume 恢复成功、completed 状态下 active_error=null/error=null、多次失败后恢复成功但在 ai_calls 与 events 中完整保留历史 failed attempts 审计，以及 Web API / UI 正确只针对当前 active error 显示告警。",
+      "checked_at": "2026-09-25T09:00:00Z"
+    },
     {
       "name": "rc-stage-3-kokoro-long-sentence-and-gemini-auth",
       "command": ".venv/bin/pytest -q tests/test_tts.py tests/test_tts_integration.py; python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts",

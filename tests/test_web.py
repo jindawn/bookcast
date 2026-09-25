@@ -115,6 +115,10 @@ def test_recovery_delegates_to_core_without_repeating_completed_chapters(client,
         return original(self, prompt, response_model)
     with patch.object(MockLLMProvider, 'generate_structured', fail):
         job = run(client, identifier)
+    assert job['active_error'] == kind.value
+    assert job['error'] == kind.value
+    assert job['progress']['error'] == kind.value
+    assert job['progress']['active_error'] == kind.value
     path = Path(job['directory'])
     before = snapshot(path / 'analysis')
     assert before
@@ -125,11 +129,17 @@ def test_recovery_delegates_to_core_without_repeating_completed_chapters(client,
     else:
         assert job['can_resume']
         assert client.post(f'/api/jobs/{identifier}/resume').status_code == 202
-    assert run(client, identifier)['state'] == 'SUCCEEDED'
+    recovered = run(client, identifier)
+    assert recovered['state'] == 'SUCCEEDED'
+    assert recovered['error'] is None
+    assert recovered['active_error'] is None
+    assert recovered['progress']['error'] is None
+    assert recovered['progress']['active_error'] is None
     for file, value in before.items():
         assert (file.stat().st_mtime_ns, sha256_file(file)) == value
     calls = load_manifest(path / 'manifest.json').ai_calls
     assert len([call for call in calls if call.task == 'analysis:0001:0001']) == 1
+    assert any(call.error == kind.value for call in calls)
 
 
 def test_http_local_boundary_input_limits_and_no_paths(client, monkeypatch):

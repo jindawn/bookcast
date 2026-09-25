@@ -1,3 +1,34 @@
+## 2026-09-25 RC Stage 4：Job Resume / Active Error State 收口
+
+目标：严格解耦 active_error 与 historical_attempt_errors。
+1. **Active Error 契约**：
+   - 只有 Job 有效状态为 `failed`、`failed_retryable`、`blocked`（`TaskState.FAILED_PERMANENT`、`TaskState.FAILED_RETRYABLE`、`BLOCKED`）时，`active_error` / `error` / `progress.error` 才允许存在。
+   - 当任务成功完成（`completed` / `SUCCEEDED`）时，`active_error`、`error` 及 `progress.error` 严格返回 `null`（`None`）。
+   - `_Runner.finish()` 在任务完成前清空 `self.last_error`，`_Runner.event()` 仅在失败状态中发射活跃错误。
+2. **Historical Audit 不受污染**：
+   - 所有的历史重试、限流（`rate_limit`）、超时（`timeout`）与配额超限（`quota_exhausted`）尝试完整保留在 `manifest.ai_calls`、`logs/events.jsonl` 与运行历史中，禁止删除历史审计。
+3. **CLI / Web 行为**：
+   - CLI：`show_progress` 在 `completed` 状态下不显示历史错误（显示为 `-`）；`status` 命令在 completed 状态下不输出 `错误：...`。
+   - Web API：`GET /api/jobs/{id}` 与 `GET /api/jobs` 对 `SUCCEEDED` 任务返回 `error: null`、`active_error: null` 及 `progress.error: null`。
+   - Web UI：仅对当前未完成的 active_error 渲染红色告警横幅；恢复成功的任务显示完成状态，不显示红色错误横幅。
+4. **回归测试**：
+   - `test_active_error_state_failed_permanent`（验证永久失败任务包含 active_error）
+   - `test_active_error_state_failed_retryable`（验证重试失败任务包含 active_error）
+   - `test_active_error_state_resume_success_clears_active_error_retaining_history`（验证多 chunk 任务中 chunk 1 成功、chunk 2 rate_limit 失败后 resume 成功：最终状态为 SUCCEEDED、active_error=null、job_finished event 的 error=null，且 ai_calls 中完整保留历史 rate_limit attempt）
+   - `test_active_error_state_completed_job_active_error_is_null`（验证正常完成任务 active_error=null）
+   - `test_active_error_state_multiple_failures_then_success`（验证多次失败后成功的任务 active_error=null，ai_calls 保留所有历史失败）
+   - `tests/test_web.py::test_recovery_delegates_to_core_without_repeating_completed_chapters`（验证 Web API 接口在失败态返回 active_error，恢复后返回 active_error=null 且保留历史调用）
+
+验证：
+- 39 passed (`tests/test_job_recovery.py`, `tests/test_job_cli.py`, `tests/test_web.py`)；
+- `npm --prefix web run typecheck` 0 errors；
+- `python3 scripts/validate_project.py` 通过；
+- Python syntax compileall 检查通过；
+- `git diff --check` 通过；
+- 未调用真实 API。
+
+---
+
 ## 2026-09-25 RC Stage 3：Kokoro 长连续句与 Gemini 缺失 API Key 异常分类修复
 
 目标：解决两个独立的小型 P0 问题：
