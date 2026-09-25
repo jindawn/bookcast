@@ -1,3 +1,15 @@
+## 2026-09-26 RC Stage 5：Cost Summary production integration
+
+目标：让创建时配置快照、Attempt usage、成本摘要、CLI 与 Web 使用同一份按 Job 验证的成本视图。新 Job 在 manifest 保存 `output_id` 与不含凭证的 `cost_snapshot`，其中包含 Provider/model/pricing 和北京时区工作日峰谷策略。恢复时当前 Provider 选择可以变，但创建时计价快照不变；旧 Job 无完整快照时金额为 unavailable，不用今天的 `bookcast.toml` 补价。
+
+`_Runner.update_llm_usage` 不再读取不存在的 `self.config`；终态 LLM/TTS Attempt 更新 usage 视图并原子写 `usage/cost_summary.json`。失败时只记录异常类型的 `cost_summary_diagnostic`，不阻断 Job。摘要按 `(provider, model)` 分组；缺字段的 Attempt 不计价，相关行标记 partial；TTS 保持 unavailable。`job_status` 只返回通过 Job ID、output ID、实际源文件 SHA、快照、当前选择及 journal 指纹校验的摘要；Web DTO 直接使用该结果。CLI `bookcast cost <output>` 持锁读取 Job 的 manifest/snapshot/usage，不接受 `--config` 历史重定价，并从 manifest 显示身份。没有新 Attempt 的恢复若使摘要失效，在完成时安全刷新。
+
+离线测试覆盖 Pipeline Attempt → usage → cost_summary → job_status → Web DTO、历史配置与当前配置不一致、partial usage、同 Provider 多 model、跨 Job 复制/过期身份、无快照旧 Job、摘要失败不影响生成以及无新增 Attempt 恢复。默认 pytest 的禁网保护仍有效，未调用真实 Provider。唯一额外测试维护是把 Stage 3 已修改的 Gemini 缺 Key 断言从旧 `SystemExit` 改为 `ProviderError(AUTH)`；没有修改 Gemini 生产代码。完整默认 suite 为 483 passed、1 skipped、5 deselected、10 subtests（116.48 秒）；成本/恢复专项 34 passed，Web typecheck、compileall、项目校验和 diff check 通过。功能提交 `86275234810b2b704fa73b9ef7d8632e22196117` 上复测 12 passed，项目校验与 Web typecheck 通过；`STATE.last_verified_commit` 保存此已验证提交，交接快照自身不自引用。
+
+本阶段未改 LLM prompts、Gemini retry/limiter、TTS chunking、价格表、音频或已完成真实 Job。下一步仍是用户本机有凭证环境的新独立 DeepSeek clean run；不能以旧失败 Job 或本阶段离线金额冒充真实账单。预先存在的四个未跟踪调试/fixture 文件未改、未提交。
+
+---
+
 ## 2026-09-25 RC Stage 4：Job Resume / Active Error State 收口
 
 目标：严格解耦 active_error 与 historical_attempt_errors。
