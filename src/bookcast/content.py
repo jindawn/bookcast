@@ -298,7 +298,7 @@ class ContentFlow:
             reviews.append(review)
         from .quality import evaluate
         chapters = [self.read(f'chapters/{cid}.json', Chapter) for cid in self.metadata.chapter_ids]
-        self.local('quality', {'version': 'quality-v1', 'scripts': [s.model_dump() for s in scripts],
+        self.local('quality', {'version': 'quality-v2', 'scripts': [s.model_dump() for s in scripts],
                               'plan': plan.model_dump(), 'reviews': [v.model_dump() for v in reviews], 'claims': sha256_file(r.path('analysis/claims.json')),
                               'source': self.metadata.source_sha256}, 'evaluation/quality.json',
                    lambda: evaluate(plan, scripts, claims, chapters, reviews))
@@ -389,7 +389,7 @@ class ContentFlow:
                 )
                 reviews[idx] = repaired_review
 
-            self.local('quality', {'version': 'quality-v1', 'scripts': [s.model_dump() for s in scripts],
+            self.local('quality', {'version': 'quality-v2', 'scripts': [s.model_dump() for s in scripts],
                                   'plan': plan.model_dump(), 'reviews': [v.model_dump() for v in reviews],
                                   'claims': sha256_file(r.path('analysis/claims.json')),
                                   'source': self.metadata.source_sha256}, 'evaluation/quality.json',

@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from ebooklib import epub
 import pymupdf
@@ -11,6 +12,7 @@ from bookcast.models import BookMetadata, Chapter, ChapterAnalysis, PodcastScrip
 from bookcast.parsers import parse_book, parse_epub, parse_pdf, parse_txt
 from bookcast.pipeline import Pipeline, job_status
 from bookcast.providers import MockLLMProvider, MockTTSProvider
+from bookcast.storage import sha256_file
 from typer.testing import CliRunner
 from bookcast.cli import app
 
@@ -72,6 +74,85 @@ class Phase1Tests(unittest.TestCase):
         self.assertEqual([c.title for c in parsed.chapters], ["第一章", "第二章"])
         self.assertIn("第一段。", parsed.chapters[0].text)
         self.assertNotIn("bad", parsed.chapters[0].text)
+
+    def test_epub_source_filter_removes_real_style_promotions_before_mock_analysis(self):
+        source = self.root / 'promoted.epub'
+        book = epub.EpubBook()
+        book.set_identifier('source-filter-test')
+        book.set_title('狂人日记')
+        book.set_language('zh')
+        pages = [
+            ('cover.xhtml', '<h1>封面</h1><p>封面文字</p>'),
+            ('toc.xhtml', '<p>Table of Contents</p>' + ''.join(
+                f'<a href="chapter.xhtml#{n}">第{n}节</a>' for n in range(6))),
+            ('1.html', '<p>如果你不知道读什么书，</p><p>就关注这个微信号。</p>'
+             '<p>免费电子书请加小编微信或QQ：2338856113</p>'
+             '<p>周读网址：www.ireadweek.com，电子书下载网站。</p>'),
+            ('preface.xhtml', '<h1>自序</h1><p>我写这篇序言，是要说明写作时见到的生活和人物。</p>'),
+            ('chapter.xhtml', '<h1>狂人日记</h1>'
+             '<p>我翻开历史一查，这历史没有年代。歪歪斜斜的每页上都写着仁义道德几个字。</p>'
+             '<p>本书由行行整理，如果你不知道读什么书，就关注微信公众号，'
+             '免费电子书请加小编微信或QQ：2338856113，周读网址：www.ireadweek.com。</p>'
+             '<p>我横竖睡不着，仔细看了半夜，才从字缝里看出字来。</p>'),
+            ('discussion.xhtml', '<h1>讨论</h1><p>文中讨论微信这样的通讯工具，'
+             '数字2338856113和网址https://example.org都是普通资料，不构成推广。</p>'),
+            ('back.xhtml', '<p>如果你不知道读什么书，就关注这个微信号。</p>'
+             '<p>免费电子书请加小编微信或QQ：2338856113。</p>'
+             '<p>周读网址：www.ireadweek.com，电子书下载网站。</p>'),
+            ('single-ad.xhtml', '<p>如果你不知道读什么书，就关注这个微信号。</p>'),
+            ('copyright.xhtml', '<h1>版权信息</h1><p>出版制作说明。</p>'),
+        ]
+        spine = []
+        for name, html in pages:
+            page = epub.EpubHtml(title=name, file_name=name, lang='zh')
+            page.media_type = 'application/xhtml+xml'
+            page.set_content(f'<html><body>{html}</body></html>')
+            book.add_item(page)
+            spine.append(page)
+        book.spine = spine
+        book.add_item(epub.EpubNcx())
+        book.add_item(epub.EpubNav())
+        epub.write_epub(str(source), book)
+
+        metadata = BookMetadata(book_id='fixture', title='fixture', source_name=source.name,
+                                source_sha256=sha256_file(source), source_format='epub')
+        parsed = parse_epub(source, metadata)
+        self.assertEqual(len(parsed.chapters), 3)
+        self.assertEqual(parsed.metadata.chapter_ids, ['0001', '0002', '0003'])
+        self.assertEqual([c.source_locator for c in parsed.chapters],
+                         ['epub:preface.xhtml', 'epub:chapter.xhtml', 'epub:discussion.xhtml'])
+        self.assertIn('我写这篇序言', parsed.chapters[0].text)
+        self.assertIn('我翻开历史一查', parsed.chapters[1].text)
+        self.assertNotIn('ireadweek', parsed.chapters[1].text)
+        self.assertIn('https://example.org', parsed.chapters[2].text)
+        self.assertIn('2338856113', parsed.chapters[2].text)
+        self.assertTrue(any(r.removed and r.classification == 'table_of_contents' for r in parsed.source_filter))
+        self.assertTrue(any(r.removed and r.classification == 'cover' for r in parsed.source_filter))
+        self.assertTrue(any(r.removed and r.matched_rule == 'epub_nav_document' for r in parsed.source_filter))
+        self.assertTrue(any(r.removed and r.classification == 'publisher_notice' for r in parsed.source_filter))
+        self.assertTrue(any(not r.removed and r.unit == 'epub:preface.xhtml' for r in parsed.source_filter))
+        self.assertTrue(any(r.removed and r.matched_rule == 'download_site_promotion'
+                            for r in parsed.source_filter))
+
+        job = Pipeline(MockLLMProvider(), MockTTSProvider(), self.root / 'output').generate(source,
+                                                                                           mode='two_host', minutes=2)
+        audit = json.loads((job / 'source_filter.json').read_text())
+        self.assertEqual(audit['schema_version'], 1)
+        self.assertTrue(any(r['unit'] == 'epub:1.html' and r['classification'] == 'advertisement'
+                            and r['removed'] for r in audit['units']))
+        self.assertTrue(any(r['unit'] == 'epub:single-ad.xhtml' and r['classification'] == 'advertisement'
+                            and r['removed'] for r in audit['units']))
+        self.assertTrue(any(r['unit'] == 'epub:chapter.xhtml#p:2' and r['removed']
+                            for r in audit['units']))
+        for folder in ('chapters', 'analysis', 'synthesis', 'scripts'):
+            for artifact in (job / folder).rglob('*.json'):
+                self.assertNotIn('ireadweek', artifact.read_text())
+        self.assertTrue((job / 'podcast.mp3').is_file())
+        old_parse = json.loads((job / 'manifest.json').read_text())['steps']['parse']['fingerprint']
+        with patch('bookcast.source_sanitation.SOURCE_FILTER_VERSION', 'epub-source-filter-v2'):
+            Pipeline(MockLLMProvider(), MockTTSProvider(), self.root / 'output').resume_job(job)
+        new_parse = json.loads((job / 'manifest.json').read_text())['steps']['parse']['fingerprint']
+        self.assertNotEqual(old_parse, new_parse)
 
     def test_pdf_parser_extracts_pages_and_locator(self):
         path = self.root / "book.pdf"

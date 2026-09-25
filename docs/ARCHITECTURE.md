@@ -131,7 +131,7 @@ Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry /
 
 启动恢复先取得内核独占文件锁，再将遗留 RUNNING 步骤和 pending/running 尝试标为 interrupted/FAILED_RETRYABLE。RunOwner 的 PID、主机和会话 ID 只用于诊断；不根据超时抢锁。有效完成 Attempt 可修复尚未写成成功的 Step。新计划不再使用的历史步骤标为 SKIPPED，保留文件与调用历史。
 
-缓存同时验证输入/提示版本、产物 SHA-256 和具体 Provider 配置摘要。同名实例配置改变使其旧调用失效；显式替换为其他实例保留已完成结果和原始归属，保证额度切换不重做前六章。规则和 D-010 的局部替代见 D-014 与 [JOBS.md](JOBS.md)。认证、输入、schema、业务错误仍不会自动切模型，需修复后 retry。
+缓存同时验证输入/提示版本、产物 SHA-256 和具体 Provider 配置摘要。同名实例配置改变使其旧调用失效；显式替换为其他实例保留已完成结果和原始归属，保证额度切换不重做前六章。规则和 D-010 的局部替代见 D-014 与 [JOBS.md](JOBS.md)。认证、输入、schema、业务错误仍不会自动切模型，需修复后 retry。EPUB parse 的确定性来源过滤在 Chapter/LLM 前执行，规则版本进入 parse 指纹，结果及保留/排除依据写入 `source_filter.json`；质量检查再检测明显脚本推广，见 D-022。
 
 任务清单分阶段注册 PENDING，规划前显示已知剩余量与数量待定标志。jobs/status/doctor 不修改状态；损坏任务单独列出。进度写 stderr，事件追加至 logs/events.jsonl；日志不是恢复依据，日志或终端写入失败不能使已持久化 AI 成功变成失败。
 

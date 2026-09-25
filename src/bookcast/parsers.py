@@ -14,6 +14,8 @@ from .document_extraction import OCRProvider
 from .errors import BookCastError
 from .models import BookMetadata, Chapter, DocumentExtractionInfo, NormalizedBook, SourceTextBlock
 from .pdf_extraction import LOW_CONFIDENCE, extract_pdf
+from .source_sanitation import (advertisement_unit_rule, filter_epub_body, source_record,
+                                structural_rule)
 
 
 HEADING = re.compile(r"^(?:第[0-9零〇一二三四五六七八九十百千两]+[章回节卷部].*|chapter\s+\S+.*|#{1,3}\s+.+)$", re.I)
@@ -65,26 +67,46 @@ def parse_epub(path: Path, metadata: BookMetadata, ocr: OCRProvider | None = Non
             ordered.append(item)
             seen.add(item_id)
     for item in book.get_items_of_type(ITEM_DOCUMENT):
-        if item.get_id() not in seen and not isinstance(item, epub.EpubNav):
+        if item.get_id() not in seen:
             ordered.append(item)
-            metadata.warnings.append(f"非 spine 文档追加到末尾：{item.get_name()}")
+            if not isinstance(item, epub.EpubNav):
+                metadata.warnings.append(f"非 spine 文档追加到末尾：{item.get_name()}")
     chapters = []
     resources = {item.get_name(): item for item in book.get_items()}
     image_items = 0
     ocr_pages = []
+    source_filter = []
     for position, item in enumerate(ordered, 1):
-        if isinstance(item, epub.EpubNav) or "nav" in getattr(item, "properties", []):
-            continue
+        unit = f"epub:{item.get_name()}"
         if item.get_type() != ITEM_DOCUMENT:
             metadata.warnings.append(f"未解析的 spine 资源：{item.get_name()}")
             metadata.coverage = "partial"
+            source_filter.append(source_record(unit, 'auxiliary', True, 'non_document_resource',
+                                               'epub_resource_type', item.get_name()))
             continue
         soup = BeautifulSoup(item.get_body_content(), "html.parser")
         for tag in soup(["script", "style", "noscript"]):
             tag.decompose()
+        original_text = soup.get_text("\n", strip=True)
+        structure = structural_rule(item.get_name(), list(getattr(item, 'properties', [])), soup)
+        if isinstance(item, epub.EpubNav):
+            structure = ('table_of_contents', 'epub_nav_document')
+        if structure:
+            classification, rule = structure
+            source_filter.append(source_record(unit, classification, True, rule, rule, original_text))
+            continue
+        promotion = advertisement_unit_rule(soup, original_text)
+        if promotion:
+            source_filter.append(source_record(unit, 'advertisement', True, promotion, promotion, original_text))
+            continue
+        source_filter.extend(filter_epub_body(soup, unit))
         heading = soup.find(["h1", "h2", "h3"])
         title = heading.get_text(" ", strip=True) if heading else item.get_name()
         text = soup.get_text("\n", strip=True)
+        if text:
+            source_filter.append(source_record(unit, 'body', False,
+                                               'spine_content' if item.get_id() in seen else 'non_spine_content',
+                                               'retained_by_default', text))
         blocks = ([SourceTextBlock(text=text, method="native", page=position,
                                    source_artifact=f"sha256:{metadata.source_sha256}",
                                    resource_locator=f"epub:{item.get_name()}")]
@@ -131,6 +153,8 @@ def parse_epub(path: Path, metadata: BookMetadata, ocr: OCRProvider | None = Non
         if not blocks:
             metadata.warnings.append(f"无可提取文本，可能是图片页：{item.get_name()}")
             metadata.coverage = "partial"
+            source_filter.append(source_record(unit, 'auxiliary', True, 'empty_after_extraction',
+                                               'no_text_or_ocr', original_text))
             continue
         if images and not ocr:
             metadata.warnings.append(f"图片内容未 OCR：{item.get_name()}")
@@ -144,16 +168,16 @@ def parse_epub(path: Path, metadata: BookMetadata, ocr: OCRProvider | None = Non
     kind = "mixed" if image_items and has_native else "image" if image_items else "text"
     metadata.document_extraction = DocumentExtractionInfo(
         kind=kind, provider=ocr.name if ocr_pages and ocr else None, ocr_pages=ocr_pages)
-    return _book(metadata, chapters)
+    return _book(metadata, chapters, source_filter)
 
 
 def parse_pdf(path: Path, metadata: BookMetadata, ocr: OCRProvider | None = None) -> NormalizedBook:
     return extract_pdf(path, metadata, ocr)
 
 
-def _book(metadata: BookMetadata, chapters: list[Chapter]) -> NormalizedBook:
+def _book(metadata: BookMetadata, chapters: list[Chapter], source_filter=None) -> NormalizedBook:
     metadata.chapter_ids = [chapter.id for chapter in chapters]
-    return NormalizedBook(metadata=metadata, chapters=chapters)
+    return NormalizedBook(metadata=metadata, chapters=chapters, source_filter=source_filter or [])
 
 
 def parse_book(path: Path, metadata: BookMetadata, ocr: OCRProvider | None = None) -> NormalizedBook:

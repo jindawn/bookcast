@@ -17,6 +17,7 @@ from bookcast.provider_api import ErrorKind, ProviderError
 from bookcast.provider_chain import ProviderChain
 from bookcast.providers import MockLLMProvider, MockTTSProvider
 from bookcast.quality import evaluate
+from bookcast.source_sanitation import script_contamination_rule
 from bookcast.storage import sha256_file
 
 DEMO = Path(__file__).resolve().parents[1] / 'examples/content-demo.txt'
@@ -248,6 +249,35 @@ def test_quality_metrics_detect_repetition_length_vague_language_and_real_covera
     assert report['host_b_ratio']==0 and report['vague_expressions']['众所周知']>1
     assert report['script_chars']>report['target_chars']*1.35
     assert report['blocking_issues'] and len(report['warnings'])>=4
+
+
+def test_final_source_contamination_guard_is_specific_and_blocks_before_tts(tmp_path):
+    assert script_contamination_rule('文中讨论微信通信与数字2338856113，见 https://example.org。') is None
+    assert script_contamination_rule('关注这个微信号，免费电子书请加小编微信或QQ：2338856113')
+    assert script_contamination_rule('电子书下载网站：www.ireadweek.com')
+    class Contaminating(MockLLMProvider):
+        def generate_structured(self, raw_prompt, response_model):
+            result = super().generate_structured(raw_prompt, response_model)
+            if json.loads(raw_prompt)['operation'] == 'dialogue':
+                result.turns[0].text = '欢迎关注这个微信号，免费电子书请加小编微信或QQ：2338856113。'
+            return result
+
+    class CountingTTS(MockTTSProvider):
+        calls = 0
+        def synthesize(self, script, destination):
+            self.calls += 1
+            return super().synthesize(script, destination)
+
+    tts = CountingTTS()
+    with pytest.raises(BookCastError, match='内容质量检查未通过'):
+        Pipeline(Contaminating(), tts, tmp_path).generate(DEMO, minutes=3)
+    job = next(tmp_path.glob('*/manifest.json')).parent
+    report = json.loads((job / 'evaluation/quality.json').read_text())
+    assert report['status'] == 'blocked'
+    assert report['source_contamination'][0]['reason'] == 'source_contamination'
+    assert any('来源推广内容' in issue for issue in report['blocking_issues'])
+    assert tts.calls == 0
+    assert not (job / 'podcast.mp3').exists()
 
 
 def test_chunk_boundaries_are_contiguous_and_quote_offsets_survive_unicode():

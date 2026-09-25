@@ -445,9 +445,20 @@ class _Runner:
                 write_json(self.path(name), chapter.model_dump())
                 outputs.append(name)
             write_json(self.path("metadata.json"), book.metadata.model_dump())
+            if manifest.source_format == 'epub':
+                from .source_sanitation import SOURCE_FILTER_VERSION
+                write_json(self.path('source_filter.json'), {
+                    'schema_version': 1, 'rules_version': SOURCE_FILTER_VERSION,
+                    'source_sha256': manifest.source_sha256,
+                    'units': [record.model_dump() for record in book.source_filter],
+                })
+                outputs.append('source_filter.json')
             return ["metadata.json", *outputs]
 
         parse_inputs = {"source": sha256_file(self.path(source_relative)), "format": manifest.source_format}
+        if manifest.source_format == 'epub':
+            from .source_sanitation import SOURCE_FILTER_VERSION
+            parse_inputs['source_filter'] = SOURCE_FILTER_VERSION
         if manifest.extraction_options and manifest.extraction_options.mode == "auto":
             from .document_extraction import ocr_cache_key
             parse_inputs["extraction"] = {**manifest.extraction_options.model_dump(),
@@ -455,7 +466,8 @@ class _Runner:
         if metadata_seed:
             parse_inputs["metadata_seed"] = metadata_seed.model_dump()
         old_parse = manifest.steps.get('parse')
-        if (self.by_id and metadata_seed is None and old_parse and old_parse.status == 'completed'
+        if (self.by_id and manifest.source_format != 'epub' and metadata_seed is None
+                and old_parse and old_parse.status == 'completed'
                 and artifacts_valid(self.root, old_parse)):
             # Pre-v3 acquired jobs did not retain the seed. Preserve a verified parse and its provenance.
             self.current_stage = 'parse'

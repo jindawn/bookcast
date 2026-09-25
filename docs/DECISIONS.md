@@ -190,3 +190,7 @@ Gemini 使用标准库调用官方、仍有文档的 generateContent REST TTS；
 ## D-021 — 本地 OCR 是可选文档提取边界
 
 状态：accepted；日期：2026-09-24。先对 PDF 每页分类，再只在用户显式 `--ocr auto` 时对扫描页或混合页未覆盖的大图像区域做 OCR；EPUB 仅识别包内图片。OCR 不归入 LLMProvider/TTSProvider，也不分叉 Content/Pipeline；输出带源 SHA、页/资源、区域与置信度的 `SourceTextBlock`。本机 Apple Vision 在自制中英/旋转样本通过技术试验，作为 macOS 可选实现；Tesseract 在本机未安装、未实测，不提前注册。识别进程和不可信 PDF 检测进程隔离，不传 AI 凭证；源大小、页数、像素、区域、时间和结果大小有边界。OCR 设置和实现版本进入 parse Step 指纹，已完成结果按原 Job/Artifact 恢复，同一 Job 不切换原生/OCR 模式。代价是 parse 未提交时恢复可能重做整份 OCR，复杂版面和非 macOS OCR 暂不承诺。依据与可复现实验见 [OCR.md](OCR.md)。
+
+## D-022 — EPUB 正文边界先于 LLM 且可审计
+
+状态：accepted；日期：2026-09-25。EPUB spine/XHTML 只是阅读资源顺序，不等同语义章节。Parser 在生成 Chapter 前排除明确的 nav/目录、封面、版权页与高置信度推广整页；混合 XHTML 仅移除有促销意图及联系/下载上下文的段落。序言、后记、普通 URL/数字/微信讨论默认保留，规则无法确定的内容不静默丢弃，也不逐 chunk 调用 LLM 分类。`source_filter.json` 记录资源及被移除段落的分类、规则和短预览；规则版本进入 parse 指纹，使旧污染分析缓存失效。最终质量检查对明显推广脚本再阻断，quality 输入版本同步升级以重评旧报告，但不能替代源过滤。代价是保守规则可能漏掉未知广告，标题独占的 XHTML 仍按原解析单元处理；不得声称自动语义分章或已净化所有 EPUB。

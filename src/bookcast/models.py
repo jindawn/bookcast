@@ -45,6 +45,16 @@ class DocumentExtractionInfo(Model):
     ocr_pages: list[int] = Field(default_factory=list)
 
 
+class SourceFilterRecord(Model):
+    unit: str
+    classification: Literal['body', 'advertisement', 'table_of_contents', 'cover',
+                            'publisher_notice', 'production_note', 'auxiliary']
+    removed: bool
+    reason: str
+    matched_rule: str
+    preview: str = Field(max_length=120)
+
+
 class DocumentExtractionOptions(Model):
     mode: Literal["native", "auto"] = "native"
     provider: Literal["apple-vision"] | None = None
@@ -83,6 +93,7 @@ class BookMetadata(Model):
 class NormalizedBook(Model):
     metadata: BookMetadata
     chapters: list[Chapter] = Field(min_length=1)
+    source_filter: list[SourceFilterRecord] = Field(default_factory=list)
 
 
 class ChapterAnalysis(Model):

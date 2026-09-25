@@ -2,6 +2,8 @@
 from collections import Counter
 import re
 
+from .source_sanitation import script_contamination_rule
+
 
 def normalize(text):
     return ''.join(c.lower() for c in text if c.isalnum())
@@ -14,10 +16,15 @@ def evaluate(plan, scripts, claims, chapters, reviews=()):
     counts = Counter(compact[i:i+20] for i in range(max(0, len(compact)-19)))
     repetition = sum(n-1 for n in counts.values()) / max(1, sum(counts.values()))
     blocking, warnings, source_issues, covered = [], [], [], set()
+    contamination = []
     role_chars = Counter()
     for segment, script in zip(plan.segments, scripts, strict=True):
-        for turn in script.turns:
+        for turn_index, turn in enumerate(script.turns):
             role_chars[turn.speaker] += len(turn.text)
+            contamination_rule = script_contamination_rule(turn.text)
+            if contamination_rule:
+                contamination.append({'segment': segment.id, 'turn_index': turn_index,
+                                      'reason': 'source_contamination', 'matched_rule': contamination_rule})
             invalid = set(turn.claim_ids) - set(segment.claim_ids)
             if invalid:
                 source_issues.append({'segment': segment.id, 'issue': 'unknown_or_out_of_segment_claim'})
@@ -43,6 +50,8 @@ def evaluate(plan, scripts, claims, chapters, reviews=()):
         warnings.append('部分来源陈述未完成语义核验；Mock 必须由人工复核。')
     if source_issues:
         blocking.append('来源引用或事实形式检查失败')
+    if contamination:
+        blocking.append('脚本包含来源推广内容；请检查 source_contamination。')
     # Across turn boundaries too. Fixed engineering guard, not a legal safe-harbor threshold.
     windows = {compact[i:i+80] for i in range(max(0, len(compact)-79))}
     overlap = False
@@ -79,6 +88,7 @@ def evaluate(plan, scripts, claims, chapters, reviews=()):
                                     'semantic_status': 'requires_human_review',
                                     'checks': ['evidence offsets checked during analysis', 'allowed claim IDs',
                                                'source attribution', 'numeric support', 'hypothetical labels']},
+            'source_contamination': contamination,
             'verbatim_overlap_detected': overlap, 'is_mock': any(s.is_mock for s in scripts),
             'limitations': ['引用存在不证明推论正确；不检测所有语义矛盾、事实错误或抄袭。',
                             '80字符是保守产品拦截阈值，不是版权法律许可界线。',
