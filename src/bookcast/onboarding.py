@@ -37,7 +37,7 @@ def profile_text(profile: str, destination: Path, model_dir: Path | None = None)
     if profile == "demo":
         lines += ['type = "mock"', 'model = "mock-tones-v1"']
     elif profile == "deepseek-gemini":
-        lines += ['type = "gemini-tts"', 'model = "gemini-3.1-flash-tts-preview"',
+        lines += ['type = "gemini-tts"', 'model = "gemini-3.8-flash-tts"',
                   'api_key_env = "GEMINI_API_KEY"', 'timeout_seconds = 120',
                   '[providers.cloud_tts]', 'send_text_to_cloud = true', 'data_tier = "unknown"',
                   'host_voice = "Kore"', 'guest_voice = "Puck"']

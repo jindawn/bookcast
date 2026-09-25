@@ -53,12 +53,13 @@ def usage_snapshot(calls, reuse_counts=None, prices=None):
             'by_provider_model_stage': entries}
 
 
+
 def tts_usage_snapshot(calls, root_dir=None):
     from collections import defaultdict
     import json
     rows = defaultdict(lambda: {
-        'request_count': 0, 'input_tokens': 0, 'output_tokens': 0,
-        'retry_count': 0, 'duration_seconds': 0.0
+        'request_count': 0, 'retry_count': 0, 'successful_chunks': 0, 'failed_chunks': 0, 'duration_seconds': 0.0,
+        'input_tokens': 0, 'output_tokens': 0, 'usage_available': False
     })
     
     for call in calls:
@@ -69,11 +70,16 @@ def tts_usage_snapshot(calls, root_dir=None):
         row = rows[key]
         row['request_count'] += 1
         
-        if call.status == 'failed_retryable':
-            row['retry_count'] += 1
+        if call.status == 'failed_retryable' or call.status == 'failed_permanent':
+            row['failed_chunks'] += 1
+            if call.status == 'failed_retryable':
+                row['retry_count'] += 1
+        else:
+            row['successful_chunks'] += 1
             
         usage = call.provider_reported_usage
-        if usage:
+        if usage and (usage.input_tokens is not None or usage.output_tokens is not None):
+            row['usage_available'] = True
             row['input_tokens'] += usage.input_tokens or 0
             row['output_tokens'] += usage.output_tokens or 0
             
@@ -89,6 +95,9 @@ def tts_usage_snapshot(calls, root_dir=None):
                         
     entries = []
     for (provider, model), row in sorted(rows.items()):
+        if not row['usage_available']:
+            row.pop('input_tokens', None)
+            row.pop('output_tokens', None)
         entries.append({'provider': provider, 'model': model, **row})
         
     return {'schema_version': 1, 'tts_usage': entries}

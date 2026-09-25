@@ -498,10 +498,48 @@ export default function Home() {
                 </button>
               ))}
             </div>
+
+            <label className="step-label">
+              <b>3</b> 语音引擎
+            </label>
+            <div className="modes" role="radiogroup" aria-label="语音引擎">
+              <button
+                role="radio"
+                aria-checked={ttsEngine === "auto"}
+                className={ttsEngine === "auto" ? "chosen" : ""}
+                onClick={() => setTtsEngine("auto")}
+              >
+                <span><i>{ttsEngine === "auto" ? "●" : "○"}</i></span>
+                <strong>默认</strong>
+                <small>使用 bookcast.toml 优先级</small>
+              </button>
+              <button
+                role="radio"
+                aria-checked={ttsEngine === "gemini"}
+                className={ttsEngine === "gemini" ? "chosen" : ""}
+                onClick={() => setTtsEngine("gemini")}
+              >
+                <span><i>{ttsEngine === "gemini" ? "●" : "○"}</i></span>
+                <strong>Gemini — 高质量云端</strong>
+                <small>模型：Gemini 3.8 Flash TTS · 主持人：Kore · 嘉宾：Puck</small>
+              </button>
+              <button
+                role="radio"
+                aria-checked={ttsEngine === "kokoro"}
+                className={ttsEngine === "kokoro" ? "chosen" : ""}
+                onClick={() => setTtsEngine("kokoro")}
+              >
+                <span><i>{ttsEngine === "kokoro" ? "●" : "○"}</i></span>
+                <strong>Kokoro — 本地免费</strong>
+                <small>完全离线的本地人声合成引擎</small>
+              </button>
+            </div>
+            
             <div className="duration">
               <label className="step-label" htmlFor="minutes">
-                <b>3</b> 目标时长
+                <b>4</b> 目标时长
               </label>
+
               <div>
                 <input
                   id="minutes"

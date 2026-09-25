@@ -137,9 +137,10 @@ class GeminiTTSProvider:
             if not normalized.strip():
                 continue
                 
-            style = "calm, thoughtful Chinese podcast host" if t.speaker == '主持人' else "natural, conversational, reflective guest"
-            if self.settings.style_instruction:
-                style = self.settings.style_instruction
+            if t.speaker == '主持人':
+                style = self.settings.host_style or self.settings.style_instruction or "Natural Mandarin Chinese podcast host. Calm, thoughtful and conversational. Speak like a real podcast host discussing literature, not like a news anchor, audiobook narrator or advertisement. Use natural pauses and restrained emotion. Medium speaking pace."
+            else:
+                style = self.settings.guest_style or self.settings.style_instruction or "Natural Mandarin Chinese podcast guest. Relaxed, reflective and conversational. Respond naturally to the host rather than reading a script. Use subtle emotion and natural pauses. Medium speaking pace."
 
             parts.append({
                 'type': 'text',

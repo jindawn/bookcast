@@ -28,6 +28,7 @@ class Submission(Model):
     edition: str | None = Field(default=None, max_length=100)
     mode: Literal['summary', 'deep_read', 'two_host'] = 'two_host'
     minutes: int = Field(default=10, ge=1, le=120)
+    tts_engine: Literal['gemini', 'kokoro', 'auto'] = 'auto'
 
     @model_validator(mode='after')
     def one_source(self):
@@ -160,9 +161,16 @@ class WebService:
                 result = SearchResult.model_validate_json(id_path(self.root, 'searches', request.search_id).with_suffix('.json').read_text())
                 candidate = choose_edition(result, request.edition)
                 title = candidate.identity.title
+
             settings = load_config(self.config)
+            
+            if request.tts_engine == 'gemini':
+                gemini_spec = next((p for p in settings.providers if p.name == request.tts_engine), None)
+                if not gemini_spec or not __import__('os').environ.get(gemini_spec.api_key_env or 'GEMINI_API_KEY'):
+                    raise BookCastError("authentication_error: 未配置 GEMINI_API_KEY")
+
             record = WebJob(id=identifier, request=request, title=title, candidate=candidate,
-                            settings=settings_snapshot(settings, 'auto', 'auto'))
+                            settings=settings_snapshot(settings, 'auto', request.tts_engine))
             write_json(root / 'submission.json', record.model_dump(mode='json'))
             self.launch(identifier)
         return self.status(identifier)

@@ -55,6 +55,8 @@ class CloudTTSConfig(Model):
     host_voice: str = Field(default="Kore", pattern=r"^[A-Za-z]{1,32}$")
     guest_voice: str = Field(default="Puck", pattern=r"^[A-Za-z]{1,32}$")
     style_instruction: str | None = Field(default=None, max_length=512)
+    host_style: str | None = Field(default=None, max_length=512)
+    guest_style: str | None = Field(default=None, max_length=512)
     mode: Literal["conversational", "standard", "unknown"] = "unknown"
 
     @model_validator(mode="after")
