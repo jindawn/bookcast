@@ -434,3 +434,8 @@
 - 对已完成真实 EPUB Job 的 manifest 作只读分阶段审计；361 唯一步骤/429 次 LLM attempt，主要输出 token 来自章/全书综合和 reasoning。旧任务正文与音频未改，未调用真实 DeepSeek。逐项计数见 `docs/LLM_COST.md`。
 - `content.py` 保留来源分析和证据，章综合批次 12，先按时长/书序筛选全书综合候选并将 20 分钟片段上限降至16；`generation.py` 增加分阶段输出预算；`llm_usage.py` 和 Runner 从 Attempt 聚合用量，不含 prompt/secret。
 - 八模块离线 244 passed/1 skipped；Mock 成本 smoke 13 个请求、3 个 segment、0 真实 API；项目 validator/compileall/diff check 通过。新真实账单与质量未验证，禁止把离线投影当成实际降幅。
+
+## 2026-09-25 真实 5 分钟成本验证预检
+
+- 提交 `6a9f9515774468d10bc3f8633dfcfa43a9f431ed` 下运行 Mock 成本烟测（0真实 API）与 8 模块离线 244 passed/1 skipped。
+- 独立运行目录 `output/llm-cost-clean-5min-5f94c8665518` 仅写入 baseline.json；真实 EPUB SHA 见基线，净化解析 69 单元/93 chunk，0 manifest/usage/检查点。当前进程缺少 DeepSeek 凭证且本地 Web 未运行，真实调用未开始，未创造 Core job_id 或消费 token。

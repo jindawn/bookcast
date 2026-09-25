@@ -1,5 +1,15 @@
 # 给下一位 Coding Agent
 
+更新时间：2026-09-25。当前目标是用户明确要求的真实 DeepSeek 5 分钟双人播客 clean-run 成本验证，不是继续架构优化。**真实调用未启动**：当前 Codex 执行进程没有 `DEEPSEEK_API_KEY`，本地 Web 127.0.0.1:8765 未运行。不要向聊天输出密钥，不要拿旧 Job 冒充新 clean run。用户已收到安全注入凭证的异步请求。
+
+零成本烟测通过（Mock 13 请求、真实 0），相关离线 244 passed / 1 skipped。新独立运行基线在 `output/llm-cost-clean-5min-5f94c8665518/baseline.json`，run_id `5f94c8665518409a9cdad81f205d0cee`；当前只有该基线文件，无 Core job_id、manifest、usage 或检查点。源使用旧已完成 Web Job 内的 EPUB 导入副本，SHA-256 为 `80b17c0c498c1cc1ae32dc806211c3e1300846f37617ca792189957709d3a0bc`；本地净化解析为 69 个 XHTML 单元、93 个分析 chunk。配置仍是 deepseek-flash / kokoro-multi-lang-v1_0、two_host、5 分钟，HEAD `6a9f9515774468d10bc3f8633dfcfa43a9f431ed`。旧 Job/音频未修改。
+
+取得执行环境凭证后，先确认可用，使用 baseline.json 中 output_dir 作为 `bookcast generate` 的全新输出根，只运行一次，不 retry；出现 schema/auth/异常重复请求或超预期 fan-out 时立即停止。随后用新 Job `usage/llm_usage.json` 与 manifest 审计实际阶段用量、重复、repair 和 target_duration，不推算未发生的数据。旧完成任务一概不要运行。
+
+---
+
+# 给下一位 Coding Agent
+
 更新时间：2026-09-25。先读 AGENTS.md 和核对 Git。Phase18 的 LLM 成本审计与有界预算已提交为 `04551c0d779d6c4b8f198d192dd5dafbbeb70005`；当前真实《狂人日记》完成 Job/音频未修改，未调用 DeepSeek 或 Kokoro。测试结果与决策见 [LLM_COST.md](LLM_COST.md) 和 D-023。
 
 ## Phase18 本次工作
