@@ -5,7 +5,7 @@
   "current_task": "等待用户本机新独立 DeepSeek clean run 与真实成本验收",
   "task_status": "blocked",
   "branch": "main",
-  "last_verified_commit": "86275234810b2b704fa73b9ef7d8632e22196117",
+  "last_verified_commit": "8fe39f474888d9d6fb31dfcbd7d31573d3ebd076",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -113,7 +113,8 @@
     "RC Stage 0：Gemini虚拟时间、默认suite主/子进程禁网、Interactions fixture和chunk恢复真实回归；核心58通过，未调用真实API",
     "RC Stage 3: 修复 Kokoro 长连续句 80 字符 Pydantic 越界（split_text/speech_units 限制 80）与 Gemini 缺 Key 时抛 ProviderError(AUTH) 而非 sys.exit/UnboundLocalError",
     "RC Stage 4: 严格区分 active_error 与 historical_attempt_errors；只有 failed/failed_retryable/blocked 状态存在 active_error；completed/SUCCEEDED 状态下 active_error 与 top-level error 为 null，同时在 manifest.ai_calls 与 events.jsonl 中完整保留历史 failed attempts 审计。",
-    "RC Stage 5：生产成本摘要使用 Job 创建时配置/计价快照，Attempt 更新 usage 与原子摘要；CLI/Web 按 Job 身份验证并显示，缺失用量不标实际，按 Provider+model 分组；全路径离线回归通过。"
+    "RC Stage 5：生产成本摘要使用 Job 创建时配置/计价快照，Attempt 更新 usage 与原子摘要；CLI/Web 按 Job 身份验证并显示，缺失用量不标实际，按 Provider+model 分组；全路径离线回归通过。",
+    "补齐遗漏的测试资产 tests/fixtures/deepseek_analysis_0015_concepts_overflow.json，在 .gitignore 忽略 debugging-*.md 本地会话记录并清理冗余副本。"
   ],
   "in_progress": [],
   "next_actions": [
@@ -126,6 +127,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "deepseek-concepts-overflow-fixture-regression",
+      "command": ".venv/bin/pytest tests/test_generation.py -k 'test_2026_09_25_analysis_0015_concepts_overflow_and_conversational_retry' -q; python3 scripts/validate_project.py; git diff HEAD^ HEAD --check",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "1 passed；覆盖第 15 章 concepts 溢出及对话式修复用例所需 fixture 资产落盘跟踪，离线测试、项目校验与提交差异全部通过。",
+      "checked_at": "2026-09-25T20:10:30Z"
+    },
     {
       "name": "rc-stage-4-active-error-state-lifecycle",
       "command": ".venv/bin/pytest tests/test_job_recovery.py tests/test_job_cli.py tests/test_web.py -q; npm --prefix web run typecheck; python3 scripts/validate_project.py",
@@ -1165,7 +1174,11 @@
     {
       "path": "tests/offline_guard/sitecustomize.py",
       "purpose": "默认离线测试的Python子进程禁网入口；意外socket连接立即失败"
+    },
+    {
+      "path": "tests/fixtures/deepseek_analysis_0015_concepts_overflow.json",
+      "purpose": "第 15 章 concepts 字段超限脱敏测试 fixture"
     }
   ],
-  "updated_at": "2026-09-25T19:49:30Z"
+  "updated_at": "2026-09-25T20:10:30Z"
 }

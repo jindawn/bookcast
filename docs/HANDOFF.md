@@ -1,3 +1,12 @@
+## 2026-09-26 仓库未跟踪文件收口与测试资产补全
+
+目标：处理仓库中残留的未跟踪文件，保持工作区整洁且不遗漏必要测试资产。
+1. **测试资产补全**：将 `tests/fixtures/deepseek_analysis_0015_concepts_overflow.json` 纳入 Git 跟踪。该文件为 `test_2026_09_25_analysis_0015_concepts_overflow_and_conversational_retry` 必需的脱敏测试 fixture，同目录下的 `deepseek_analysis_0003_evidence_overflow.json` 已在历史提交中跟踪。
+2. **会话转录隔离与清理**：在 `.gitignore` 中新增 `debugging-*.md` 规则；本地保留完整的原始排障流水 `debugging-bookcast-deepseek-schema-error--bf8123db.md`，删除存在截断的重复副本 `-2.md` 与 `-3.md`。
+3. **验证与状态同步**：相关测试 1 passed，`scripts/validate_project.py` 通过，功能提交 `8fe39f474888d9d6fb31dfcbd7d31573d3ebd076` 已创建并验证。工作区当前无未跟踪文件。
+
+---
+
 ## 2026-09-26 RC Stage 5：Cost Summary production integration
 
 目标：让创建时配置快照、Attempt usage、成本摘要、CLI 与 Web 使用同一份按 Job 验证的成本视图。新 Job 在 manifest 保存 `output_id` 与不含凭证的 `cost_snapshot`，其中包含 Provider/model/pricing 和北京时区工作日峰谷策略。恢复时当前 Provider 选择可以变，但创建时计价快照不变；旧 Job 无完整快照时金额为 unavailable，不用今天的 `bookcast.toml` 补价。
