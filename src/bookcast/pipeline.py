@@ -423,6 +423,16 @@ class _Runner:
             reuse[stage] = reuse.get(stage, 0) + count
         write_json(path, usage_snapshot(self.manifest.ai_calls, reuse))
         write_json(self.path('usage/tts_usage.json'), tts_usage_snapshot(self.manifest.ai_calls, self.root))
+        
+        try:
+            from .cost import calculate_cost_summary
+            from .provider_config import load_config
+            cost_summary = calculate_cost_summary(self.manifest.ai_calls, load_config(self.config), self.root)
+            write_json(self.path('usage/cost_summary.json'), cost_summary)
+        except Exception as exc:
+            import sys
+            print(f"Failed to write cost_summary.json: {exc}", file=sys.stderr)
+
         self.pending_llm_reuse.clear()
 
     def ai_operation(self, name: str, kind: str, version: str, inputs: object, invoke: Callable) -> list[str]:

@@ -51,6 +51,17 @@ def profile_text(profile: str, destination: Path, model_dir: Path | None = None)
                   f'model_dir = {json.dumps(relative, ensure_ascii=False)}']
         if voice == 'qwen':
             lines += ['experimental = true', 'host_voice = "Vivian"', 'guest_voice = "Uncle_Fu"']
+    lines.append('
+[pricing.deepseek-flash.off_peak]
+cached_input_per_million = 0.5
+uncached_input_per_million = 1.0
+output_per_million = 2.0
+
+[pricing.deepseek-flash.peak]
+cached_input_per_million = 1.0
+uncached_input_per_million = 2.0
+output_per_million = 2.0
+')
     result = '\n'.join(lines) + '\n'
     import tomllib
     ProvidersConfig.model_validate(tomllib.loads(result))

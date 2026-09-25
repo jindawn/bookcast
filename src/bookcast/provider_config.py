@@ -24,6 +24,16 @@ def is_loopback(host: str | None) -> bool:
         return False
 
 
+class ModelPricing(Model):
+    cached_input_per_million: float
+    uncached_input_per_million: float
+    output_per_million: float
+
+class PricingTier(Model):
+    off_peak: ModelPricing | None = None
+    peak: ModelPricing | None = None
+    default: ModelPricing | None = None
+
 class LocalTTSConfig(Model):
     model_dir: str = Field(min_length=1)
     host_voice: int = Field(default=45, ge=45, le=52)
@@ -125,6 +135,7 @@ class ProvidersConfig(Model):
     llm_priority: list[str] = Field(min_length=1)
     tts_priority: list[str] = Field(min_length=1)
     failover_on: list[ErrorKind] = Field(default_factory=lambda: sorted(FAILOVER_ERRORS))
+    pricing: dict[str, PricingTier] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_chains(self):

@@ -363,8 +363,55 @@ def doctor(
         raise typer.Exit(1)
 
 
+
+@app.command()
+def cost(
+    job: Annotated[str, typer.Argument(help="任务目录、ID 或名称")],
+    output_dir: Annotated[Path, typer.Option(help="产物根目录")] = Path("output"),
+    config: Annotated[Path | None, typer.Option(help="Provider TOML 文件")] = None
+) -> None:
+    """生成并展示指定任务的成本报告。"""
+    from .jobs import resolve_job
+    from .pipeline import load_manifest
+    from .provider_config import load_config
+    from .cost import calculate_cost_summary
+    from .storage import artifact_path
+    import json
+    
+    try:
+        path = resolve_job(job, output_dir)
+        root = path.parent
+        manifest = load_manifest(path)
+    except Exception as exc:
+        raise BookCastError(f"读取任务失败：{exc}") from None
+        
+    cfg = load_config(config)
+    summary = calculate_cost_summary(manifest.ai_calls, cfg, root)
+    
+    # Save the updated cost summary
+    summary_path = artifact_path(root, 'usage/cost_summary.json')
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+    
+    print("\nDeepSeek")
+    if summary['llm']['cost']['status'] == 'unavailable':
+        print("Cost: unavailable (no pricing configured)")
+    else:
+        print(f"Cached input: {summary['llm']['usage']['cached_input_tokens']}")
+        print(f"Uncached input: {summary['llm']['usage']['uncached_input_tokens']}")
+        print(f"Output: {summary['llm']['usage']['output_tokens']}")
+        print(f"Estimated cost: ¥{summary['llm']['cost']['amount']:.2f}")
+        
+    print("\nGemini TTS")
+    print(f"Requests: {summary['tts']['request_count']}")
+    print(f"Duration: {int(summary['tts']['audio_duration_seconds'])}s")
+    print("Cost: unavailable")
+    
+    print(f"\nKnown total: ¥{summary['total']['known_amount']:.2f}")
+
 @app.command()
 def status(
+
     job: Annotated[str, typer.Argument(help="Job ID、book_id、任务目录或 manifest.json 路径")],
     output_dir: Annotated[Path, typer.Option(help="按 ID 查找时使用的产物根目录")] = Path("output"),
     as_json: Annotated[bool, typer.Option("--json", help="输出机器可读 JSON")] = False,

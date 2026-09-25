@@ -676,6 +676,49 @@ export default function Home() {
                       )}
                     </div>
                   )}
+                  {current.cost_summary && (
+                    <div className="cost-summary" style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                      <h4 style={{ margin: '0 0 0.5rem' }}>本期生成成本</h4>
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>DeepSeek</span>
+                        <span>{current.cost_summary.llm.cost.status === 'unavailable' ? '未统计' : `¥${current.cost_summary.llm.cost.amount.toFixed(2)}`}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Gemini TTS</span>
+                        <span>{current.cost_summary.tts.cost.status === 'unavailable' ? '未统计' : `¥${current.cost_summary.tts.cost.amount.toFixed(2)}`}</span>
+                      </div>
+                      <hr style={{ margin: '0.5rem 0', borderColor: 'var(--border)' }} />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                        <span>已知成本</span>
+                        <span>¥{current.cost_summary.total.known_amount.toFixed(2)}</span>
+                      </div>
+                      
+                      <details style={{ marginTop: '1rem' }}>
+                        <summary style={{ cursor: 'pointer', color: 'var(--primary)' }}>查看明细</summary>
+                        
+                        <div style={{ marginTop: '1rem', fontSize: '0.9em' }}>
+                          <strong>DeepSeek Token</strong>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>缓存输入</span><span>{current.cost_summary.llm.usage.cached_input_tokens}</span></div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>未缓存输入</span><span>{current.cost_summary.llm.usage.uncached_input_tokens}</span></div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>输出</span><span>{current.cost_summary.llm.usage.output_tokens}</span></div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--muted)' }}><span>推理 (仅展示)</span><span>{current.cost_summary.llm.usage.reasoning_tokens}</span></div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>请求数</span><span>{current.cost_summary.llm.requests}</span></div>
+                          
+                          <strong style={{ display: 'block', marginTop: '0.5rem' }}>TTS</strong>
+                          <div>{current.cost_summary.tts.model}</div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>请求数</span><span>{current.cost_summary.tts.request_count}</span></div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>重试</span><span>{current.cost_summary.tts.retry_count}</span></div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>API usage</span><span>{current.cost_summary.tts.usage_available ? '可用' : '官方响应未提供 token usage'}</span></div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>估算费用</span><span>未计算</span></div>
+                        </div>
+                      </details>
+                      
+                      {current.cost_summary.diagnostics?.map((msg, idx) => (
+                        <p key={idx} className="notice error" style={{ marginTop: '0.5rem', marginBottom: 0 }}>{msg}</p>
+                      ))}
+                    </div>
+                  )}
                   <details>
                     <summary>产物与任务信息</summary>
                     <p>Core ID：{current.core_job_id || "尚未创建"}</p>
