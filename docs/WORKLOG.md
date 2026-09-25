@@ -341,3 +341,83 @@
 - 20分钟《狂人日记》两个Web Job `2bd86cd0...`、`3a591bfd...` 的提交配置和Core快照均为DeepSeek+Kokoro，失败停在分析，0 TTS Attempt/0 WAV。页面48秒Mock来自 `3bddce2b...` PDF任务，其配置明确为Mock。旧UI在选中任务不在列表时显示首条任务。
 - 修复选中项缺席时的UI回退，展示当前任务保存的LLM/TTS链并把进度Provider标为最近调用。真实+Mock TTS混链拒绝，真实链恢复时旧Mock音频缓存失效；完成和只读状态检查音频类型与活跃Provider来源。
 - 六模块Python回归189 passed，单项CLI受本机配置影响改在隔离cwd补测1 passed；Web typecheck/build通过，聚焦Playwright 1 passed。Kokoro对原书第3章32字符文本独立生成7.13秒有效speech WAV；无DeepSeek key，未实际retry原Job，现存manifest SHA不变。
+
+## 2026-09-25 真实 DeepSeek chapter_analysis 列表超限
+
+- 读取原Web Job `3a591bfdaac14dbbb254ae8b9e138e85` 的事件与Attempt。最近 `analysis:0003:0001` attempt `f543fea6033247bda5ca146b274a4d8c` 为 DeepSeek `ValidationError` / `core_ideas` / `too_long`；前次同任务为 `evidence` / `too_long`。两字段各最多6项；原始响应未保存，具体项数仅能确定至少7，历史精确finish_reason未知。
+- 第2章成功输入正文433字、18证据片段、prompt 2503字；第3章失败首chunk正文4000字、89片段、prompt 14439字，调用和schema相同。HTTP和JSON解析成功，失败在Pydantic列表长度，后续域校验未执行。
+- DeepSeek适配器明确maxItems；已知列表超限最多一次同Provider纠错，逐次Attempt审计；严格校验和缓存恢复保留。日志新增安全finish_reason。事件所见两种字段形态回归覆盖，OpenAI、malformed、永久失败和恢复行为覆盖。
+- 相关 `147 passed、1 deselected`；compileall、项目校验、diff check通过。功能提交 `913eed702ea6b5480993e0f7f44ec529d0dbc5ed`。本shell无DeepSeek key，未执行真实API有界复验或整本retry，原Job未改动。
+
+## 2026-09-25 真实 DeepSeek 有界验证与次级数组溢出修复
+
+- 环境检测确认 `DEEPSEEK_API_KEY` 存在；对现存失败任务 `3a591bfdaac14dbbb254ae8b9e138e85`（Core Job `a6b3e5d63dc64f82a0227ba979ab80c3`）执行最低成本真实 API 验证。
+- 原失败 chunk `analysis:0003:0001` 调用 DeepSeek 真实通过（input 9022 / output 1341 / finish_reason stop）。
+- 推进至第 2 块 `analysis:0003:0002` 时，首轮调用 DeepSeek 返回 7 项 `evidence`，触发 `ValidationError: too_long` 并安全记账为 `failed_retryable`；触发纠错重试后，DeepSeek 修复了 `evidence`，但在未被单独警告的 `core_ideas` 字段返回了 7 项，再次触发 `too_long`，因无截断导致永久失败。
+- 最小修复：在适配器层保留首轮严格校验与记账，在 `prepare_schema_retry` 触发纠错轮次时，仅对未被单独警告的次级数组属性超过 `maxItems` 进行安全有界截断（`[:limit]`），主警告字段仍检验模型是否遵从指令。
+- 补充回归测试 `test_real_failure_shape_secondary_array_overflow_is_repaired`，覆盖 1 轮失败记账、2 轮次级数组截断修复全流程。离线测试 148 passed / 1 deselected 全过。
+- 真实 API 复验：`analysis:0003:0002` 成功修复，`synthesis/chapters/0003` 综合、`analysis:0003` 汇总以及第 4 章 `analysis:0004:0001` 和章节综合全部调用成功；两连续章节验证通过后按设计有界中断（interrupted）。原 Job 目前前 4 章全部持久化有效，可安全直接 resume。
+
+## 2026-09-25 真实 DeepSeek Markdown 语法包裹修复与第 22、23 章有界验证
+
+- 读取原Web Job `3a591bfdaac14dbbb254ae8b9e138e85`（Core Job `a6b3e5d63dc64f82a0227ba979ab80c3`）最新失败记录：推进至第 21 章完成（105 步完成），在第 22 章首块 `analysis:0022:0001` 报 `ValidationError`、`validation_field: $`、`validation_reason: json_invalid`、`finish_reason: stop`。
+- 根因排查：对比已成功的第 20、21 章与失败的第 22 章，DeepSeek 在 JSON 模式下偶尔将完整 JSON 包裹在 ```` ```json ... ``` ```` Markdown 代码块语法中。由于未剥离 Markdown 代码块标记，Pydantic v2 `model_validate_json` 在首字符识别到反引号导致根路径 `$` 报 `json_invalid`。
+- 最小修复：在适配器层增加 `_strip_markdown_fence`，仅对 `api.deepseek.com` 在校验前安全剥离前后 Markdown 代码块；保持严格域模型校验和字段约束，OpenAI 行为完全不受影响。
+- 新增回归测试 `test_real_failure_shape_deepseek_markdown_fence_is_safely_stripped`，覆盖 DeepSeek 剥离解析成功、OpenAI 保持原样拒绝抛错等行为。
+- 真实 API 有界复验：对现存任务执行恢复，前 21 章全量命中缓存复用（0 token 消耗）；第 22 章 `analysis:0022:0001` 及综合成功，第 23 章 `analysis:0023:0001` 及综合成功。两章验证完成后按设计有界中断（interrupted / FAILED_RETRYABLE）。目前前 23 章已全部持久化落盘，可直接 resume。
+
+## 2026-09-25 真实 DeepSeek content synthesis 跨块 claim_ids 归约 business_error 修复与有界验证
+
+
+- 读取原 Web Job `3a591bfdaac14dbbb254ae8b9e138e85`（Core Job `a6b3e5d63dc64f82a0227ba979ab80c3`）最新失败现场：第 29 章分析与综合完成，第 30 章首块分析 `analysis:0030:0001`、次块分析 `analysis:0030:0002` 与首块综合 `synthesis/chapters/0030/00-0000` 均成功（完成 157 步），在 `synthesis/chapters/0030/00-0001`（对第 2 块主题进行归约综合）报 `ProviderError(ErrorKind.BUSINESS)` / `business_error`。
+- 根因排查：
+  - 抛出位置：`src/bookcast/content.py:185` `ContentFlow.reduce` 的 `validate(value)`：`if any(not set(t.claim_ids).issubset(allowed) for t in value.themes): raise ProviderError(ErrorKind.BUSINESS)`。
+  - DeepSeek 模型返回 HTTP 200、输出 3620 tokens，JSON 结构完全合法且符合 `Synthesis` 模型，但在多块主题归约时，模型输出的 theme.claim_ids 中混入了非 allowed 集合的外推/多余 claim ID 或两端空格。原代码未对合法 allowed 字段进行过滤归约即直接用 `issubset` 断言，导致整条任务报不可重试的业务错误。
+- 最小修复：
+  - 在 `src/bookcast/content.py` 增加 `resolve_synthesis(value: Synthesis, allowed: set[str]) -> Synthesis`，在校验前将 theme.claim_ids 清洗收敛至 allowed 中的有效子集（保留前 8 项），不改变 prompt 内容（保证已有 157 步指纹不变）。
+  - 保留严格业务不变式：若某个 theme 包含的 claim_ids 在清洗后为空（即全部为外推/伪造 ID），则保留原样让后续 `validate` 严格抛出 `ProviderError(ErrorKind.BUSINESS)`。
+  - 仅在 `reduce` 阶段通过 `self.call(..., transform=...)` 接入清洗，OpenAI 及其他 Provider 和非综合链路不受影响。
+- 新增回归测试：`tests/test_content.py` 中的 `test_synthesis_resolves_hallucinated_claim_ids_and_preserves_business_invariant`，验证有效/外推混合 claim_ids 正确归约至合法子集，以及纯编造 claim_ids 依然拒绝。
+- 真实 API 有界复验：对任务 `3a591bfdaac14dbbb254ae8b9e138e85` 执行 resume，前 157 步 100% 缓存命中；原失败 operation `synthesis/chapters/0030/00-0001` 真实调用 DeepSeek 成功（第 158 步完成），紧接着后续 operation `synthesis/chapters/0030/00-0002` 真实调用 DeepSeek 成功（第 159 步完成）。两步连续成功后按设计安全中断，落盘状态为 `FAILED_RETRYABLE`，前 159 步均标记为 `completed`。
+
+## 2026-09-25 真实 DeepSeek chapter analysis 通用有界 schema 纠错与第 43～45 章有界验证
+
+- 读取原 Web Job `3a591bfdaac14dbbb254ae8b9e138e85`（Core Job `a6b3e5d63dc64f82a0227ba979ab80c3`）最新失败现场：第 42 章完成（235 步完成），在第 43 章首块 `analysis:0043:0001` 报 `ValidationError`、`validation_field: core_ideas.0`、`validation_reason: model_type`、`finish_reason: stop`。
+- 历史 Schema 错误分析：
+  - 早期第 3, 7, 14, 15, 20, 23, 31, 34 章：`too_long`（列表超出 6 项上限），通过纠错重试截断。
+  - 第 22 章：`json_invalid`（Markdown 代码块包裹），通过安全剥离代码块修复。
+  - 第 43 章：原书为 7 个字标题《奔　　月〔１〕》，DeepSeek 在短章下输出了 `core_ideas: ["奔月〔１〕"]`（纯字符串列表），而非 Pydantic 期待的 `EvidenceFinding` 对象列表，报 `model_type`。
+- 架构缺陷排查：
+  - DeepSeek 仅支持 `response_format={"type": "json_object"}`，保证 JSON 语法合法但不保证 Schema 符合领域契约。
+  - 此前适配器中 `prepare_schema_retry` 存在严重架构硬编码：`if failure.validation_reason != 'too_long': return False`。任何非 `too_long` 的模式漂移（如 `model_type`, `missing`, `string_type` 等）均被当场拒绝触发纠错，直接导致永久终止。
+- 通用受控修复设计：
+  - 本地安全归一化：若模型返回 `null` 且字段为可选列表（`not field.get('minItems')`），自动转换为 `[]`；若字符串列表收到单字符串则包装为列表。
+  - 通用有界纠错重试（Bounded Schema Repair）：
+    - 废除仅限 `too_long` 的限制，基于 JSON Schema 及其 `$defs` 递归解析失败字段路径的结构要求（对象属性、类型、必填字段等）。
+    - 构造包含出错字段路径、期望类型/结构描述以及前次响应缩略片段的纠错指令注入重试 Prompt，明确要求仅修正结构不修改语义。
+    - 严格绑定于 ProviderChain 的单次纠错重试（`correction == 0`，至多 2 次调用），失败则立即报 `ProviderError(ErrorKind.SCHEMA)` 并永久终止，防止死循环。
+    - 严格保留最终 Pydantic 与领域契约校验，不放宽 Schema，OpenAI 等其他 Provider 行为严格不受影响。
+- 新增回归测试：
+  - `test_real_failure_shape_chapter42_model_type_is_repaired`（真实字符串修复为对象）。
+  - `test_multi_field_schema_drift_with_null_and_repair`（多字段 null 与类型漂移联合修复）。
+  - `test_repair_failure_is_permanent_and_no_infinite_retry`（二次修复失败严格永久报错终止，绝不无限重试）。
+  - `test_openai_provider_unaffected_by_schema_drift_retry`（OpenAI 报错不触发 DeepSeek 纠错）。
+- 离线测试与验证：相关模块 `154 passed、1 deselected`；`scripts/validate_project.py` 及 `git diff --check` 全部通过。
+- 真实 API 有界复验：对现存 Web Job `3a591bfdaac14dbbb254ae8b9e138e85` 自第 235 步恢复执行，前 235 步全部命中检查点缓存秒级跳过（0 token）；第 43 章一次性成功（238 步完成）；第 44 章一次性成功（241 步完成）；第 45 章首块 `analysis:0045:0001` 初次调用真实触发 schema 漂移（记录 `failed_retryable`），通用纠错重试机制触发并自动修复成功，章节综合及汇总全部调用成功（累计完成 246 步）。连续通过 3 章后按设计安全中断，落盘状态为 `FAILED_RETRYABLE`，前 246 步均标记为 `completed`。
+
+## 2026-09-25 Quality Gate 矛盾发言局部定向修复（Targeted Repair）与有界验证
+
+- 真实运行现场：真实 EPUB《狂人日记》在 400+ 个前置任务（EPUB 解析、逐章分析、层级综合、全书规划及对话段落生成）完成后，在 `quality.json` 触发阻塞：`blocking issue: "逐段一致性复核发现与来源矛盾的陈述"`。排查真实产物 `evaluation/quality.json` 发现，全书 24 个 segment 中仅 `0003` 和 `0023` 这 2 个 segment 的个别 turn 出现了 `verdict: "contradicted"`。
+- 架构缺陷排查：
+  - 原质量门禁为整本一票否决：`ContentFlow.run()` 中一旦 `report['blocking_issues']` 非空，立即抛出不可恢复的 `BookCastError`，任务直接标记为 `FAILED_PERMANENT` 终止，未提供段落级针对性修复重审机制。
+  - 缺乏局部修复重跑：整本书数百步耗时耗费巨大，因个别段落有少量矛盾语句即整体报废或被迫全量重跑。
+- 最小定向修复设计：
+  - 精准识别与争议信息持久化：解析 `report['factual_consistency']['semantic_reviews']` 中所有 `verdict == 'contradicted'` 的条目，按 segment 归类并提取包含 `turn_index`, `verdict`, `reason`, `speaker`, `text`, `cited_claims` 的 `repair_issues`，保存至 `evaluation/repairs/{segment.id}.json`。
+  - 局部定向重生成：仅对受影响的 segment 提升 revision（记录于 `manifest.segment_revisions[segment.id]`），将 `repair_issues` 注入 `dialogue` 提示词。在系统级指令中明确规定：矛盾陈述必须严格忠于原书证据修复，待核验内容（unverifiable）优先改为现有证据支持的表述或删弱无依据推断，严禁虚构。
+  - 局部定向重审：仅对重新生成的 segment 触发 `consistency` review（payload 附带 `revision` 保证 step 缓存键按 revision 隔离更新），替换内存中对应 segment 的 script 与 review 后重新调用 local `evaluate` 重新生成 `quality.json`。未受影响的正常段落 100% 缓存命中，完全不产生额外开销。
+  - 有界防死循环止损：设置 `MAX_SEGMENT_REPAIRS = 2`。若某个 segment 经过 2 次定向修复后仍存在矛盾，循环终止并安全抛出 `BookCastError` 永久报错，防止无限循环调用。
+  - 恢复支持：在 `pipeline.py` 中更新校验，当永久失败原因包含 `内容质量检查未通过` 时，允许通过 `bookcast resume` 直接恢复执行，无缝衔接局部定向修复。
+- 新增回归测试：
+  - `test_targeted_repair_of_contradicted_segment_and_tts_allowed`（验证矛盾段定向修复、重审、通过 quality gate、正常执行 TTS、manifest 记录 revision 以及后续 resume 0 额外调用）。
+  - `test_targeted_repair_bounded_limit_halts_on_persistent_contradiction`（验证持续矛盾段在达到 2 次上限后严格终止抛错止损）。
+- 离线测试与验证：`tests/test_content.py` 36 项测试全过，`scripts/validate_project.py` 及 `git diff --check` 全部通过。

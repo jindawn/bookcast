@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-17",
-  "current_task": "Web 任务身份与真实 TTS 来源恢复校验",
+  "current_task": "实现 quality gate 矛盾/待核验发言局部定向修复（targeted repair）与有界验证",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "589479fcdca65356347b363f15d0aac997198f48",
+  "last_verified_commit": "ad9a21cb901db03b7cddc5095b077309e6dc82d4",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -101,16 +101,70 @@
     "Phase 17完整离线410 passed/1 skipped/5 deselected/10 subtests；真实本机Apple Vision中文、英文、90度页及隔离进程1 passed，无云API和模型下载。",
     "DeepSeek schema_error 诊断：本地两份《狂人日记》EPUB Job 均在 analysis:0004:0001 失败；收到响应及 usage，但历史原始响应和校验异常未保存，当前环境无 DeepSeek key，不能还原历史具体坏字段。已在适配器强化 DeepSeek JSON schema 指令，保留严格校验；Attempt/events 保存安全错误类型/字段/原因，显式 retry 回归保留前章。",
     "核对data/web/jobs六份Web记录：三份SUCCEEDED正常，三份《狂人日记》FAILED_PERMANENT均有合法submission/manifest/schema v3与有效源路径；旧Web进程因新增Attempt诊断字段触发extra_forbidden，误报记录损坏。新代码保留诊断到events，停止在manifest v3写入新字段；未修改任何任务数据。",
-    "核对20分钟《狂人日记》Web Job 的原始settings和manifest snapshot均为deepseek→kokoro，TTS attempts/audio均为0；页面显示的48秒mock-tts来自另一份PDF Mock已完成任务。修复前端选中任务缺席时错误展示首条任务，真实TTS链禁止Mock混入，TTS缓存换Provider后失效，完成与只读状态需验证真实来源。"
+    "核对20分钟《狂人日记》Web Job 的原始settings和manifest snapshot均为deepseek→kokoro，TTS attempts/audio均为0；页面显示的48秒mock-tts来自另一份PDF Mock已完成任务。修复前端选中任务缺席时错误展示首条任务，真实TTS链禁止Mock混入，TTS缓存换Provider后失效，完成与只读状态需验证真实来源。",
+    "读取3a591bfd Web Job 最近真实失败事件：analysis:0003:0001 的 DeepSeek ValidationError core_ideas too_long，前一次 evidence too_long；两者均超出 EvidenceAnalysis 每类最多6项。DeepSeek JSON mode 仅保证JSON语法。适配器明确列表上限，并在此类错误时同一Provider最多一次独立记账纠错调用；保留严格校验和已完成章节缓存。离线相关147 passed/1 deselected；本进程无DeepSeek key，尚未真实复验第3、4章。",
+    "真实 DeepSeek 凭证环境验证《狂人日记》现存任务：第3章首块（analysis:0003:0001）成功通过；次块（analysis:0003:0002）初次调用因 evidence 超限触发重试，重试时 DeepSeek 修复 evidence 但 core_ideas 随机超限（7项），因适配器未做安全截断导致二次调用失败。在适配器补齐纠错轮次对未被针对警告的次级数组属性的有界安全截断（上限6项），保留严格域校验与首轮失败审计。真实复验第3章两块与综合、第4章一块与综合全部成功，连续两章通过后安全中断；相关测试 148 passed、1 deselected。",
+    "真实 DeepSeek content synthesis 跨块 claim_ids 归约 business_error 修复：第30章归约因外推claim_ids超出allowed集合报business_error，在content层通过resolve_synthesis清洗有效子集，保持严格业务不变式且已有157步指纹不变。回归测试通过，真实API复验synthesis/chapters/0030/00-0001及后续00-0002均成功，累计完成159步后安全暂停。",
+    "真实 DeepSeek chapter analysis 通用有界 schema 纠错与第 43～45 章有界验证：消除此前仅对 too_long 特判纠错的架构缺陷，实现通用 schema 纠错提示引导与有界单次模型 repair；增加可选数组 null 安全归一化与单元素提升。真实 API 复验第 43、44、45 连续三章（共 11 个 steps 全部成功，含第 45 章实测命中 schema 漂移并经单次纠错自动恢复成功），累计完成 246 步后安全暂停。",
+    "实现 quality gate 矛盾/待核验发言局部定向修复（targeted repair）：当 quality gate 发现一致性 review 存在 contradicted 时，精确定位受影响 segment 及 turn_index，仅改写受影响段落并注入原引用证据及争议上下文；仅对修复段重跑 consistency review 并重新评估 quality；每个 segment 严格限制最多 2 次修复防止死循环；离线测试 157 passed / 1 deselected 验证 targeted repair、持久化 cache hit 与有界上限止损。"
   ],
   "in_progress": [],
   "next_actions": [
+    "用户对现存《狂人日记》Web Job执行显式 resume/retry 触发局部定向修复并继续 TTS 合成。",
     "维护者确定BookCast LICENSE、PyMuPDF AGPL/商业/替代路径及Kokoro espeak-ng-data通知；解决前不发布可再分发V1包。",
     "在用户授权的复杂排版、多栏、脚注及低质扫描样本上人工核对OCR顺序/漏字；跨平台OCR与逐页持久缓存需单独设计，不因Phase17技术通过而承诺质量。",
     "按docs/PHASE16_AUDIT.md逐项处理Medium/Low backlog；实验Qwen extra公告未解决前不进入默认发行包。",
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "quality-gate-targeted-repair-and-bounds",
+      "command": ".venv/bin/pytest -q tests/test_content.py tests/test_generation.py tests/test_job_recovery.py tests/test_providers.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'; python3 scripts/validate_project.py; git diff --check",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "157 passed、1 deselected；覆盖 quality gate 发现 contradicted 时精确定位受影响 segment、带 repair_issues 局部定向改写、仅重审受影响段、通过后继续 TTS，以及持久矛盾严格受限于最多 2 次修复后报错止损。验证 resume 时已完成检查点完全命中 0 额外调用。",
+      "checked_at": "2026-09-25T00:15:40Z"
+    },
+    {
+      "name": "deepseek-generic-bounded-schema-repair-and-real-verification",
+      "command": ".venv/bin/pytest -q tests/test_generation.py tests/test_content.py tests/test_job_recovery.py tests/test_providers.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'; python3 scripts/validate_project.py; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "154 passed、1 deselected；覆盖真实 chapter 42/43 model_type 失败修复、多字段 null 与类型漂移修复、纠错失败不无限重试严格永久报错、OpenAI 不受影响。真实 DeepSeek API 对现存任务自第 235 步断点恢复，第 43、44、45 章全部调用成功（第 45 章实测首轮出现 schema 漂移并触发通用纠错自动成功），累计完成 246 步有界验证通过。",
+      "checked_at": "2026-09-24T21:48:00Z"
+    },
+    {
+      "name": "deepseek-synthesis-claim-ids-resolve-and-real-verification",
+      "command": ".venv/bin/pytest -q tests/test_content.py tests/test_job_recovery.py tests/test_generation.py tests/test_providers.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'; python3 scripts/validate_project.py; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "150 passed、1 deselected；真实失败形态synthesis claim_ids外推/空格归约至allowed有效子集回归测试通过，伪造纯无效ID依然严格触发business_error。真实DeepSeek API对synthesis/chapters/0030/00-0001及后续00-0002全部调用成功，两操作有界验证通过（已完成159步）。",
+      "checked_at": "2026-09-24T21:22:00Z"
+    },
+    {
+      "name": "deepseek-markdown-fence-strip-and-real-verification",
+      "command": ".venv/bin/pytest -q tests/test_content.py tests/test_job_recovery.py tests/test_generation.py tests/test_providers.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'; .venv/bin/python -m compileall -q src tests scripts; python3 scripts/validate_project.py; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "149 passed、1 deselected；真实失败形态DeepSeek返回```json代码块包裹通过安全剥离测试及OpenAI未受影响回归。真实DeepSeek API对第22章（analysis:0022:0001及综合）、第23章（analysis:0023:0001及综合）全部调用成功，两章有界验证通过。",
+      "checked_at": "2026-09-24T20:53:00Z"
+    },
+    {
+      "name": "deepseek-real-shape-secondary-overflow-repair",
+      "command": ".venv/bin/pytest -q tests/test_content.py tests/test_job_recovery.py tests/test_generation.py tests/test_providers.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'; .venv/bin/python -m compileall -q src tests scripts; python3 scripts/validate_project.py; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "148 passed、1 deselected；真实失败形态evidence首轮失败记账、次轮纠错次级数组溢出截断修复全流程覆盖。真实DeepSeek API对第3、4章全部调用成功并通过两章有界验证。",
+      "checked_at": "2026-09-24T20:25:00Z"
+    },
+    {
+      "name": "deepseek-real-shape-bounded-correction",
+      "command": ".venv/bin/pytest -q tests/test_content.py tests/test_job_recovery.py tests/test_generation.py tests/test_providers.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'; .venv/bin/python -m compileall -q src tests scripts; python3 scripts/validate_project.py; git diff --check",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "147 passed、1 deselected；真实失败形态evidence/core_ideas超6项纠错、同Provider至多两次、OpenAI不变、malformed拒绝、已完成章节恢复均覆盖。validator/compileall/diff check通过；无DeepSeek key，未进行真实API调用。",
+      "checked_at": "2026-09-24T19:51:45Z"
+    },
     {
       "name": "web-real-tts-resume-and-identity",
       "command": ".venv/bin/pytest -q tests/test_content.py tests/test_tts.py tests/test_web.py tests/test_job_recovery.py tests/test_generation.py tests/test_providers.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'; npm --prefix web run typecheck; npm --prefix web run build; npm --prefix web run test:e2e -- --grep 'missing selected task'",
@@ -560,8 +614,7 @@
     "可选实验Qwen extra的uv全锁审计有14条OSV记录（含别名）；不随默认/可再分发V1包分发，待上游兼容更新和本机复验。",
     "Phase17 OCR仅macOS Apple Vision显式可用；复杂多栏/脚注、矢量描边字及非macOS OCR未验收，低置信需核原页。",
     "OCR parse Step在提交前崩溃会重新识别整份文档；完成后resume复用有效Artifact，尚无逐页OCR持久缓存。",
-    "《狂人日记》两份现存 Web Job 的历史 schema_error 具体字段无法追溯：旧日志仅有类型和 usage，未保存响应；当前进程无 DeepSeek key。修复后需显式 retry 获得真实响应与安全字段诊断，尚未宣称真实 API 复验。",
-    "20分钟《狂人日记》原任务仍在chapter_analysis失败：本进程没有DEEPSEEK_API_KEY，未实际retry整本；已只读核对resume会选择deepseek+kokoro，并用原书短文本独立Kokoro生成7.13秒speech WAV，不等同原任务TTS阶段完成。"
+    "3a591bfd现存Web Job已成功复验第43、44、45章，前246步全部持久化完成；任务按连续三章有界验证设计安全中断（interrupted/FAILED_RETRYABLE），用户可直接点击 resume 继续后续第46～72章及TTS合成。"
   ],
   "blockers": [],
   "important_files": [
@@ -966,5 +1019,5 @@
       "purpose": "PDF/EPUB检测、来源、恢复、安全反例与显式真实Vision验收"
     }
   ],
-  "updated_at": "2026-09-24T19:41:39Z"
+  "updated_at": "2026-09-25T00:15:40Z"
 }

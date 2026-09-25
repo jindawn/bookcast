@@ -1,5 +1,110 @@
 # 给下一位 Coding Agent
 
+更新时间：2026-09-25。先读 AGENTS.md 和项目文档并核对 Git。当前工作区已实现 Quality Gate 矛盾发言局部定向修复（Targeted Repair）机制，并添加了有界上限与回归测试验证。
+
+## Quality Gate 矛盾发言局部定向修复（Targeted Repair）与有界验证
+
+真实 EPUB《狂人日记》推进至 TTS 前（已完成 400+ 个前置步骤），在 `quality.json` 触发阻塞：`blocking issue: "逐段一致性复核发现与来源矛盾的陈述"`。排查发现全书 24 个 segment 中仅 `0003` 和 `0023` 这 2 个 segment 的个别 turn 出现了 `verdict: "contradicted"`。
+1. 失败现场与架构根因：
+   - 原代码中 `report = json.loads(r.path('evaluation/quality.json').read_text())` 后直接判断 `if report['blocking_issues']: raise BookCastError(...)` 并永久终止任务。
+   - 缺乏局部修复重审机制：全书数百步骤已全部完成，仅因个别段落有 1~2 处矛盾即导致整个任务停滞，且不支持针对性改写受影响段落，存在“要么整本重跑、要么任务作废”的严重缺陷。
+2. 最小定向修复设计：
+   - 精准定位受影响段：从 `report['factual_consistency']['semantic_reviews']` 识别所有 `verdict == 'contradicted'` 的条目，精准提取 `segment` 和 `turn_index`，并抽取该段争议发言、原引用证据及判定原因，持久化至 `evaluation/repairs/{segment.id}.json`。
+   - 局部重跑与提示注入：仅对受影响的 segment 增加 revision 并调用 `dialogue` 重新生成（payload 附带 `repair_issues` 与原证据引用上下文）；在 `INSTRUCTIONS['dialogue']` 中明确规定矛盾点必须严格忠于原书证据，待核验点（unverifiable）必须弱化推断或仅作合理转述，严禁虚构。
+   - 局部重审：仅对重新生成的 segment 触发 `consistency` review（payload 注入 `revision`，使步骤缓存键严格绑定版本），更新内存中的 scripts 与 reviews 后重新局部评估 `quality.json`。未受影响的正常 segment 100% 缓存命中，完全不产生额外调用。
+   - 有界防死循环止损：定义 `MAX_SEGMENT_REPAIRS = 2`，每个 segment 最多尝试 2 次定向修复。若 2 次修复后仍有矛盾，则停止修复并安全保留 `BookCastError` 永久报错，防止无限消耗 LLM token。
+   - 恢复支持：在 `pipeline.py` 中放行被质量门禁阻塞的永久失败任务，允许通过 `bookcast resume`（或 `retry`）直接恢复并无缝进入局部定向修复流程。
+3. 测试与验证：
+   - `test_targeted_repair_of_contradicted_segment_and_tts_allowed`：验证矛盾段精准识别、定向修复重审、质量门禁通过、TTS 正确执行并生成音频、后续 resume 100% 缓存命中 0 新增调用。
+   - `test_targeted_repair_bounded_limit_halts_on_persistent_contradiction`：验证持续矛盾段在达到 2 次修复上限后严格终止抛错，不多消耗调用。
+   - 全量回归测试：`tests/test_content.py` 36 项测试全过，`scripts/validate_project.py` 和 `git diff --check` 全部通过。
+4. 下一步：
+   - 对当前《狂人日记》Web Job 执行 `bookcast resume` 即可触发对 segment `0003` 和 `0023` 的局部定向修复与重审，通过后自动进入 TTS 合成，无需从头重跑。
+
+---
+
+
+
+基于提交 `913eed7`、次级数组溢出截断及 Markdown 剥离修复，用户真实 retry 《狂人日记》推进至第 42 章完成（完成 235 步）后，在第 43 章首块 `analysis:0043:0001` 报 `schema_error`：
+1. 失败排查现场与历史对比：
+   - 历史错误规律：早期章节出现 `too_long`（数组超出上限），第 22 章出现 `json_invalid`（Markdown ```json 代码块包裹），第 30 章归约出现 `business_error`（claim_ids 外推）。
+   - 本次失败：`stage: analysis:0043:0001`, `error_type: ValidationError`, `validation_field: core_ideas.0`, `validation_reason: model_type`。
+   - 现场数据对比：第 42 章正文 1555 字，DeepSeek 输出标准 `EvidenceFinding` 对象列表；第 43 章原书为仅 7 个字的短章标题占位《奔　　月〔１〕》，DeepSeek 输出 `core_ideas: ["奔月〔１〕"]`（字符串列表而非对象列表），触发 Pydantic `model_type` 错误。
+   - 架构根因：
+     - DeepSeek 仅支持 `response_format={"type": "json_object"}`，保证 JSON 语法合法但不保证 Schema 合规。
+     - 此前 `CompatibleLLMProvider.prepare_schema_retry` 存在严重架构缺陷，硬编码了 `if failure.validation_reason != 'too_long': return False`，人为排斥了除 `too_long` 之外的所有错误类型（`model_type`、`missing`、`string_type`、`list_type` 等），导致任何类型漂移均被视为永久错误终止。
+2. 通用受控修复设计：
+   - 通用安全本地归一化：
+     - 若模型返回 `null` 且字段为可选列表（`not field.get('minItems')`），自动转换为 `[]`。
+     - 若字符串列表字段收到单个字符串，自动提升为 `[str]`。
+   - 通用有界纠错重试（Bounded Schema Repair）：
+     - 彻底废除 `failure.validation_reason != 'too_long'` 的特判限制，允许所有可安全修复的 ValidationError 触发一次针对性纠错重试（由 ProviderChain 保证 strictly 1 retry，`correction == 0`）。
+     - 通过 `_get_field_schema` 解析 JSON Schema（含 `$defs` 引用），精准提取出错路径的期望类型/结构（例如 `core_ideas.0` 需为包含 text 和 evidence_id 的对象）。
+     - 将具体错误路径、期望规范及上一轮失败片段以结构化指令注入重试提示中，要求模型仅修复结构不改语义。
+     - 严格保持最终 Pydantic 和领域模型校验不变，不放宽 schema，不无限重试，OpenAI 等其他 Provider 行为严格不受影响。
+   - 添加回归测试：
+     - `test_real_failure_shape_chapter42_model_type_is_repaired`：覆盖真实失败形态（字符串元素自动 repair 为对象）。
+     - `test_multi_field_schema_drift_with_null_and_repair`：覆盖多字段 null 与类型漂移。
+     - `test_repair_failure_is_permanent_and_no_infinite_retry`：覆盖纠错失败严格报 `ProviderError(ErrorKind.SCHEMA)` 并永久终止（最多 2 次调用）。
+     - `test_openai_provider_unaffected_by_schema_drift_retry`：验证 OpenAI provider 不受 DeepSeek 纠错影响（1 次失败即终止）。
+3. 真实 API 有界复验：
+   - 任务 `3a591bfdaac14dbbb254ae8b9e138e85`（Core Job `a6b3e5d63dc64f82a0227ba979ab80c3`）自第 235 步恢复，前 235 步 100% 缓存命中（0 token）。
+   - 第 43 章：`analysis:0043:0001` 一次性成功，章节综合成功（完成至 238 步）。
+   - 第 44 章：`analysis:0044:0001` 一次性成功，章节综合成功（完成至 241 步）。
+   - 第 45 章：首块 `analysis:0045:0001` 初次调用真实触发 schema 漂移并记录 `failed_retryable`，通用纠错机制即时触发并成功修复，紧接着章节综合 `00-0000`、`00-0001`、`01-0000` 及 `analysis:0045` 全部调用成功（完成至 246 步）。
+   - 连续通过第 43、44、45 三章后按设计有界中断（interrupted，保持 FAILED_RETRYABLE），未浪费后续 token。前 246 步全部标记为 completed 并安全落盘。
+   - 离线测试 154 passed / 1 deselected，项目校验与差异检查全过。
+   - 下一步：用户可直接在 Web 界面点击 resume / 运行 `bookcast resume` 继续后续章节（第 46～72 章）及 TTS 合成。
+
+---
+
+
+## 真实 DeepSeek content synthesis 跨块 claim_ids 归约 business_error 修复与有界验证
+
+基于提交 `913eed7` 及 Markdown 语法剥离修复，用户真实 retry 《狂人日记》推进至第 29 章全部完成、第 30 章首两块分析与首块综合均完成（完成 157 步）后，在 `synthesis/chapters/0030/00-0001`（对第 2 块主题进行归约综合）报 `business_error`：
+1. 失败排查现场：
+   - 报错位置：`src/bookcast/content.py:185` `ContentFlow.reduce` 的 `validate(value)`：`if any(not set(t.claim_ids).issubset(allowed) for t in value.themes): raise ProviderError(ErrorKind.BUSINESS)`。
+   - `events.jsonl` 记录：`error: business_error`, `error_type: ProviderError`, `finish_reason: stop`。DeepSeek HTTP 200，输出 3620 tokens，返回的 JSON 结构完全符合 Pydantic `Synthesis` 结构模型。
+   - 根因：在多块主题归约时，模型输出的 theme.claim_ids 偶发外推、伪造了非 allowed 集合的 claim ID 或包含了前后多余空格；原业务逻辑直接使用 `not set(t.claim_ids).issubset(allowed)` 进行严格断言，未先清洗收敛，且 `ProviderError(ErrorKind.BUSINESS)` 被 ProviderChain 视为不可重试的永久业务失败，直接终止任务。
+2. 最小修复：
+   - 在 `src/bookcast/content.py` 新增 `resolve_synthesis(value: Synthesis, allowed: set[str]) -> Synthesis`，在校验前将 theme.claim_ids 过滤收敛至 `allowed` 有效子集（保留前 8 项），不改变 Prompt 输入（确保前 157 步 Step 指纹不变，100% 缓存命中）。
+   - 保留严格业务不变式：若某个 theme 包含的 claim_ids 在清洗后为空（即全部为外推/伪造 ID），则保留原样让后续 `validate` 严格抛出 `ProviderError(ErrorKind.BUSINESS)`。
+   - 仅在 `reduce` 阶段通过 `self.call(..., transform=...)` 接入清洗，OpenAI 及其他 Provider 和非综合链路不受影响。
+   - 添加回归测试 `test_synthesis_resolves_hallucinated_claim_ids_and_preserves_business_invariant`。
+3. 真实 API 有界复验：
+   - 任务 `3a591bfdaac14dbbb254ae8b9e138e85`（Core Job `a6b3e5d63dc64f82a0227ba979ab80c3`）执行恢复，前 157 步全部命中检查点缓存秒级跳过（0 token 消耗）。
+   - 原失败 operation `synthesis/chapters/0030/00-0001` 真实调用 DeepSeek 成功（第 158 步完成），紧接着后续 operation `synthesis/chapters/0030/00-0002` 真实调用 DeepSeek 成功（第 159 步完成）。
+   - 连续通过两步后按设计有界中断（interrupted，保持 FAILED_RETRYABLE），未浪费后续 token。前 159 步全部标记为 completed 并安全落盘。
+   - 单元测试 150 passed / 1 deselected，项目校验与差异检查全过。
+   - 下一步：用户可直接在 Web 界面点击 resume / 运行 `bookcast resume` 继续第 30 章剩余部分、第 31～72 章及 TTS 合成。
+
+---
+
+## 真实 DeepSeek Markdown 代码块包裹修复与第 22、23 章有界验证
+
+基于提交 `913eed7` 及次级数组截断修复，用户真实 retry 《狂人日记》推进至第 21 章完成后，在第 22 章首块（`analysis:0022:0001`）失败：
+1. 失败排查现场：
+   - `events.jsonl` 记录：`stage: analysis:0022:0001`, `error_type: ValidationError`, `validation_field: $`, `validation_reason: json_invalid`, `finish_reason: stop`。
+   - 根因：DeepSeek 在启用 `response_format: {"type": "json_object"}` 情况下，返回的内容被 markdown 代码块标记包裹（```` ```json\n{...}\n``` ````）。
+   - Pydantic v2 `model_validate_json` 在根路径 `$` 报 `Invalid JSON: expected value at line 1 column 1 [type=json_invalid]`；此前适配器直接把 `choice['message']['content']` 送入校验，未做 markdown 语法包裹剥离。
+2. 最小修复：
+   - 在 `CompatibleLLMProvider` 中增加 `_strip_markdown_fence(text)`，安全剔除前后 ```` ```json ```` / ```` ``` ```` 包裹。
+   - 仅对 DeepSeek（`urlsplit(self.spec.base_url).hostname == 'api.deepseek.com'`）生效，OpenAI 及其他兼容端点行为保持严格不变。
+   - 保持严格域模型与 Pydantic 字段级校验，不吞咽错误，不放宽 schema。
+   - 添加回归测试 `test_real_failure_shape_deepseek_markdown_fence_is_safely_stripped`。
+3. 真实 API 有界复验：
+   - 任务 `3a591bfdaac14dbbb254ae8b9e138e85`（Core Job `a6b3e5d63dc64f82a0227ba979ab80c3`）执行恢复，前 21 章全部命中检查点缓存秒级跳过（0 token 消耗）。
+   - 第 22 章 `analysis:0022:0001` 一次性调用成功（Markdown 包裹成功剥离），章节综合 `00-0000`、`00-0001`、`01-0000` 及 `analysis:0022` 汇总全部完成。
+   - 第 23 章 `analysis:0023:0001` 首轮触发数组超限 `failed_retryable`，次轮自动纠错成功，章节综合及 `analysis:0023` 全部完成。
+   - 连续通过第 22、23 两章后按设计有界中断（interrupted，保持 FAILED_RETRYABLE），未浪费后续 token。
+   - 离线测试 149 passed / 1 deselected，项目校验全过。
+   - 下一步：用户可直接在 Web 界面点击 resume / 运行 `bookcast resume` 继续第 24～72 章及 TTS 合成。
+
+---
+
+
+# 给下一位 Coding Agent
+
 更新时间：2026-09-25。先读 AGENTS.md 和项目文档并核对 Git。已验证功能提交：54257b4883b6d82831fa7c20bbbd777bf4c73714；未 push。
 
 ## 2026-09-25 Web 误认 Mock 音频与真实 TTS 恢复修复
