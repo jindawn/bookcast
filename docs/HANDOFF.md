@@ -1,6 +1,6 @@
 # 给下一位 Coding Agent
 
-更新时间：2026-09-25。先读 AGENTS.md 和核对 Git。Phase18 的 LLM 成本审计与有界预算已在工作区实现；当前真实《狂人日记》完成 Job/音频未修改，未调用 DeepSeek 或 Kokoro。测试结果与决策见 [LLM_COST.md](LLM_COST.md) 和 D-023。
+更新时间：2026-09-25。先读 AGENTS.md 和核对 Git。Phase18 的 LLM 成本审计与有界预算已提交为 `04551c0d779d6c4b8f198d192dd5dafbbeb70005`；当前真实《狂人日记》完成 Job/音频未修改，未调用 DeepSeek 或 Kokoro。测试结果与决策见 [LLM_COST.md](LLM_COST.md) 和 D-023。
 
 ## Phase18 本次工作
 

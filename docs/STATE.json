@@ -5,7 +5,7 @@
   "current_task": "LLM clean-run 调用/输出成本审计与时长预算前移",
   "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "a65f77dea69907fd05d5033350bfca264dc90c00",
+  "last_verified_commit": "04551c0d779d6c4b8f198d192dd5dafbbeb70005",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -612,17 +612,17 @@
       "name": "phase18-relevant-offline",
       "command": "cd /private/tmp && /Users/wumj/workspace/bookcast/.venv/bin/pytest -q /Users/wumj/workspace/bookcast/tests/test_content.py /Users/wumj/workspace/bookcast/tests/test_generation.py /Users/wumj/workspace/bookcast/tests/test_phase1.py /Users/wumj/workspace/bookcast/tests/test_providers.py /Users/wumj/workspace/bookcast/tests/test_job_recovery.py /Users/wumj/workspace/bookcast/tests/test_ocr.py /Users/wumj/workspace/bookcast/tests/test_sources.py /Users/wumj/workspace/bookcast/tests/test_web.py",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "244 passed, 1 skipped；覆盖 Mock 有界规划、已选证据、usage、原有来源过滤、质量门禁、targeted repair、恢复及 Web。",
-      "checked_at": "2026-09-25T00:54:31Z"
+      "checked_at": "2026-09-25T00:57:16Z"
     },
     {
       "name": "phase18-cost-smoke-static",
       "command": ".venv/bin/python scripts/llm_cost_smoke.py; python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; git diff --check",
       "status": "passed",
-      "scope": "working_tree",
+      "scope": "commit",
       "summary": "Mock smoke 13 个离线 LLM 请求、3 个 segment、0 真实 API；validator、compileall、diff check 通过。",
-      "checked_at": "2026-09-25T00:54:31Z"
+      "checked_at": "2026-09-25T00:57:16Z"
     }
   ],
   "known_failures": [
@@ -1059,5 +1059,5 @@
       "purpose": "显式 Mock provider 的临时目录离线成本烟测"
     }
   ],
-  "updated_at": "2026-09-25T00:54:31Z"
+  "updated_at": "2026-09-25T00:57:16Z"
 }
