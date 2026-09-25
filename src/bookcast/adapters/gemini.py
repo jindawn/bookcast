@@ -207,41 +207,64 @@ class GeminiTTSProvider:
 
 
 
+
 def decode_audio(result, destination):
-    try:
-        # Interactions API typically returns output with audio bytes, or choices.
-        # Let's handle generic interactions response or fallback to generateContent format if somehow mixed.
-        data = None
-        if 'output' in result and isinstance(result['output'], dict) and 'audio' in result['output']:
-            # Assuming output: { audio: { data: "base64..." } }
+    status = result.get('status', 'completed')
+    if status in {'failed', 'incomplete', 'cancelled'}:
+        reason = result.get('error', {}).get('message', '') or result.get('incomplete_reason', '') or result.get('reason', '')
+        raise ProviderError(ErrorKind.BUSINESS, error_type=f"interaction_{status}", validation_reason=reason)
+
+    data = None
+    
+    # 1. New REST API schema: steps[].content[]
+    if 'steps' in result:
+        for step in result['steps']:
+            for item in step.get('content', []):
+                if item.get('type') == 'audio' and 'data' in item:
+                    data = base64.b64decode(item['data'], validate=True)
+                    break
+            if data:
+                break
+                
+    # 2. Known convenience-compatible shape / legacy outputs
+    if not data:
+        if 'output_audio' in result and 'data' in result['output_audio']:
+            data = base64.b64decode(result['output_audio']['data'], validate=True)
+        elif 'output' in result and isinstance(result['output'], dict) and 'audio' in result['output']:
             data = base64.b64decode(result['output']['audio']['data'], validate=True)
-        elif 'response' in result and isinstance(result['response'], dict) and 'audio' in result['response']:
-            data = base64.b64decode(result['response']['audio']['data'], validate=True)
-        elif 'choices' in result and result['choices']:
-            # Maybe OpenAI-like format from interactions API?
-            msg = result['choices'][0].get('message', {})
-            if 'audio' in msg:
-                data = base64.b64decode(msg['audio']['data'], validate=True)
         elif 'candidates' in result:
-            inline = result['candidates'][0]['content']['parts'][0]['inlineData']
-            data = base64.b64decode(inline['data'], validate=True)
-            
-        if not data:
-            # Let's search for base64 aggressively if schema varies
-            import json
-            dumped = json.dumps(result)
-            # Find the largest base64 string? We just raise if we can't find standard keys.
-            raise ValueError("No audio data found in response schema")
-            
-        # We always expect WAV from Gemini interactions audio output based on user prompt: 
-        # "正确提取 output audio 后直接写 .wav。不要再手工添加 WAV header"
-        with open(str(destination), 'wb') as output:
-            output.write(data)
-            
-    except Exception as e:
+            try:
+                inline = result['candidates'][0]['content']['parts'][0]['inlineData']
+                data = base64.b64decode(inline['data'], validate=True)
+            except (KeyError, IndexError, TypeError):
+                pass
+                
+    if not data:
         import sys
-        print("Failed to decode audio:", type(e), e, file=sys.stderr)
-        raise ProviderError(ErrorKind.SCHEMA, error_type="decode_error", validation_reason=str(e)) from None
+        keys = list(result.keys())
+        steps_info = []
+        for i, step in enumerate(result.get('steps', [])):
+            stype = step.get('type', 'unknown')
+            ctypes = [c.get('type', 'unknown') for c in step.get('content', [])]
+            steps_info.append(f"step[{i}].type={stype} content_types={ctypes}")
+            
+        print(f"status={status}", file=sys.stderr)
+        print(f"top_level_keys={keys}", file=sys.stderr)
+        print(f"steps={len(result.get('steps', []))}", file=sys.stderr)
+        for detail in steps_info:
+            print(detail, file=sys.stderr)
+            
+        if status == 'completed':
+            raise ProviderError(ErrorKind.SCHEMA, error_type="decode_error", validation_reason="completed interaction contained no audio content")
+        raise ProviderError(ErrorKind.SCHEMA, error_type="decode_error", validation_reason="No audio data found in response schema")
+
+    # 3. Direct WAV output without re-wrapping
+    if not data.startswith(b'RIFF'):
+        import sys
+        print("Warning: Decoded audio data does not start with 'RIFF'. Proceeding anyway.", file=sys.stderr)
+        
+    with open(str(destination), 'wb') as output:
+        output.write(data)
 
 
 def decode_pcm(result):

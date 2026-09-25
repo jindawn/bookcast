@@ -95,3 +95,106 @@ def test_interactions_api_payload(mock_urlopen, spec, tmp_path):
         # Check output
         assert dest.exists()
         assert dest.read_bytes() == wav_bytes
+
+
+@patch('bookcast.adapters.gemini.request.build_opener')
+def test_decoder_new_schema_audio(mock_urlopen, spec, tmp_path):
+    os.environ['GEMINI_API_KEY'] = 'fake-key'
+    provider = GeminiTTSProvider(spec)
+    segment = SpeechSegment(turns=[SpeechTurn(speaker="主持人", text="你好")])
+    
+    wav_bytes = b'RIFF$\x00\x00\x00WAVEfmt '
+    encoded = base64.b64encode(wav_bytes).decode('ascii')
+    
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps({
+        "status": "completed",
+        "steps": [
+            {
+                "type": "model_output",
+                "content": [
+                    { "type": "audio", "data": encoded, "mime_type": "audio/wav" }
+                ]
+            }
+        ]
+    }).encode('utf-8')
+    mock_urlopen.return_value.open.return_value.__enter__.return_value = mock_response
+
+    dest = tmp_path / "out1.wav"
+    provider.synthesize_segment(segment, dest)
+    assert dest.read_bytes() == wav_bytes
+
+@patch('bookcast.adapters.gemini.request.build_opener')
+def test_decoder_mixed_content_and_late_audio(mock_urlopen, spec, tmp_path):
+    os.environ['GEMINI_API_KEY'] = 'fake-key'
+    provider = GeminiTTSProvider(spec)
+    segment = SpeechSegment(turns=[SpeechTurn(speaker="主持人", text="你好")])
+    
+    wav_bytes = b'RIFF$\x00\x00\x00WAVEfmt '
+    encoded = base64.b64encode(wav_bytes).decode('ascii')
+    
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps({
+        "status": "completed",
+        "steps": [
+            {
+                "type": "user_input",
+                "content": [{ "type": "text", "text": "foo" }]
+            },
+            {
+                "type": "model_output",
+                "content": [
+                    { "type": "text", "text": "bar" },
+                    { "type": "audio", "data": encoded, "mime_type": "audio/wav" }
+                ]
+            }
+        ]
+    }).encode('utf-8')
+    mock_urlopen.return_value.open.return_value.__enter__.return_value = mock_response
+
+    dest = tmp_path / "out2.wav"
+    provider.synthesize_segment(segment, dest)
+    assert dest.read_bytes() == wav_bytes
+
+@patch('bookcast.adapters.gemini.request.build_opener')
+def test_decoder_failed_status(mock_urlopen, spec, tmp_path):
+    os.environ['GEMINI_API_KEY'] = 'fake-key'
+    provider = GeminiTTSProvider(spec)
+    segment = SpeechSegment(turns=[SpeechTurn(speaker="主持人", text="你好")])
+    
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps({
+        "status": "failed",
+        "error": { "message": "Content policy violation" }
+    }).encode('utf-8')
+    mock_urlopen.return_value.open.return_value.__enter__.return_value = mock_response
+
+    dest = tmp_path / "out3.wav"
+    with pytest.raises(ProviderError) as exc:
+        provider.synthesize_segment(segment, dest)
+    assert exc.value.error_type == "interaction_failed"
+    assert exc.value.validation_reason == "Content policy violation"
+
+@patch('bookcast.adapters.gemini.request.build_opener')
+def test_decoder_completed_no_audio(mock_urlopen, spec, tmp_path):
+    os.environ['GEMINI_API_KEY'] = 'fake-key'
+    provider = GeminiTTSProvider(spec)
+    segment = SpeechSegment(turns=[SpeechTurn(speaker="主持人", text="你好")])
+    
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps({
+        "status": "completed",
+        "steps": [
+            {
+                "type": "model_output",
+                "content": [ { "type": "text", "text": "I can't generate audio." } ]
+            }
+        ]
+    }).encode('utf-8')
+    mock_urlopen.return_value.open.return_value.__enter__.return_value = mock_response
+
+    dest = tmp_path / "out4.wav"
+    with pytest.raises(ProviderError) as exc:
+        provider.synthesize_segment(segment, dest)
+    assert exc.value.error_type == "decode_error"
+    assert exc.value.validation_reason == "completed interaction contained no audio content"
