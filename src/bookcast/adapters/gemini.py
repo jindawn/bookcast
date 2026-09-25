@@ -1,13 +1,16 @@
 """Optional official Gemini Interactions REST TTS, with no SDK retries."""
 import base64
 import binascii
+from dataclasses import dataclass
+import io
 import json
 import os
 from pathlib import Path
+import random
 import re
+import struct
 import sys
 import time
-import random
 from collections.abc import Callable
 from urllib import error, request
 import wave
@@ -20,9 +23,6 @@ from ..storage import fingerprint
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/"
 WIRE_VERSION = "gemini-generate-content-tts-v1:pcm-s16le-24k"
 MAX_RESPONSE = 32 * 1024 * 1024
-
-
-import re
 
 def sanitize_gemini_error(text: str) -> str:
     if not isinstance(text, str):
@@ -317,86 +317,211 @@ class GeminiTTSProvider:
 
 
 
-def decode_audio(result, destination):
+@dataclass(frozen=True)
+class AudioPayload:
+    audio_bytes: bytes
+    container: str = "wav"
+    codec: str = "pcm_s16le"
+    sample_rate: int = 24000
+    channels: int = 1
+
+    def __init__(
+        self,
+        audio_bytes: bytes | None = None,
+        container: str = "wav",
+        codec: str = "pcm_s16le",
+        sample_rate: int = 24000,
+        channels: int = 1,
+        *,
+        data: bytes | None = None,
+        bytes: bytes | None = None,
+    ):
+        raw = audio_bytes if audio_bytes is not None else (data if data is not None else bytes)
+        if raw is None:
+            raise ValueError("audio_bytes is required")
+        object.__setattr__(self, "audio_bytes", raw)
+        object.__setattr__(self, "container", container)
+        object.__setattr__(self, "codec", codec)
+        object.__setattr__(self, "sample_rate", sample_rate)
+        object.__setattr__(self, "channels", channels)
+
+    @property
+    def bytes(self) -> bytes:
+        return self.audio_bytes
+
+    @property
+    def data(self) -> bytes:
+        return self.audio_bytes
+
+
+def decode_audio(result: dict, destination: Path | str | None = None) -> AudioPayload:
+    if not isinstance(result, dict):
+        raise ProviderError(
+            ErrorKind.SCHEMA,
+            error_type="decode_error",
+            validation_reason="response is not a dict",
+        )
+
     status = result.get('status', 'completed')
     if status in {'failed', 'incomplete', 'cancelled'}:
-        reason = result.get('error', {}).get('message', '') or result.get('incomplete_reason', '') or result.get('reason', '')
-        raise ProviderError(ErrorKind.BUSINESS, error_type=f"interaction_{status}", validation_reason=reason)
+        raw_reason = (
+            result.get('error', {}).get('message', '')
+            if isinstance(result.get('error'), dict)
+            else ''
+        ) or result.get('incomplete_reason', '') or result.get('reason', '')
+        safe_reason = sanitize_gemini_error(str(raw_reason))
+        raise ProviderError(
+            ErrorKind.BUSINESS,
+            error_type=f"interaction_{status}",
+            validation_reason=safe_reason,
+        )
 
-    data = None
-    
-    # 1. New REST API schema: steps[].content[]
-    if 'steps' in result:
+    audio_items = []
+    if 'steps' in result and isinstance(result['steps'], list):
         for step in result['steps']:
-            for item in step.get('content', []):
-                if item.get('type') == 'audio' and 'data' in item:
-                    data = base64.b64decode(item['data'], validate=True)
-                    break
-            if data:
-                break
-                
-    # 2. Known convenience-compatible shape / legacy outputs
-    if not data:
-        if 'output_audio' in result and 'data' in result['output_audio']:
-            data = base64.b64decode(result['output_audio']['data'], validate=True)
-        elif 'output' in result and isinstance(result['output'], dict) and 'audio' in result['output']:
-            data = base64.b64decode(result['output']['audio']['data'], validate=True)
-        elif 'candidates' in result:
-            try:
-                inline = result['candidates'][0]['content']['parts'][0]['inlineData']
-                data = base64.b64decode(inline['data'], validate=True)
-            except (KeyError, IndexError, TypeError):
-                pass
-                
-    if not data:
-        import sys
-        keys = list(result.keys())
-        steps_info = []
-        for i, step in enumerate(result.get('steps', [])):
-            stype = step.get('type', 'unknown')
-            ctypes = [c.get('type', 'unknown') for c in step.get('content', [])]
-            steps_info.append(f"step[{i}].type={stype} content_types={ctypes}")
-            
-        print(f"status={status}", file=sys.stderr)
-        print(f"top_level_keys={keys}", file=sys.stderr)
-        print(f"steps={len(result.get('steps', []))}", file=sys.stderr)
-        for detail in steps_info:
-            print(detail, file=sys.stderr)
-            
-        if status == 'completed':
-            raise ProviderError(ErrorKind.SCHEMA, error_type="decode_error", validation_reason="completed interaction contained no audio content")
-        raise ProviderError(ErrorKind.SCHEMA, error_type="decode_error", validation_reason="No audio data found in response schema")
+            if isinstance(step, dict):
+                content = step.get('content', [])
+                if isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, dict) and item.get('type') == 'audio':
+                            audio_items.append(item)
+    else:
+        if 'output_audio' in result and isinstance(result['output_audio'], dict):
+            audio_items.append(result['output_audio'])
+        elif 'output' in result and isinstance(result['output'], dict) and 'audio' in result['output'] and isinstance(result['output']['audio'], dict):
+            audio_items.append(result['output']['audio'])
+        elif 'candidates' in result and isinstance(result['candidates'], list):
+            for cand in result['candidates']:
+                if isinstance(cand, dict):
+                    parts = cand.get('content', {}).get('parts', [])
+                    if isinstance(parts, list):
+                        for part in parts:
+                            if isinstance(part, dict) and 'inlineData' in part and isinstance(part['inlineData'], dict):
+                                audio_items.append(part['inlineData'])
 
-    # 3. Direct WAV output without re-wrapping
-    if not data.startswith(b'RIFF'):
-        import sys
-        print("Warning: Decoded audio data does not start with 'RIFF'. Proceeding anyway.", file=sys.stderr)
-        
-    with open(str(destination), 'wb') as output:
-        output.write(data)
+    if not audio_items:
+        reason = (
+            "completed interaction contained no audio content"
+            if status == 'completed'
+            else "missing audio in interaction response"
+        )
+        raise ProviderError(
+            ErrorKind.SCHEMA,
+            error_type="decode_error",
+            validation_reason=reason,
+        )
 
+    if len(audio_items) > 1:
+        raise ProviderError(
+            ErrorKind.SCHEMA,
+            error_type="decode_error",
+            validation_reason="multiple audio blocks found in interaction response",
+        )
 
-def decode_pcm(result):
+    audio_item = audio_items[0]
+
+    raw_b64 = audio_item.get('data')
+    if not isinstance(raw_b64, str) or not raw_b64.strip():
+        raise ProviderError(
+            ErrorKind.SCHEMA,
+            error_type="decode_error",
+            validation_reason="missing audio data in audio item",
+        )
 
     try:
-        candidates = result['candidates']
-        if len(candidates) != 1 or candidates[0].get('finishReason') != 'STOP':
-            raise ValueError()
-        parts = candidates[0]['content']['parts']
-        if len(parts) != 1:
-            raise ValueError()
-        inline = parts[0]['inlineData']
-        mime, *parameters = inline['mimeType'].lower().replace(' ', '').split(';')
-        fields = dict(p.split('=', 1) for p in parameters)
-        if (mime != 'audio/l16' or len(fields) != len(parameters)
-                or fields.get('rate') != '24000' or fields.get('codec', 'pcm') != 'pcm'
-                or fields.get('channels', '1') != '1'
-                or set(fields) - {'rate', 'codec', 'channels'}):
-            raise ValueError()
-        pcm = base64.b64decode(inline['data'], validate=True)
-        if not 0 < len(pcm) <= 24000 * 2 * 480 or len(pcm) % 2 or not any(pcm):
-            raise ValueError()
-        # Google's documented L16 TTS bytes are PCM s16le (not RFC big endian).
-        return pcm
-    except (KeyError, IndexError, TypeError, AttributeError, ValueError, binascii.Error):
-        raise ProviderError(ErrorKind.SCHEMA) from None
+        audio_bytes = base64.b64decode(raw_b64, validate=True)
+    except (binascii.Error, ValueError):
+        raise ProviderError(
+            ErrorKind.SCHEMA,
+            error_type="decode_error",
+            validation_reason="invalid base64 encoding",
+        )
+
+    mime_str = audio_item.get('mime_type') or audio_item.get('mimeType')
+    is_raw_pcm = False
+    if mime_str is not None:
+        if not isinstance(mime_str, str):
+            raise ProviderError(
+                ErrorKind.SCHEMA,
+                error_type="decode_error",
+                validation_reason="invalid mime_type format",
+            )
+        mime_base = mime_str.lower().split(';')[0].strip()
+        if mime_base in {'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/vnd.wave', 'audio/*'}:
+            pass
+        elif mime_base in {'audio/l16', 'audio/pcm'}:
+            is_raw_pcm = True
+        else:
+            raise ProviderError(
+                ErrorKind.SCHEMA,
+                error_type="decode_error",
+                validation_reason=f"unsupported audio mime type: {mime_base}",
+            )
+
+    if is_raw_pcm and not audio_bytes.startswith(b'RIFF'):
+        if len(audio_bytes) == 0 or len(audio_bytes) % 2 != 0:
+            raise ProviderError(
+                ErrorKind.SCHEMA,
+                error_type="decode_error",
+                validation_reason="invalid raw PCM length",
+            )
+        out = io.BytesIO()
+        with wave.open(out, 'wb') as wav_out:
+            wav_out.setparams((1, 2, 24000, 0, 'NONE', 'not compressed'))
+            wav_out.writeframes(audio_bytes)
+        audio_bytes = out.getvalue()
+
+    if not audio_bytes.startswith(b'RIFF'):
+        raise ProviderError(
+            ErrorKind.SCHEMA,
+            error_type="decode_error",
+            validation_reason="invalid RIFF header",
+        )
+
+    try:
+        with wave.open(io.BytesIO(audio_bytes), "rb") as wav_file:
+            channels = wav_file.getnchannels()
+            sampwidth = wav_file.getsampwidth()
+            framerate = wav_file.getframerate()
+            nframes = wav_file.getnframes()
+
+            if (channels, sampwidth, framerate) != (1, 2, 24_000):
+                raise ProviderError(
+                    ErrorKind.SCHEMA,
+                    error_type="decode_error",
+                    validation_reason=f"unexpected WAV format: channels={channels}, sampwidth={sampwidth}, framerate={framerate}",
+                )
+            if nframes == 0:
+                raise ProviderError(
+                    ErrorKind.SCHEMA,
+                    error_type="decode_error",
+                    validation_reason="audio frames count is 0",
+                )
+            read_bytes = wav_file.readframes(nframes)
+            if len(read_bytes) != nframes * sampwidth * channels:
+                raise ProviderError(
+                    ErrorKind.SCHEMA,
+                    error_type="decode_error",
+                    validation_reason="audio data is truncated",
+                )
+    except (wave.Error, EOFError, struct.error):
+        raise ProviderError(
+            ErrorKind.SCHEMA,
+            error_type="decode_error",
+            validation_reason="invalid WAV container or structure",
+        ) from None
+
+    payload = AudioPayload(
+        audio_bytes=audio_bytes,
+        container="wav",
+        codec="pcm_s16le",
+        sample_rate=framerate,
+        channels=channels,
+    )
+
+    if destination is not None:
+        dest_path = Path(destination)
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        dest_path.write_bytes(payload.audio_bytes)
+
+    return payload

@@ -24,6 +24,15 @@ def spec():
         )
     )
 
+def wav_bytes():
+    import io, wave, struct
+    output = io.BytesIO()
+    with wave.open(output, 'wb') as wav:
+        wav.setparams((1, 2, 24000, 0, 'NONE', 'not compressed'))
+        wav.writeframes(struct.pack('<hh', 1000, -1000) * 100)
+    return output.getvalue()
+
+
 @patch('bookcast.adapters.gemini.request.build_opener')
 def test_interactions_api_payload(mock_urlopen, spec, tmp_path, monkeypatch):
     monkeypatch.setenv('GEMINI_API_KEY', 'fake-key')
@@ -37,9 +46,8 @@ def test_interactions_api_payload(mock_urlopen, spec, tmp_path, monkeypatch):
     )
 
     mock_response = MagicMock()
-    # Fake audio bytes
-    wav_bytes = b'RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00'
-    encoded = base64.b64encode(wav_bytes).decode('ascii')
+    raw_wav = wav_bytes()
+    encoded = base64.b64encode(raw_wav).decode('ascii')
 
     mock_response.read.return_value = json.dumps({
         "status": "completed",
@@ -91,7 +99,7 @@ def test_interactions_api_payload(mock_urlopen, spec, tmp_path, monkeypatch):
 
         # Check output
         assert dest.exists()
-        assert dest.read_bytes() == wav_bytes
+        assert dest.read_bytes() == raw_wav
 
 
 @patch('bookcast.adapters.gemini.request.build_opener')
@@ -100,8 +108,8 @@ def test_decoder_new_schema_audio(mock_urlopen, spec, tmp_path, monkeypatch):
     provider = GeminiTTSProvider(spec)
     segment = SpeechSegment(turns=[SpeechTurn(speaker="主持人", text="你好")])
     
-    wav_bytes = b'RIFF$\x00\x00\x00WAVEfmt '
-    encoded = base64.b64encode(wav_bytes).decode('ascii')
+    raw_wav = wav_bytes()
+    encoded = base64.b64encode(raw_wav).decode('ascii')
     
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps({
@@ -119,7 +127,7 @@ def test_decoder_new_schema_audio(mock_urlopen, spec, tmp_path, monkeypatch):
 
     dest = tmp_path / "out1.wav"
     provider.synthesize_segment(segment, dest)
-    assert dest.read_bytes() == wav_bytes
+    assert dest.read_bytes() == raw_wav
 
 @patch('bookcast.adapters.gemini.request.build_opener')
 def test_decoder_mixed_content_and_late_audio(mock_urlopen, spec, tmp_path, monkeypatch):
@@ -127,8 +135,8 @@ def test_decoder_mixed_content_and_late_audio(mock_urlopen, spec, tmp_path, monk
     provider = GeminiTTSProvider(spec)
     segment = SpeechSegment(turns=[SpeechTurn(speaker="主持人", text="你好")])
     
-    wav_bytes = b'RIFF$\x00\x00\x00WAVEfmt '
-    encoded = base64.b64encode(wav_bytes).decode('ascii')
+    raw_wav = wav_bytes()
+    encoded = base64.b64encode(raw_wav).decode('ascii')
     
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps({
@@ -151,7 +159,7 @@ def test_decoder_mixed_content_and_late_audio(mock_urlopen, spec, tmp_path, monk
 
     dest = tmp_path / "out2.wav"
     provider.synthesize_segment(segment, dest)
-    assert dest.read_bytes() == wav_bytes
+    assert dest.read_bytes() == raw_wav
 
 @patch('bookcast.adapters.gemini.request.build_opener')
 def test_decoder_failed_status(mock_urlopen, spec, tmp_path, monkeypatch):

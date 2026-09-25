@@ -14,7 +14,7 @@ import wave
 import pytest
 from pydantic import ValidationError
 
-from bookcast.adapters.gemini import GeminiTTSProvider, classify_http, decode_audio, NoRedirect
+from bookcast.adapters.gemini import GeminiTTSProvider, classify_http, decode_audio, AudioPayload, NoRedirect
 from bookcast.audio import validate_wav
 from bookcast.errors import BookCastError
 from bookcast.models import PodcastScript, DialogueTurn
@@ -137,6 +137,227 @@ def test_interaction_without_completed_audio_is_permanent(tmp_path, mode):
         decode_audio(data, tmp_path/'invalid.wav')
     assert exc.value.kind in {ErrorKind.SCHEMA, ErrorKind.BUSINESS}
     assert not (tmp_path/'invalid.wav').exists()
+
+
+def test_canonical_decoder_valid_wav(tmp_path):
+    dest = tmp_path / "valid.wav"
+    raw_wav = wav_bytes()
+    resp = {
+        'status': 'completed',
+        'steps': [{
+            'type': 'model_output',
+            'content': [{
+                'type': 'audio',
+                'mime_type': 'audio/wav',
+                'data': base64.b64encode(raw_wav).decode()
+            }]
+        }]
+    }
+    payload = decode_audio(resp, dest)
+    assert isinstance(payload, AudioPayload)
+    assert payload.audio_bytes == raw_wav
+    assert payload.bytes == raw_wav
+    assert payload.data == raw_wav
+    assert payload.container == 'wav'
+    assert payload.codec == 'pcm_s16le'
+    assert payload.sample_rate == 24000
+    assert payload.channels == 1
+    assert dest.is_file()
+    assert dest.read_bytes() == raw_wav
+
+    # Without destination parameter
+    in_mem_payload = decode_audio(resp)
+    assert isinstance(in_mem_payload, AudioPayload)
+    assert in_mem_payload.bytes == raw_wav
+
+
+def test_canonical_decoder_invalid_riff(tmp_path):
+    dest = tmp_path / "invalid_riff.wav"
+    bad_data = b"NOT_A_RIFF_AUDIO_DATA_AT_ALL_1234567890"
+    b64_str = base64.b64encode(bad_data).decode()
+    resp = {
+        'status': 'completed',
+        'steps': [{
+            'type': 'model_output',
+            'content': [{
+                'type': 'audio',
+                'mime_type': 'audio/wav',
+                'data': b64_str
+            }]
+        }]
+    }
+    with pytest.raises(ProviderError) as exc:
+        decode_audio(resp, dest)
+    assert exc.value.kind == ErrorKind.SCHEMA
+    assert exc.value.error_type == 'decode_error'
+    assert "invalid RIFF" in exc.value.validation_reason
+    assert not dest.exists()
+    assert b64_str not in str(exc.value)
+
+
+def test_canonical_decoder_missing_audio(tmp_path):
+    dest = tmp_path / "missing.wav"
+    resp = {
+        'status': 'completed',
+        'steps': [{
+            'type': 'model_output',
+            'content': [{
+                'type': 'text',
+                'text': 'Secret transcript only, no audio.'
+            }]
+        }]
+    }
+    with pytest.raises(ProviderError) as exc:
+        decode_audio(resp, dest)
+    assert exc.value.kind == ErrorKind.SCHEMA
+    assert exc.value.error_type == 'decode_error'
+    assert "no audio" in exc.value.validation_reason or "missing audio" in exc.value.validation_reason
+    assert not dest.exists()
+    assert 'Secret transcript' not in str(exc.value)
+
+
+def test_canonical_decoder_text_and_audio(tmp_path):
+    dest = tmp_path / "text_audio.wav"
+    raw_wav = wav_bytes()
+    resp = {
+        'status': 'completed',
+        'steps': [{
+            'type': 'model_output',
+            'content': [
+                {'type': 'text', 'text': 'Confidential speech script text.'},
+                {'type': 'audio', 'mime_type': 'audio/wav', 'data': base64.b64encode(raw_wav).decode()},
+                {'type': 'text', 'text': 'Subsequent commentary.'}
+            ]
+        }]
+    }
+    payload = decode_audio(resp, dest)
+    assert isinstance(payload, AudioPayload)
+    assert payload.bytes == raw_wav
+    assert dest.read_bytes() == raw_wav
+
+
+def test_canonical_decoder_audio_in_subsequent_step(tmp_path):
+    dest = tmp_path / "subsequent_step.wav"
+    raw_wav = wav_bytes()
+    resp = {
+        'status': 'completed',
+        'steps': [
+            {'type': 'thought', 'content': [{'type': 'text', 'text': 'Internal reasoning without audio'}]},
+            {'type': 'model_output', 'content': [{'type': 'audio', 'mime_type': 'audio/wav', 'data': base64.b64encode(raw_wav).decode()}]}
+        ]
+    }
+    payload = decode_audio(resp, dest)
+    assert isinstance(payload, AudioPayload)
+    assert payload.bytes == raw_wav
+    assert dest.read_bytes() == raw_wav
+
+
+def test_canonical_decoder_multiple_audio_blocks(tmp_path):
+    dest = tmp_path / "multiple_audio.wav"
+    raw_wav = wav_bytes()
+    b64_wav = base64.b64encode(raw_wav).decode()
+    # Case A: across steps
+    resp_steps = {
+        'status': 'completed',
+        'steps': [
+            {'type': 'model_output', 'content': [{'type': 'audio', 'mime_type': 'audio/wav', 'data': b64_wav}]},
+            {'type': 'model_output', 'content': [{'type': 'audio', 'mime_type': 'audio/wav', 'data': b64_wav}]}
+        ]
+    }
+    with pytest.raises(ProviderError) as exc:
+        decode_audio(resp_steps, dest)
+    assert exc.value.kind == ErrorKind.SCHEMA
+    assert exc.value.error_type == 'decode_error'
+    assert "multiple audio blocks" in exc.value.validation_reason
+    assert not dest.exists()
+    assert b64_wav not in str(exc.value)
+
+    # Case B: within same step
+    resp_same_step = {
+        'status': 'completed',
+        'steps': [{
+            'type': 'model_output',
+            'content': [
+                {'type': 'audio', 'mime_type': 'audio/wav', 'data': b64_wav},
+                {'type': 'audio', 'mime_type': 'audio/wav', 'data': b64_wav}
+            ]
+        }]
+    }
+    with pytest.raises(ProviderError) as exc2:
+        decode_audio(resp_same_step, dest)
+    assert exc2.value.kind == ErrorKind.SCHEMA
+    assert exc2.value.error_type == 'decode_error'
+    assert "multiple audio blocks" in exc2.value.validation_reason
+
+
+def test_canonical_decoder_invalid_base64(tmp_path):
+    dest = tmp_path / "invalid_b64.wav"
+    bad_b64 = "this_is_not_valid_base64_data!!!!"
+    resp = {
+        'status': 'completed',
+        'steps': [{
+            'type': 'model_output',
+            'content': [{
+                'type': 'audio',
+                'mime_type': 'audio/wav',
+                'data': bad_b64
+            }]
+        }]
+    }
+    with pytest.raises(ProviderError) as exc:
+        decode_audio(resp, dest)
+    assert exc.value.kind == ErrorKind.SCHEMA
+    assert exc.value.error_type == 'decode_error'
+    assert "invalid base64" in exc.value.validation_reason
+    assert not dest.exists()
+    assert bad_b64 not in str(exc.value)
+
+
+@pytest.mark.parametrize('bad_param', ['sample_rate', 'channels', 'empty', 'truncated', 'unsupported_mime'])
+def test_canonical_decoder_format_and_mime_boundaries(tmp_path, bad_param):
+    dest = tmp_path / "bad_format.wav"
+    out = io.BytesIO()
+    if bad_param == 'sample_rate':
+        with wave.open(out, 'wb') as wav:
+            wav.setparams((1, 2, 48000, 0, 'NONE', 'not compressed'))
+            wav.writeframes(struct.pack('<hh', 1000, -1000) * 2400)
+        data = out.getvalue()
+        mime = 'audio/wav'
+    elif bad_param == 'channels':
+        with wave.open(out, 'wb') as wav:
+            wav.setparams((2, 2, 24000, 0, 'NONE', 'not compressed'))
+            wav.writeframes(struct.pack('<hhhh', 1000, -1000, 1000, -1000) * 2400)
+        data = out.getvalue()
+        mime = 'audio/wav'
+    elif bad_param == 'empty':
+        with wave.open(out, 'wb') as wav:
+            wav.setparams((1, 2, 24000, 0, 'NONE', 'not compressed'))
+        data = out.getvalue()
+        mime = 'audio/wav'
+    elif bad_param == 'truncated':
+        full_wav = wav_bytes()
+        data = full_wav[:len(full_wav) - 50]
+        mime = 'audio/wav'
+    elif bad_param == 'unsupported_mime':
+        data = wav_bytes()
+        mime = 'video/mp4'
+
+    resp = {
+        'status': 'completed',
+        'steps': [{
+            'type': 'model_output',
+            'content': [{
+                'type': 'audio',
+                'mime_type': mime,
+                'data': base64.b64encode(data).decode()
+            }]
+        }]
+    }
+    with pytest.raises(ProviderError) as exc:
+        decode_audio(resp, dest)
+    assert exc.value.kind == ErrorKind.SCHEMA
+    assert exc.value.error_type == 'decode_error'
+    assert not dest.exists()
 
 
 @pytest.mark.parametrize('value', [False, 1, 'true', None])

@@ -36,7 +36,12 @@ def test_voice_tuning_script(mock_opener, tmp_path):
     }
     (scripts_dir / '0001.json').write_text(json.dumps(mock_script))
     
-    wav_bytes = b'RIFF$\\x00\\x00\\x00WAVEfmt \\x10\\x00\\x00\\x00\\x01\\x00\\x01\\x00\\x80>\\x00\\x00\\x00}\\x00\\x00\\x02\\x00\\x10\\x00data\\x00\\x00\\x00\\x00'
+    import io, wave, struct
+    out = io.BytesIO()
+    with wave.open(out, 'wb') as wav:
+        wav.setparams((1, 2, 24000, 0, 'NONE', 'not compressed'))
+        wav.writeframes(struct.pack('<hh', 1000, -1000) * 1200)
+    wav_bytes = out.getvalue()
     encoded = base64.b64encode(wav_bytes).decode('ascii')
     
     mock_response = MagicMock()
