@@ -33,7 +33,7 @@ def test_cost_calculation():
     calls = [
         Attempt(id="1", task="book_synthesis", kind="llm", status="completed", provider="deepseek", model="deepseek-flash", prompt_version="1", input_hash="1",
                 timestamp="2023-09-01T16:30:00Z", provider_reported_usage=ProviderUsage(cache_hit_tokens=500000, input_tokens=1500000, output_tokens=2000000, reasoning_tokens=500000)),
-        Attempt(id="2", task="tts_segment:001", kind="tts", status="completed", provider="gemini", model="gemini-3.8-flash-tts", prompt_version="1", input_hash="1",
+        Attempt(id="2", task="tts_segment:001", kind="tts", status="completed", provider="mock-tts", model="gemini-3.8-flash-tts", prompt_version="1", input_hash="1",
                 timestamp="2023-09-01T16:30:00Z", provider_reported_usage=None, artifacts={"audio/segments/001-1.json": "hash"})
     ]
     
@@ -43,8 +43,8 @@ def test_cost_calculation():
     # 1M uncached = 1.0 (off peak)
     # 2M output = 4.0 (off peak)
     # Total = 5.25
-    assert summary['llm']['cost']['amount'] == 5.25
-    assert summary['llm']['usage']['reasoning_tokens'] == 500000
-    assert summary['tts']['usage_available'] is False
+    assert summary['llm']['providers']['deepseek']['cost']['amount'] == 5.25
+    assert summary['llm']['providers']['deepseek']['usage']['reasoning_tokens'] == 500000
+    assert summary['tts']['providers']['mock-tts']['usage_available'] is False
     assert summary['total']['status'] == 'partial'
 

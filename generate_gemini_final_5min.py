@@ -83,7 +83,7 @@ if __name__ == '__main__':
     original_request = provider._request
     request_count = 0
     
-    def intercept_request(payload=None):
+    def intercept_request(payload=None, destination=None):
         global request_count
         request_count += 1
         if payload and 'input' in payload:

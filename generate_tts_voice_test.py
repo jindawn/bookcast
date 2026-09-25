@@ -39,7 +39,7 @@ def synthesize_mock_runner(provider, script, output_dest):
     original_request = provider._request
     request_count = 0
     
-    def intercept_request(payload=None):
+    def intercept_request(payload=None, destination=None):
         nonlocal request_count
         request_count += 1
         if payload and 'input' in payload:
