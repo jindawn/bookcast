@@ -51,3 +51,44 @@ def usage_snapshot(calls, reuse_counts=None, prices=None):
             'by_stage': {stage: {**row, 'cache_reuse_count': reuse_counts.get(stage, 0)}
                          for stage, row in sorted(by_stage.items())},
             'by_provider_model_stage': entries}
+
+
+def tts_usage_snapshot(calls, root_dir=None):
+    from collections import defaultdict
+    import json
+    rows = defaultdict(lambda: {
+        'request_count': 0, 'input_tokens': 0, 'output_tokens': 0,
+        'retry_count': 0, 'duration_seconds': 0.0
+    })
+    
+    for call in calls:
+        if call.kind != 'tts' or call.status not in {'completed', 'failed_retryable', 'failed_permanent'}:
+            continue
+            
+        key = (call.provider, call.model)
+        row = rows[key]
+        row['request_count'] += 1
+        
+        if call.status == 'failed_retryable':
+            row['retry_count'] += 1
+            
+        usage = call.provider_reported_usage
+        if usage:
+            row['input_tokens'] += usage.input_tokens or 0
+            row['output_tokens'] += usage.output_tokens or 0
+            
+        if call.status == 'completed' and call.artifacts and root_dir:
+            for artifact in call.artifacts:
+                if artifact.endswith('.json'):
+                    try:
+                        with open(root_dir / artifact) as af:
+                            data = json.load(af)
+                            row['duration_seconds'] += data.get('duration_seconds', 0.0)
+                    except Exception:
+                        pass
+                        
+    entries = []
+    for (provider, model), row in sorted(rows.items()):
+        entries.append({'provider': provider, 'model': model, **row})
+        
+    return {'schema_version': 1, 'tts_usage': entries}

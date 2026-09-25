@@ -290,3 +290,111 @@ def test_real_sigkill_keeps_completed_segments(tmp_path, window):
     finally:
         if process.poll() is None: process.kill()
         process.wait(timeout=10); process.stderr.close()
+import os
+import json
+import base64
+import pytest
+from unittest.mock import patch, MagicMock
+from pathlib import Path
+
+from bookcast.adapters.gemini import GeminiTTSProvider
+from bookcast.provider_config import ProviderSpec, CloudTTSConfig
+from bookcast.provider_api import SpeechSegment, SpeechTurn, ProviderError, ErrorKind
+
+@pytest.fixture
+def spec():
+    return ProviderSpec(
+        name="gemini",
+        kind="tts",
+        type="gemini-tts",
+        model="gemini-3.8-flash-tts",
+        api_key_env="GEMINI_API_KEY",
+        cloud_tts=CloudTTSConfig(
+            send_text_to_cloud=True, 
+            host_voice="HostA", 
+            guest_voice="GuestB",
+            mode="conversational"
+        )
+    )
+
+def test_fail_fast_missing_api_key(spec):
+    if 'GEMINI_API_KEY' in os.environ:
+        del os.environ['GEMINI_API_KEY']
+        
+    provider = GeminiTTSProvider(spec)
+    with pytest.raises(SystemExit) as exc:
+        provider._request({})
+    assert "Gemini TTS requires GEMINI_API_KEY" in str(exc.value)
+
+def test_api_key_not_in_cache_key(spec):
+    os.environ['GEMINI_API_KEY'] = 'secret-key-123'
+    provider = GeminiTTSProvider(spec)
+    assert 'secret' not in provider.cache_key
+
+@patch('bookcast.adapters.gemini.request.build_opener')
+def test_speaker_mapping_and_metadata(mock_urlopen, spec, tmp_path):
+    os.environ['GEMINI_API_KEY'] = 'fake-key'
+    provider = GeminiTTSProvider(spec)
+    
+    segment = SpeechSegment(
+        turns=[
+            SpeechTurn(speaker="主持人", text="你好"),
+            SpeechTurn(speaker="嘉宾", text="(笑声) 我很好！")
+        ]
+    )
+    
+    # Mock response
+    mock_response = MagicMock()
+    # Fake audio bytes
+    wav_bytes = b'RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00'
+    encoded = base64.b64encode(wav_bytes).decode('ascii')
+    
+    mock_response.read.return_value = json.dumps({
+        "candidates": [{
+            "finishReason": "STOP",
+            "content": {
+                "parts": [{
+                    "inlineData": {
+                        "mimeType": "audio/wav",
+                        "data": encoded
+                    }
+                }]
+            }
+        }],
+        "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 20},
+        "modelVersion": "gemini-3.8-flash-tts-v1"
+    }).encode('utf-8')
+    mock_urlopen.return_value.open.return_value.__enter__.return_value = mock_response
+    
+    dest = tmp_path / "out.wav"
+    with patch('bookcast.adapters.gemini.request.Request') as mock_req:
+        info = provider.synthesize_segment(segment, dest)
+        
+        # Check payload
+        args, kwargs = mock_req.call_args
+        payload = json.loads(kwargs['data'])
+        
+        parts = payload['contents'][0]['parts']
+        assert len(parts) == 2
+        
+        # turn 1: Host
+        assert parts[0]['text'] == '你好' # markdown stripped if applicable
+        assert parts[0]['speech_metadata']['speaker'] == 'HostA'
+        assert 'calm' in parts[0]['speech_metadata']['style']
+        assert 'style' not in parts[0]['text']
+        
+        # turn 2: Guest
+        assert parts[1]['text'].strip() == '我很好！' # (笑声) stripped
+        assert parts[1]['speech_metadata']['speaker'] == 'GuestB'
+        assert 'natural' in parts[1]['speech_metadata']['style']
+        
+        # Check config
+        assert payload['generationConfig']['speechConfig']['mode'] == 'conversational'
+        
+        # Check output
+        assert dest.exists()
+        assert dest.read_bytes() == wav_bytes
+        
+        # Check info
+        assert info.voices == {'主持人': 'HostA', '嘉宾': 'GuestB'}
+

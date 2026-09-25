@@ -406,7 +406,7 @@ class _Runner:
                             'finish_reason': attempt.finish_reason})
 
     def update_llm_usage(self) -> None:
-        from .llm_usage import usage_snapshot
+        from .llm_usage import usage_snapshot, tts_usage_snapshot
 
         path = self.path('usage/llm_usage.json')
         reuse = {}
@@ -422,6 +422,7 @@ class _Runner:
         for stage, count in self.pending_llm_reuse.items():
             reuse[stage] = reuse.get(stage, 0) + count
         write_json(path, usage_snapshot(self.manifest.ai_calls, reuse))
+        write_json(self.path('usage/tts_usage.json'), tts_usage_snapshot(self.manifest.ai_calls, self.root))
         self.pending_llm_reuse.clear()
 
     def ai_operation(self, name: str, kind: str, version: str, inputs: object, invoke: Callable) -> list[str]:

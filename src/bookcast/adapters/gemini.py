@@ -78,7 +78,7 @@ class GeminiTTSProvider:
     def _request(self, payload=None):
         key = os.environ.get(self.spec.api_key_env)
         if not key:
-            raise ProviderError(ErrorKind.AUTH)
+            sys.exit('Gemini TTS requires GEMINI_API_KEY')
         url = ENDPOINT + self.model + (':generateContent' if payload is not None else '')
         try:
             req = request.Request(url, headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
@@ -114,56 +114,110 @@ class GeminiTTSProvider:
             self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
         return self.last_status
 
+
     def synthesize_segment(self, segment: SpeechSegment, destination: Path) -> SegmentSpeechInfo:
+        from ..speech import normalize_tts_text
         self.last_usage, self.reported_model = None, None
         segment = SpeechSegment.model_validate(segment)
-        roles = {'主持人': 'HostA', '嘉宾': 'HostB'}
         voices = {'主持人': self.settings.host_voice, '嘉宾': self.settings.guest_voice}
         selected = {t.speaker: voices[t.speaker] for t in segment.turns}
-        instruction = segment.instruction if segment.instruction is not None else self.settings.style_instruction
-        text = 'Read the following transcript verbatim. Do not read speaker labels or add words.\n'
-        if instruction:
-            text += 'Delivery style: ' + instruction + '\n'
-        text += '\nTranscript:\n' + '\n'.join(f'{roles[t.speaker]}: {t.text}' for t in segment.turns)
-        if len(text.encode('utf-8')) > 6000:
+        
+        parts = []
+        for t in segment.turns:
+            normalized = normalize_tts_text(t.text)
+            if not normalized.strip():
+                continue
+                
+            style = "calm, thoughtful Chinese podcast host" if t.speaker == '主持人' else "natural, conversational, reflective guest"
+            # Overwrite if general style instruction is provided
+            if self.settings.style_instruction:
+                style = self.settings.style_instruction
+
+            parts.append({
+                'text': normalized,
+                'speech_metadata': {
+                    'speaker': voices[t.speaker],
+                    'style': style
+                }
+            })
+            
+        if not parts:
             raise ProviderError(ErrorKind.INPUT)
-        configs = [{'speaker': roles[s], 'voiceConfig': {'prebuiltVoiceConfig': {'voiceName': v}}}
-                   for s, v in selected.items()]
-        speech_config = ({'multiSpeakerVoiceConfig': {'speakerVoiceConfigs': configs}} if len(configs) == 2
-                         else {'voiceConfig': configs[0]['voiceConfig']})
-        payload = {'contents': [{'parts': [{'text': text}]}],
-                   'generationConfig': {'responseModalities': ['AUDIO'], 'speechConfig': speech_config}}
-        # Fixed disclosure only; neither transcript nor credentials go to terminal/logs.
+            
+        payload = {
+            'contents': [{'parts': parts}],
+            'generationConfig': {
+                'responseModalities': ['AUDIO'],
+                'speechConfig': {
+                    'mode': getattr(self.settings, 'mode', 'conversational')
+                }
+            }
+        }
+        
         try:
             print('云端 TTS：将播客文本发送至 Google Developer API；免费/未知层可能用于产品改进，付费层适用不同数据条款。',
                   file=sys.stderr)
         except OSError:
             pass  # A detached terminal must not invalidate a durable job.
+            
         try:
             result = self._request(payload)
             usage = result.get('usageMetadata')
             if isinstance(usage, dict):
-                self.last_usage = ProviderUsage.from_response({'prompt_tokens': usage.get('promptTokenCount'),
-                    'completion_tokens': usage.get('candidatesTokenCount')})
+                self.last_usage = ProviderUsage.from_response({
+                    'prompt_tokens': usage.get('promptTokenCount'),
+                    'completion_tokens': usage.get('candidatesTokenCount')
+                })
             model = result.get('modelVersion')
             if isinstance(model, str) and re.fullmatch(r'[A-Za-z0-9._-]{1,128}', model):
                 self.reported_model = model
-            pcm = decode_pcm(result)
-            with wave.open(str(destination), 'wb') as output:
-                output.setparams((1, 2, 24000, 0, 'NONE', 'not compressed'))
-                output.writeframes(pcm)
+                
+            decode_audio(result, destination)
+            
         except ProviderError as failure:
             self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
             raise
+            
         self.last_status = ProviderStatus(provider=self.name, model=self.model, availability='available')
         return SegmentSpeechInfo(voices=selected)
 
     def synthesize(self, script, destination):
+
         # Never hide multiple cloud requests behind a single legacy Attempt.
         raise ProviderError(ErrorKind.INPUT)
 
 
+
+def decode_audio(result, destination):
+    try:
+        candidates = result['candidates']
+        if len(candidates) != 1 or candidates[0].get('finishReason') != 'STOP':
+            raise ValueError()
+        parts = candidates[0]['content']['parts']
+        if len(parts) != 1:
+            raise ValueError()
+        inline = parts[0]['inlineData']
+        mime = inline['mimeType'].lower().replace(' ', '').split(';')[0]
+        
+        data = base64.b64decode(inline['data'], validate=True)
+        if not data:
+            raise ValueError()
+            
+        if mime == 'audio/wav':
+            with open(str(destination), 'wb') as output:
+                output.write(data)
+        elif mime == 'audio/l16':
+            with wave.open(str(destination), 'wb') as output:
+                output.setparams((1, 2, 24000, 0, 'NONE', 'not compressed'))
+                output.writeframes(data)
+        else:
+            raise ValueError()
+            
+    except (KeyError, IndexError, TypeError, AttributeError, ValueError, binascii.Error):
+        raise ProviderError(ErrorKind.SCHEMA) from None
+
 def decode_pcm(result):
+
     try:
         candidates = result['candidates']
         if len(candidates) != 1 or candidates[0].get('finishReason') != 'STOP':
