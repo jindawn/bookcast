@@ -6,6 +6,8 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+debugging-*.md
+
 
 # Credentials and local configuration (sanitized examples may be committed)
 .env

@@ -1,0 +1,22 @@
+{
+  "chapter_id": "0015",
+  "chunk_id": "0001",
+  "core_ideas": [{"text": "redacted idea", "evidence_id": "e0001"}],
+  "arguments": [],
+  "evidence": [],
+  "examples": [],
+  "people": [],
+  "concepts": [
+    {"text": "redacted concept 1", "evidence_id": "e0001"},
+    {"text": "redacted concept 2", "evidence_id": "e0002"},
+    {"text": "redacted concept 3", "evidence_id": "e0003"},
+    {"text": "redacted concept 4", "evidence_id": "e0004"},
+    {"text": "redacted concept 5", "evidence_id": "e0005"},
+    {"text": "redacted concept 6", "evidence_id": "e0006"},
+    {"text": "redacted concept 7", "evidence_id": "e0007"}
+  ],
+  "counter_arguments": [],
+  "connections": [],
+  "key_passages": [],
+  "is_mock": false
+}
