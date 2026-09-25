@@ -386,12 +386,31 @@ def cost(
         raise BookCastError(f"读取任务失败：{exc}") from None
         
     cfg = load_config(config)
-    summary = calculate_cost_summary(manifest.ai_calls, cfg, root)
+    manifest_info = {
+        "job_id": job,
+        "output_id": root.name,
+        "source": {
+            "title": manifest.metadata_seed.title if manifest.metadata_seed else Path(manifest.source_name).stem,
+            "input_file": manifest.source_name,
+            "input_hash": manifest.source_sha256
+        },
+        "usage_source": {
+            "llm_usage_path": str(artifact_path(root, 'usage/llm_usage.json')),
+            "tts_usage_path": str(artifact_path(root, 'usage/tts_usage.json'))
+        }
+    }
+    
+    summary = calculate_cost_summary(manifest.ai_calls, cfg, root, manifest.provider_settings, manifest_info)
     
     # Save the updated cost summary
     summary_path = artifact_path(root, 'usage/cost_summary.json')
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+    
+    print(f"\nJob ID: {manifest_info['job_id']}")
+    print(f"Output ID: {manifest_info['output_id']}")
+    print(f"LLM usage path: {manifest_info['usage_source']['llm_usage_path']}")
+
     
     print("\nLLM")
     for prov, p_dict in summary['llm']['providers'].items():

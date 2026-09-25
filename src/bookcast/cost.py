@@ -28,9 +28,11 @@ def _is_off_peak(timestamp_str: str) -> bool:
     except Exception:
         return False
 
-def calculate_cost_summary(calls: list, config: ProvidersConfig, root_dir: Path | None = None, current_settings: dict | None = None) -> dict:
+def calculate_cost_summary(calls: list, config: ProvidersConfig, root_dir: Path | None = None, current_settings: dict | None = None, manifest_info: dict | None = None) -> dict:
     summary = {
+        "job_identity": manifest_info or {},
         "currency": "CNY",
+
         "llm": {
             "current_provider": None,
             "providers": defaultdict(lambda: {

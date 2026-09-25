@@ -427,7 +427,19 @@ class _Runner:
         try:
             from .cost import calculate_cost_summary
             from .provider_config import load_config
-            cost_summary = calculate_cost_summary(self.manifest.ai_calls, load_config(self.config), self.root, self.manifest.settings)
+            manifest_info = {
+                "source": {
+                    "title": self.manifest.metadata_seed.title if self.manifest.metadata_seed else Path(self.manifest.source_name).stem,
+                    "input_file": self.manifest.source_name,
+                    "input_hash": self.manifest.source_sha256
+                },
+                "usage_source": {
+                    "llm_usage_path": str(self.path('usage/llm_usage.json')),
+                    "tts_usage_path": str(self.path('usage/tts_usage.json'))
+                }
+            }
+            # We don't have the web job ID in the pure pipeline, but the web layer will inject it if needed.
+            cost_summary = calculate_cost_summary(self.manifest.ai_calls, load_config(self.config), self.root, self.manifest.provider_settings, manifest_info)
             write_json(self.path('usage/cost_summary.json'), cost_summary)
         except Exception as exc:
             import sys

@@ -703,7 +703,16 @@ export default function Home() {
                       <details style={{ marginTop: '1rem' }}>
                         <summary style={{ cursor: 'pointer', color: 'var(--primary)' }}>查看明细</summary>
                         
+
                         <div style={{ marginTop: '1rem', fontSize: '0.9em' }}>
+                          {current.cost_summary.job_identity && current.cost_summary.job_identity.job_id && (
+                            <div style={{ marginBottom: '1rem', padding: '0.5rem', background: 'var(--bg-inset)', borderRadius: '4px' }}>
+                              <div style={{ color: 'var(--muted)', fontSize: '0.8em', marginBottom: '0.2rem' }}>数据来源校验</div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Job ID</span><span style={{ fontFamily: 'monospace' }}>{current.cost_summary.job_identity.job_id}</span></div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Output ID</span><span style={{ fontFamily: 'monospace' }}>{current.cost_summary.job_identity.output_id}</span></div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>LLM Usage</span><span style={{ fontFamily: 'monospace', fontSize: '0.8em', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '200px' }} title={current.cost_summary.job_identity.usage_source?.llm_usage_path}>{current.cost_summary.job_identity.usage_source?.llm_usage_path}</span></div>
+                            </div>
+                          )}
                           <strong>LLM Token</strong>
                           {Object.keys(current.cost_summary.llm.providers).map(prov => (
                              <div key={prov} style={{ marginBottom: '0.5rem', color: prov === current.cost_summary.llm.current_provider ? 'inherit' : 'var(--muted)' }}>
