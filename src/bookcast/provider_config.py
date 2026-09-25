@@ -57,6 +57,7 @@ class CloudTTSConfig(Model):
     style_instruction: str | None = Field(default=None, max_length=512)
     host_style: str | None = Field(default=None, max_length=512)
     guest_style: str | None = Field(default=None, max_length=512)
+    min_request_interval: int = Field(default=25, ge=0, le=120)
     mode: Literal["conversational", "standard", "unknown"] = "unknown"
 
     @model_validator(mode="after")

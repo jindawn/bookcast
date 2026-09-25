@@ -23,7 +23,7 @@ WIRE_VERSION = "gemini-generate-content-tts-v1:pcm-s16le-24k"
 MAX_RESPONSE = 32 * 1024 * 1024
 
 
-def classify_http(status, body):
+def classify_http(status, body, headers=None):
     """Use structured status/reasons/quota IDs, never persist or match error prose."""
     try:
         failure = json.loads(body).get('error', {})
@@ -32,33 +32,52 @@ def classify_http(status, body):
         reasons = {d.get('reason') for d in details if isinstance(d.get('reason'), str)}
     except (ValueError, AttributeError, TypeError):
         failure, details, reasons = {}, [], set()
-    if status == 401 or failure.get('status') == 'UNAUTHENTICATED' or reasons & {'API_KEY_INVALID', 'API_KEY_EXPIRED'}:
-        return ProviderError(ErrorKind.AUTH)
-    if status == 403:
-        return ProviderError(ErrorKind.PERMISSION)
-    if status == 402 or reasons & {'BILLING_DISABLED', 'BILLING_NOT_ACTIVE', 'QUOTA_EXCEEDED'}:
-        return ProviderError(ErrorKind.QUOTA)
-    if status == 429:
-        violations = [v for d in details for v in (d.get('violations') if isinstance(d.get('violations'), list) else [])
-                      if isinstance(v, dict)]
-        for violation in violations:
-            quota_id = str(violation.get('quotaId', '')).lower()
-            if ('perday' in quota_id or 'per_day' in quota_id
-                    or violation.get('quotaValue') in (0, '0')):
-                return ProviderError(ErrorKind.QUOTA)
-        return ProviderError(ErrorKind.RATE_LIMIT)
-
-    if status in {408, 504}:
-        return ProviderError(ErrorKind.TIMEOUT)
-    if status >= 500:
-        return ProviderError(ErrorKind.UNAVAILABLE)
         
     error_status = failure.get('status', str(status))
     error_msg = failure.get('message', '')
     if error_msg:
         import sys
         print(f"Gemini API Error: {error_status} - {error_msg[:300]}", file=sys.stderr)
-    return ProviderError(ErrorKind.SCHEMA, error_type=error_status, validation_reason=error_msg[:300])
+        
+    retry_after = None
+    if headers and 'Retry-After' in headers:
+        try:
+            retry_after = int(headers['Retry-After'])
+        except ValueError:
+            pass
+
+    kind = ErrorKind.BUSINESS
+    if status == 401 or failure.get('status') == 'UNAUTHENTICATED' or reasons & {'API_KEY_INVALID', 'API_KEY_EXPIRED'}:
+        kind = ErrorKind.AUTH
+    elif status == 403:
+        kind = ErrorKind.PERMISSION
+    elif status == 402 or reasons & {'BILLING_DISABLED', 'BILLING_NOT_ACTIVE', 'QUOTA_EXCEEDED'}:
+        kind = ErrorKind.QUOTA
+    elif status == 429:
+        kind = ErrorKind.RATE_LIMIT
+        violations = [v for d in details for v in (d.get('violations') if isinstance(d.get('violations'), list) else [])
+                      if isinstance(v, dict)]
+        for violation in violations:
+            quota_id = str(violation.get('quotaId', '')).lower()
+            if ('perday' in quota_id or 'per_day' in quota_id
+                    or violation.get('quotaValue') in (0, '0')):
+                kind = ErrorKind.QUOTA
+        
+        # Determine exact 429 reason
+        if error_status == 'RESOURCE_EXHAUSTED':
+            error_status = 'quota_exceeded' if kind == ErrorKind.QUOTA else 'rate_limit_exceeded'
+            if 'too_many_requests' in error_msg.lower():
+                error_status = 'too_many_requests'
+    elif status in {408, 504}:
+        kind = ErrorKind.TIMEOUT
+    elif status >= 500:
+        kind = ErrorKind.UNAVAILABLE
+    else:
+        kind = ErrorKind.SCHEMA
+
+    err = ProviderError(kind, error_type=error_status, validation_reason=error_msg[:300])
+    err.retry_after = retry_after
+    return err
 
 
 
@@ -67,7 +86,11 @@ class NoRedirect(request.HTTPRedirectHandler):
         raise ProviderError(ErrorKind.INPUT)
 
 
+import time
+import random
+
 class GeminiTTSProvider:
+    _last_request_time = 0.0
     def __init__(self, spec):
         self.spec, self.name, self.model = spec, spec.name, spec.model
         self.settings = spec.cloud_tts
@@ -88,28 +111,57 @@ class GeminiTTSProvider:
         if not key:
             sys.exit('Gemini TTS requires GEMINI_API_KEY')
         url = ENDPOINT + self.model if payload is None else 'https://generativelanguage.googleapis.com/v1beta/interactions'
-        try:
-            req = request.Request(url, headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
-                data=json.dumps(payload, ensure_ascii=False).encode() if payload is not None else None)
-            with request.build_opener(NoRedirect()).open(req, timeout=self.spec.timeout_seconds) as response:
-                raw = response.read(MAX_RESPONSE + 1)
-            if len(raw) > MAX_RESPONSE:
-                raise ProviderError(ErrorKind.SCHEMA)
-            value = json.loads(raw)
-            if not isinstance(value, dict):
-                raise ProviderError(ErrorKind.SCHEMA)
-            return value
-        except error.HTTPError as exc:
-            failure = classify_http(exc.code, exc.read(64 * 1024))
-        except error.URLError as exc:
-            failure = ProviderError(ErrorKind.TIMEOUT if isinstance(exc.reason, TimeoutError) else ErrorKind.UNAVAILABLE)
-        except TimeoutError:
-            failure = ProviderError(ErrorKind.TIMEOUT)
-        except (ValueError, UnicodeError):
-            failure = ProviderError(ErrorKind.SCHEMA)
-        except OSError:
-            failure = ProviderError(ErrorKind.UNAVAILABLE)
-        raise failure from None
+        
+        attempts = 0
+        backoffs = [10, 20, 40, 60]
+        
+        while True:
+            # Active RPM throttling
+            now = time.time()
+            interval = getattr(self.settings, 'min_request_interval', 25)
+            if payload is not None and now - GeminiTTSProvider._last_request_time < interval:
+                sleep_time = interval - (now - GeminiTTSProvider._last_request_time)
+                time.sleep(sleep_time)
+            
+            try:
+                if payload is not None:
+                    GeminiTTSProvider._last_request_time = time.time()
+                    
+                req = request.Request(url, headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
+                    data=json.dumps(payload, ensure_ascii=False).encode() if payload is not None else None)
+                with request.build_opener(NoRedirect()).open(req, timeout=self.spec.timeout_seconds) as response:
+                    raw = response.read(MAX_RESPONSE + 1)
+                if len(raw) > MAX_RESPONSE:
+                    raise ProviderError(ErrorKind.SCHEMA)
+                value = json.loads(raw)
+                if not isinstance(value, dict):
+                    raise ProviderError(ErrorKind.SCHEMA)
+                return value
+            except error.HTTPError as exc:
+                failure = classify_http(exc.code, exc.read(64 * 1024), exc.headers)
+            except error.URLError as exc:
+                failure = ProviderError(ErrorKind.TIMEOUT if isinstance(exc.reason, TimeoutError) else ErrorKind.UNAVAILABLE)
+            except TimeoutError:
+                failure = ProviderError(ErrorKind.TIMEOUT)
+            except (ValueError, UnicodeError):
+                failure = ProviderError(ErrorKind.SCHEMA)
+            except OSError:
+                failure = ProviderError(ErrorKind.UNAVAILABLE)
+
+            # Retry logic
+            if failure.kind in {ErrorKind.RATE_LIMIT, ErrorKind.TIMEOUT, ErrorKind.UNAVAILABLE} and attempts < 4:
+                delay = getattr(failure, 'retry_after', None)
+                if not delay:
+                    delay = backoffs[attempts] + random.uniform(0, 2)
+                import sys
+                print(f"Gemini 限流/临时错误，正在等待自动重试... 下一次重试约 {int(delay)} 秒后", file=sys.stderr)
+                time.sleep(delay)
+                attempts += 1
+                # reset request time so we don't double sleep on next loop iteration
+                GeminiTTSProvider._last_request_time = time.time() - interval
+                continue
+                
+            raise failure from None
 
     def health_check(self):
         try:
