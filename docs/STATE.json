@@ -5,7 +5,7 @@
   "current_task": "真实 DeepSeek 5 分钟 clean-run 成本验证",
   "task_status": "blocked",
   "branch": "main",
-  "last_verified_commit": "04551c0d779d6c4b8f198d192dd5dafbbeb70005",
+  "last_verified_commit": "4f841063a320da78f4b20c94471f49809fbb75c3",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -109,10 +109,12 @@
     "实现 quality gate 矛盾/待核验发言局部定向修复（targeted repair）：当 quality gate 发现一致性 review 存在 contradicted 时，精确定位受影响 segment 及 turn_index，仅改写受影响段落并注入原引用证据及争议上下文；仅对修复段重跑 consistency review 并重新评估 quality；每个 segment 严格限制最多 2 次修复防止死循环；离线测试 157 passed / 1 deselected 验证 targeted repair、持久化 cache hit 与有界上限止损。",
     "EPUB来源过滤在Chapter/LLM前排除确定性封面/目录/广告及正文推广段落，source_filter.json审计保留和移除单元；quality-v2脚本推广门禁在TTS前阻断，未改变targeted repair。真实源只读核对旧72个XHTML单元/96分析chunk，净化后69/93；未调用DeepSeek或改动已完成Job。功能提交a65f77d经相关113 passed/1 skipped、validator/compileall/diff复验。",
     "Phase18 离线审计真实已完成任务的 361 个唯一 LLM 步骤/429 次尝试；全源证据分析保留，逐章综合有界合批、全书综合前按时长跨书序选候选、20分钟最多16个脚本/复核片段；增加阶段用量视图和显式 Mock 成本烟测。未调用 DeepSeek/TTS 真人模型或修改原 Job。",
-    "只读审计独立 5 分钟真实任务：analysis:0003:0001 两次 DeepSeek 正常 stop/JSON 解析成功，EvidenceAnalysis.evidence 超过 maxItems=6，第二次仍超限；实现 DeepSeek 有界可选数组归约并保留严格验证，事件增加 task_id/schema_model；未调用真实 API。"
+    "只读审计独立 5 分钟真实任务：analysis:0003:0001 两次 DeepSeek 正常 stop/JSON 解析成功，EvidenceAnalysis.evidence 超过 maxItems=6，第二次仍超限；实现 DeepSeek 有界可选数组归约并保留严格验证，事件增加 task_id/schema_model；未调用真实 API。",
+    "RC Stage 0：Gemini虚拟时间、默认suite主/子进程禁网、Interactions fixture和chunk恢复真实回归；核心58通过，未调用真实API"
   ],
   "in_progress": [],
   "next_actions": [
+    "单独更新 tests/test_cost_calculator.py 的旧成本摘要字段断言；本次 RC Stage 0 未改 cost 逻辑或该测试。",
     "在用户本机有 DEEPSEEK_API_KEY 的环境以全新 output 根运行 5 分钟双人播客 DeepSeek clean run；旧失败 Job 仅用于诊断，不纳入 clean-run 成本统计。",
     "在用户显式选择的新真实任务上比较 Phase18 的成本与播客质量；旧完成任务保持不变，不自动重制。",
     "现存《狂人日记》20分钟Job已完成但音频保留旧广告；仅在用户需要净化重制时另建独立Job。先用小EPUB Mock烟测，不对原Job做全书retry或改动已完成音频。",
@@ -641,6 +643,38 @@
       "scope": "working_tree",
       "summary": "离线烟测0真实API请求；244 passed、1 skipped。独立基线有69单元/93块，0 LLM checkpoint，usage文件不存在；凭证缺失阻止真实运行。",
       "checked_at": "2026-09-25T01:04:46Z"
+    },
+    {
+      "name": "rc-stage0-core-offline",
+      "command": ".venv/bin/python -m pytest -q tests/test_gemini_tts.py tests/test_gemini_interactions.py tests/test_gemini_retry.py tests/test_content.py::test_cli_modes_invalid_config_and_acquire_bridge tests/test_phase1.py::Phase1Tests::test_cli_generate_and_status tests/test_sources.py::test_cli_local_file_generate_and_resume",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "58 passed，4.83秒；Gemini重试/25秒限流/Retry-After采用虚拟时间，主进程和Python子进程禁网测试通过，checkpoint恢复仅调用第二chunk；未调用真实API。",
+      "checked_at": "2026-09-25T08:06:13Z"
+    },
+    {
+      "name": "rc-stage0-default-offline-suite",
+      "command": ".venv/bin/python -m pytest -q",
+      "status": "failed",
+      "scope": "working_tree",
+      "summary": "465 passed、1 failed、1 skipped、5 deselected、10 subtests passed，61.98秒；唯一失败为既有cost test断言旧summary[llm][cost]字段，当前摘要按providers分层；未修改cost。",
+      "checked_at": "2026-09-25T08:06:13Z"
+    },
+    {
+      "name": "rc-stage0-static",
+      "command": "python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "项目校验、编译和差异空白检查通过。",
+      "checked_at": "2026-09-25T08:06:13Z"
+    },
+    {
+      "name": "rc-stage0-functional-commit",
+      "command": ".venv/bin/python -m pytest -q tests/test_gemini_tts.py tests/test_gemini_interactions.py tests/test_gemini_retry.py tests/test_content.py::test_cli_modes_invalid_config_and_acquire_bridge tests/test_phase1.py::Phase1Tests::test_cli_generate_and_status tests/test_sources.py::test_cli_local_file_generate_and_resume; python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "功能提交4f841063a320da78f4b20c94471f49809fbb75c3上核心58 passed/4.29秒，validator和compileall通过；完整suite仍有独立cost旧断言失败。",
+      "checked_at": "2026-09-25T08:07:33Z"
     }
   ],
   "known_failures": [
@@ -660,7 +694,8 @@
     "Phase17 OCR仅macOS Apple Vision显式可用；复杂多栏/脚注、矢量描边字及非macOS OCR未验收，低置信需核原页。",
     "OCR parse Step在提交前崩溃会重新识别整份文档；完成后resume复用有效Artifact，尚无逐页OCR持久缓存。",
     "EPUB来源过滤使用保守确定性规则：未知广告仍可能漏检，标题独占XHTML仍保留为独立内容单元；不等同语义分章。已完成的《狂人日记》旧音频不会被本次代码修改自动净化。",
-    "Phase18 清洁运行请求数/Token 降幅仅按已有真实任务 manifest 和离线 Mock 投影；新 DeepSeek 长书未调用，播客质量、真实花费及总 token < 历史调试账单 1/3 的目标尚未验证。"
+    "Phase18 清洁运行请求数/Token 降幅仅按已有真实任务 manifest 和离线 Mock 投影；新 DeepSeek 长书未调用，播客质量、真实花费及总 token < 历史调试账单 1/3 的目标尚未验证。",
+    "RC Stage 0 默认离线 suite 唯一失败：tests/test_cost_calculator.py::test_cost_calculation 读取旧 summary[llm][cost]，当前成本摘要按 llm.providers 分层；本阶段按范围约束未修改 cost，不能据此判断生产成本正确性。"
   ],
   "blockers": [
     "首个独立 5 分钟真实任务因 EvidenceAnalysis.evidence 超6项失败，不能计为 clean run；provider 适配器已离线修复。当前 Codex 进程没有 DEEPSEEK_API_KEY；须用户本机在全新 output 根启动新任务，未自动调用 API。"
@@ -1077,7 +1112,11 @@
     {
       "path": "scripts/llm_cost_smoke.py",
       "purpose": "显式 Mock provider 的临时目录离线成本烟测"
+    },
+    {
+      "path": "tests/offline_guard/sitecustomize.py",
+      "purpose": "默认离线测试的Python子进程禁网入口；意外socket连接立即失败"
     }
   ],
-  "updated_at": "2026-09-25T01:23:50Z"
+  "updated_at": "2026-09-25T08:07:33Z"
 }

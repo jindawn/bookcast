@@ -1,3 +1,12 @@
+## 2026-09-25 RC Stage 0：离线测试基础设施
+
+目标：使核心 RC 测试在不调用真实 Gemini/DeepSeek/Kokoro API 的条件下快速、确定性运行。当前代码已在 Gemini Provider 注入 `clock`/`sleeper`，生产默认仍为真实时间，25 秒 RPM、10/20/40/60 秒退避及 `Retry-After` 数值未改。默认 pytest 的 socket 禁网保护覆盖主进程和 Python 子进程；意外连接立即以 AssertionError 失败。`unit`/离线 `integration` 仍是默认层，`live`/`large_model` 保持显式 opt-in。
+
+Gemini 测试已改为 `/v1beta/interactions` 的 `input`、`generation_config`、`steps[].content[]` 样本；移除旧 `generateContent` 请求断言和 PCM 响应 fixture。`test_success_chunk_no_repeat` 用真实 `_Runner` 检查点验证：chunk 1 落盘、chunk 2 首次 403 失败，恢复后只有 chunk 2 增加一次 HTTP 请求，按 `tts_segment:0001:0001/0002` 校验状态。测试不接触真实 API。
+
+验证：核心 58 passed（4.83 秒）；完整默认 suite 465 passed、1 failed、1 skipped、5 deselected、10 subtests passed（61.98 秒）。功能提交 `4f841063a320da78f4b20c94471f49809fbb75c3` 上核心 58 passed（4.29 秒），validator 和 compileall 通过。唯一失败 `tests/test_cost_calculator.py::test_cost_calculation` 仍断言旧 `summary['llm']['cost']` 字段，当前成本摘要按 `llm.providers` 分层；属于本阶段禁止修改的 cost 范围，未改实现或测试，不据此判断生产成本逻辑。`git diff --check` 通过。已存在的无跟踪调试文档及 DeepSeek fixture 未改、未提交。下一步单独处理成本测试契约，再按 RC 后续阶段审查生产语义；不要把本阶段测试通过当作 Gemini 真实服务验证。`STATE.last_verified_commit` 记录上述已验证功能提交，不自引用交接快照。
+
+---
 
 ## 2026-09-25 too_short validation error recovery
 
