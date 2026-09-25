@@ -443,4 +443,4 @@
 - 2026-09-25：只读核对 5 分钟真实新任务的 `logs/events.jsonl`、manifest、章节输入：第3章第1块两次 DeepSeek 响应均 stop，分别 input/output 6488/2198 与 7562/2140 token；Pydantic `EvidenceAnalysis.evidence` 都是 `too_long`，上限6；原始响应未保存。修复仅在 DeepSeek adapter 一次纠错后归约可选超长数组，再严格验证；事件补 task_id/schema_model；脱敏重建 fixture 回归与相关 217 测试通过，未调用 API 或修改用户任务。
 
 - 2026-09-25T02:38:41.102549Z: 修复 consistency:0001 `finish_reason: length` 失败，添加 missing_turns schema 重试及确定性数组对齐。所有测试通过并推送远程。
-- 2026-09-25T03:06:47.657164Z: 修复 schema correction 对 `too_short` 的漏判，允许对极短数组给出兜底指引。
+- 2026-09-25T03:06:47.657164Z: 修复 schema correction 对 `too_short` 的漏判，允许对极短数组给出兜底指引。- 2026-09-25: 实施了 TTS 音频拼凑体验优化。重写 `split_text` 放宽单片段至 200 字符上限，加入基于强弱中文标点防截断算法；引入 `normalize_tts_text` 剥离无效 Markdown 等符号。底层 `concat_wav` 扩展接受动态停顿列表。全程不修改原始 `script` 和 `LLM` 逻辑（0 次额外调用），最终选用了 `zf_xiaoxiao` 及 `zm_yunyang` 生成了对比 1.05x 播客速度的 A/B 试听音频，测试完全通过并推送。

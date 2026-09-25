@@ -185,18 +185,18 @@
 
 ## 当前目标和证据
 
-用户报告《狂人日记》DeepSeek `schema_error`。本地两份对应 Web 上传实际是 EPUB（不是 PDF），均在 `analysis:0004:0001` 失败，前 3 章成功。失败段是《鸭的喜剧》。两次都有 DeepSeek `reported_model=deepseek-flash` 和 usage，HTTP 已收到响应。旧实现丢弃了响应解析/Pydantic 的底层异常；未保存原始响应。当前进程没有 DeepSeek key，因此无法还原历史的具体无效字段，不能声称真实 API 已修好。
+用户要求优化最终 2~3 分钟的中文 A/B 试听播客，不改变 LLM 生成的 `script` 内容，且做到 0 次 LLM API 调用。旧版存在的明显问题是 80 字符的生硬分段边界，没有文本清洗（Markdown 和符号被一字一句念出），以及毫无差别的 0.18 秒停顿，极其破坏双人闲谈的沉浸感。
 
 ## 修改和验证
 
-- `src/bookcast/adapters/compatible.py`：确认当前仅发送 `response_format=json_object`，未发 OpenAI `json_schema/strict`；DeepSeek 端补充 JSON schema 类型、空数组和必填项指令。响应错误转为安全的 `error_type`、`validation_field`、`validation_reason`，保留严格 Pydantic 校验。
-- `provider_api.py`、`provider_chain.py`、`models.py`、`pipeline.py`：错误元数据沿真实调用链进入 Attempt 和 events，不保存响应内容或密钥。`tests/test_generation.py` 覆盖正常请求、错误字段、显式 retry 保留前章及 OpenAI 不变；已有 malformed 测试仍通过。
-- 专项 `tests/test_generation.py tests/test_providers.py` 100 passed；扩展四模块隔离本地配置后 144 passed、1 deselected。未隔离运行有一项既有 CLI 测试失败，因为本机 `bookcast.toml` 选择 DeepSeek 且无 key，和本次改动无关。项目 validator、compileall、diff check 待最终提交前复验。
+- `src/bookcast/speech.py`：新增 `normalize_tts_text` 剥离 Markdown 符号和括号内的辅助内容，放宽 `split_text` 的 limit 到 200，并实现了基于中文标点和避免截断英文/数字的智能标点回退。新增基于 `turn_index` 解析来制定不同停顿时间的动态切分机制。
+- `src/bookcast/audio.py`：扩展了 `concat_wav` 接收 `pause_seconds: list[float]` 的能力，实现了从固化常数到细粒度拼缝停顿的转变。
+- 采用更搭配双人聊天的 `zf_xiaoxiao` 与 `zm_yunyang` 代替原有的发音人配置，速度微调至 `1.05`。
+- 测试 `test_tts.py` 全部回归通过。成功使用 `v5` 历史 `script` Artifact 零 API 成本生成了 Baseline 和 Optimized 版本的 2 分钟 A/B 对比音频，存放在 `output/tts-ab`，修改全部合并推送（`0607c83`）。
 
 ## 下一步
 
-在有 `DEEPSEEK_API_KEY` 的原服务环境对现存 Web Job 显式 retry。检查 `logs/events.jsonl` 的 `error_type`、`validation_field`、`validation_reason`；若仍失败，针对确切字段继续修复，不要保存/输出原始响应或 key。不要从当前证据推断旧失败的具体字段，不要重新生成前 3 章。任务 ID 见本地 `data/web/jobs`（被 Git 忽略）。其他 Phase17 发布阻塞仍见 STATE.json。
-
+人工审查并对比听感。对于 TTS 后端无需再深入调参，下一步可能重点是对已有阶段（比如 `planning`、`synthesis` 或 `claims` 等环节）进行其他的架构精简或 prompt 优化，如果用户不主动指派可进行其他 Phase17 剩余阻塞排查，如 Qwen、Gutenberg 和版权依赖问题。
 ---
 
 # 给下一位 Coding Agent
