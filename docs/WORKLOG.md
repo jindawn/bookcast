@@ -439,3 +439,5 @@
 
 - 提交 `6a9f9515774468d10bc3f8633dfcfa43a9f431ed` 下运行 Mock 成本烟测（0真实 API）与 8 模块离线 244 passed/1 skipped。
 - 独立运行目录 `output/llm-cost-clean-5min-5f94c8665518` 仅写入 baseline.json；真实 EPUB SHA 见基线，净化解析 69 单元/93 chunk，0 manifest/usage/检查点。当前进程缺少 DeepSeek 凭证且本地 Web 未运行，真实调用未开始，未创造 Core job_id 或消费 token。
+
+- 2026-09-25：只读核对 5 分钟真实新任务的 `logs/events.jsonl`、manifest、章节输入：第3章第1块两次 DeepSeek 响应均 stop，分别 input/output 6488/2198 与 7562/2140 token；Pydantic `EvidenceAnalysis.evidence` 都是 `too_long`，上限6；原始响应未保存。修复仅在 DeepSeek adapter 一次纠错后归约可选超长数组，再严格验证；事件补 task_id/schema_model；脱敏重建 fixture 回归与相关 217 测试通过，未调用 API 或修改用户任务。

@@ -1,5 +1,13 @@
 # 给下一位 Coding Agent
 
+更新时间：2026-09-25。真实 5 分钟独立 DeepSeek 任务 `output/llm-cost-clean-5min-5f94c8665518/b288c0f91d3e46f32eb95916`（job_id `69dbb0d591bd4c04a6a54a74140f8baf`）已在 `analysis:0003:0001` 永久失败，不能计作 clean-run 成本。只读事件显示两次 HTTP/JSON 正常，`finish_reason=stop`，Pydantic `EvidenceAnalysis.evidence` 列表两次 `too_long`（上限6）。原始响应正文未持久化，因此只能确认超限，无法声称具体列表长度或内容。第三单元 2693 字、64 证据候选、prompt 10156 字；前两章无异常输入，analysis prompt/schema 未被 Phase18 token 优化改变。
+
+最小修复在 `src/bookcast/adapters/compatible.py`：DeepSeek 一次有界纠错后，可选列表仍超 maxItems 时确定性保留前 N 项，再做完整 Pydantic/证据归属校验；必需列表不归约，非可修复错误不 retry。`src/bookcast/pipeline.py` 事件增加 `task_id` 与 `schema_model`，不改变 manifest 旧格式。脱敏重建 fixture 与测试覆盖真实错误形态及不可修复错误。相关 217 passed，validator/compileall/diff check 通过；无真实 DeepSeek 调用。旧失败 job 不应作为 clean run 复用；用户本机应使用新独立输出根启动新的 5 分钟任务，旧已完成 20 分钟产物保持不变。
+
+---
+
+# 给下一位 Coding Agent
+
 更新时间：2026-09-25。当前目标是用户明确要求的真实 DeepSeek 5 分钟双人播客 clean-run 成本验证，不是继续架构优化。**真实调用未启动**：当前 Codex 执行进程没有 `DEEPSEEK_API_KEY`，本地 Web 127.0.0.1:8765 未运行。不要向聊天输出密钥，不要拿旧 Job 冒充新 clean run。用户已收到安全注入凭证的异步请求。
 
 零成本烟测通过（Mock 13 请求、真实 0），相关离线 244 passed / 1 skipped。新独立运行基线在 `output/llm-cost-clean-5min-5f94c8665518/baseline.json`，run_id `5f94c8665518409a9cdad81f205d0cee`；当前只有该基线文件，无 Core job_id、manifest、usage 或检查点。源使用旧已完成 Web Job 内的 EPUB 导入副本，SHA-256 为 `80b17c0c498c1cc1ae32dc806211c3e1300846f37617ca792189957709d3a0bc`；本地净化解析为 69 个 XHTML 单元、93 个分析 chunk。配置仍是 deepseek-flash / kokoro-multi-lang-v1_0、two_host、5 分钟，HEAD `6a9f9515774468d10bc3f8633dfcfa43a9f431ed`。旧 Job/音频未修改。

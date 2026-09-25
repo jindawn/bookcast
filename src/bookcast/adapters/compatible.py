@@ -209,7 +209,7 @@ class CompatibleLLMProvider(CompatibleBase):
         return self._resolve_ref(cur, schema) if isinstance(cur, dict) else {}
 
     def _normalize_deepseek_json(self, text: str, schema: dict, warned_field: str | None = None) -> str:
-        """Safely normalize null arrays, single strings into string arrays, and secondary array clamp."""
+        """Normalize safe JSON-mode drift; cap optional arrays after one failed attempt."""
         try:
             data = json.loads(text)
             if not isinstance(data, dict):
@@ -227,8 +227,10 @@ class CompatibleLLMProvider(CompatibleBase):
                     val = data[key].strip()
                     data[key] = [val] if val else []
                     modified = True
-                # 3. Secondary array clamping on retry
-                if warned_field and key != warned_field:
+                # On the one bounded retry, an optional list may still exceed maxItems.
+                # Keep the first candidates; required/nonempty primary lists
+                # must be corrected by the model rather than silently shortened.
+                if warned_field and (key != warned_field or not field.get('minItems')):
                     limit = field.get('maxItems')
                     if isinstance(limit, int) and limit > 0:
                         val = data.get(key)
@@ -281,12 +283,10 @@ class CompatibleLLMProvider(CompatibleBase):
         reason = failure.validation_reason
         field_name = failure.validation_field
         primary_prop = field_name.split('.')[0]
-        self._schema_retry_field = primary_prop
-
         if reason == 'too_long':
             limit = field_schema.get('maxItems') if isinstance(field_schema, dict) else None
             if not isinstance(limit, int) or limit < 1:
-                limit = 6
+                return False
             self._schema_retry_guidance = f'{field_name} must contain at most {limit} items. Regenerate the full JSON with all required fields.'
         elif reason == 'model_type':
             req = field_schema.get('required') if isinstance(field_schema, dict) else None
@@ -302,7 +302,9 @@ class CompatibleLLMProvider(CompatibleBase):
             exp_type = field_schema.get('type', 'valid type') if isinstance(field_schema, dict) else 'valid type'
             self._schema_retry_guidance = f"Property '{field_name}' must have type '{exp_type}'. Regenerate the full JSON with all required fields."
         else:
-            self._schema_retry_guidance = f"Property '{field_name}' failed validation ({reason}). Regenerate the full JSON strictly conforming to the schema."
+            return False
+
+        self._schema_retry_field = primary_prop
 
         if getattr(self, '_last_raw_response', None) and isinstance(self._last_raw_response, str):
             snippet = self._last_raw_response.strip()

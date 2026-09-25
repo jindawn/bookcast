@@ -108,11 +108,12 @@
     "真实 DeepSeek chapter analysis 通用有界 schema 纠错与第 43～45 章有界验证：消除此前仅对 too_long 特判纠错的架构缺陷，实现通用 schema 纠错提示引导与有界单次模型 repair；增加可选数组 null 安全归一化与单元素提升。真实 API 复验第 43、44、45 连续三章（共 11 个 steps 全部成功，含第 45 章实测命中 schema 漂移并经单次纠错自动恢复成功），累计完成 246 步后安全暂停。",
     "实现 quality gate 矛盾/待核验发言局部定向修复（targeted repair）：当 quality gate 发现一致性 review 存在 contradicted 时，精确定位受影响 segment 及 turn_index，仅改写受影响段落并注入原引用证据及争议上下文；仅对修复段重跑 consistency review 并重新评估 quality；每个 segment 严格限制最多 2 次修复防止死循环；离线测试 157 passed / 1 deselected 验证 targeted repair、持久化 cache hit 与有界上限止损。",
     "EPUB来源过滤在Chapter/LLM前排除确定性封面/目录/广告及正文推广段落，source_filter.json审计保留和移除单元；quality-v2脚本推广门禁在TTS前阻断，未改变targeted repair。真实源只读核对旧72个XHTML单元/96分析chunk，净化后69/93；未调用DeepSeek或改动已完成Job。功能提交a65f77d经相关113 passed/1 skipped、validator/compileall/diff复验。",
-    "Phase18 离线审计真实已完成任务的 361 个唯一 LLM 步骤/429 次尝试；全源证据分析保留，逐章综合有界合批、全书综合前按时长跨书序选候选、20分钟最多16个脚本/复核片段；增加阶段用量视图和显式 Mock 成本烟测。未调用 DeepSeek/TTS 真人模型或修改原 Job。"
+    "Phase18 离线审计真实已完成任务的 361 个唯一 LLM 步骤/429 次尝试；全源证据分析保留，逐章综合有界合批、全书综合前按时长跨书序选候选、20分钟最多16个脚本/复核片段；增加阶段用量视图和显式 Mock 成本烟测。未调用 DeepSeek/TTS 真人模型或修改原 Job。",
+    "只读审计独立 5 分钟真实任务：analysis:0003:0001 两次 DeepSeek 正常 stop/JSON 解析成功，EvidenceAnalysis.evidence 超过 maxItems=6，第二次仍超限；实现 DeepSeek 有界可选数组归约并保留严格验证，事件增加 task_id/schema_model；未调用真实 API。"
   ],
   "in_progress": [],
   "next_actions": [
-    "在当前 Codex 执行环境安全提供 DEEPSEEK_API_KEY 后，从 output/llm-cost-clean-5min-5f94c8665518 的独立基线目录启动一次 5 分钟双人播客真实运行；当前无 Core Job、无检查点、无 usage，不要 retry 旧任务。",
+    "在用户本机有 DEEPSEEK_API_KEY 的环境以全新 output 根运行 5 分钟双人播客 DeepSeek clean run；旧失败 Job 仅用于诊断，不纳入 clean-run 成本统计。",
     "在用户显式选择的新真实任务上比较 Phase18 的成本与播客质量；旧完成任务保持不变，不自动重制。",
     "现存《狂人日记》20分钟Job已完成但音频保留旧广告；仅在用户需要净化重制时另建独立Job。先用小EPUB Mock烟测，不对原Job做全书retry或改动已完成音频。",
     "维护者确定BookCast LICENSE、PyMuPDF AGPL/商业/替代路径及Kokoro espeak-ng-data通知；解决前不发布可再分发V1包。",
@@ -121,6 +122,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "deepseek-real-5min-evidence-overflow-regression",
+      "command": "cd /private/tmp && /Users/wumj/workspace/bookcast/.venv/bin/pytest -q /Users/wumj/workspace/bookcast/tests/test_generation.py /Users/wumj/workspace/bookcast/tests/test_content.py /Users/wumj/workspace/bookcast/tests/test_job_recovery.py /Users/wumj/workspace/bookcast/tests/test_providers.py /Users/wumj/workspace/bookcast/tests/test_phase1.py /Users/wumj/workspace/bookcast/tests/test_sources.py; cd /Users/wumj/workspace/bookcast && python3 scripts/validate_project.py && .venv/bin/python -m compileall -q src tests scripts && git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "217 passed；真实 events.jsonl 所证实的 evidence too_long 双响应形态用脱敏重建 fixture 覆盖；非法 evidence_id 首次即永久失败；事件含 task_id/schema_model。真实 raw response 未保存，未调用 DeepSeek。",
+      "checked_at": "2026-09-25T01:23:50Z"
+    },
     {
       "name": "epub-source-sanitation-and-script-contamination",
       "command": "cd /private/tmp && /Users/wumj/workspace/bookcast/.venv/bin/pytest -q /Users/wumj/workspace/bookcast/tests/test_phase1.py /Users/wumj/workspace/bookcast/tests/test_content.py /Users/wumj/workspace/bookcast/tests/test_ocr.py /Users/wumj/workspace/bookcast/tests/test_sources.py /Users/wumj/workspace/bookcast/tests/test_job_recovery.py; python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; git diff HEAD^ HEAD --check",
@@ -654,7 +663,7 @@
     "Phase18 清洁运行请求数/Token 降幅仅按已有真实任务 manifest 和离线 Mock 投影；新 DeepSeek 长书未调用，播客质量、真实花费及总 token < 历史调试账单 1/3 的目标尚未验证。"
   ],
   "blockers": [
-    "本轮真实 DeepSeek 5 分钟 clean run 尚未启动：当前 Codex 进程没有 DEEPSEEK_API_KEY，本地 Web 服务未运行；新独立 output 目录只有 baseline.json，0 真实 API 调用。需用户在执行环境安全注入凭证，不能把密钥发到聊天。"
+    "首个独立 5 分钟真实任务因 EvidenceAnalysis.evidence 超6项失败，不能计为 clean run；provider 适配器已离线修复。当前 Codex 进程没有 DEEPSEEK_API_KEY；须用户本机在全新 output 根启动新任务，未自动调用 API。"
   ],
   "important_files": [
     {
@@ -1070,5 +1079,5 @@
       "purpose": "显式 Mock provider 的临时目录离线成本烟测"
     }
   ],
-  "updated_at": "2026-09-25T01:04:46Z"
+  "updated_at": "2026-09-25T01:23:50Z"
 }

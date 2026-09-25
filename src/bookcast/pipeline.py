@@ -396,7 +396,9 @@ class _Runner:
             except (OSError, ValueError, TypeError, AttributeError):
                 pass  # This derived view must not turn a durable AI result into failure.
         self.event("attempt", state=attempt.state.value, error=attempt.error,
-                   details={'model': attempt.model, 'chapter': attempt.task.split(':')[1]
+                   details={'model': attempt.model, 'task_id': attempt.task,
+                            'schema_model': getattr(self, '_active_schema_name', None),
+                            'chapter': attempt.task.split(':')[1]
                             if attempt.task.startswith('analysis:') else None,
                             'error_type': attempt.error_type,
                             'validation_field': attempt.validation_field,
@@ -430,9 +432,15 @@ class _Runner:
                     and call.input_hash == digest and artifacts_valid(self.root, call) and self.config_valid(call)):
                 return list(call.artifacts)
         chain = self.llm if kind == "llm" else self.tts
-        artifacts = chain.execute(task=name, kind=kind, prompt_version=version, input_hash=digest,
-                                  invoke=invoke, persist=lambda names: {n: sha256_file(self.path(n)) for n in names},
-                                  observe=self.observe)
+        schema = inputs.get('schema') if isinstance(inputs, dict) else None
+        schema_name = schema.get('title') if isinstance(schema, dict) and isinstance(schema.get('title'), str) else None
+        self._active_schema_name = schema_name
+        try:
+            artifacts = chain.execute(task=name, kind=kind, prompt_version=version, input_hash=digest,
+                                      invoke=invoke, persist=lambda names: {n: sha256_file(self.path(n)) for n in names},
+                                      observe=self.observe)
+        finally:
+            self._active_schema_name = None
         return list(artifacts)
 
     def run(self, source: Path, metadata_seed: BookMetadata | None = None) -> None:

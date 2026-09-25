@@ -221,6 +221,7 @@ def test_deepseek_invalid_analysis_reports_field_and_retry_preserves_chapters(tm
     events = [json.loads(line) for line in (job/'logs/events.jsonl').read_text().splitlines()]
     assert any(e['event'] == 'attempt' and e['error_type'] == 'ValidationError'
                and e['chapter'] == '0003' and e['model'] == 'deepseek-flash'
+               and e['task_id'] == 'analysis:0003:0001' and e['schema_model'] == 'EvidenceAnalysis'
                and e['validation_field'] == 'core_ideas' and e['validation_reason'] == 'list_type'
                and e['finish_reason'] == 'stop'
                for e in events)
@@ -326,6 +327,63 @@ def test_real_failure_shape_secondary_array_overflow_is_repaired(monkeypatch):
     assert [a.status for a in terminal] == ['failed_retryable', 'completed']
     assert terminal[0].validation_field == 'evidence' and terminal[0].validation_reason == 'too_long'
     assert terminal[1].status == 'completed'
+
+
+def test_2026_09_25_evidence_overflow_repeated_on_bounded_retry(monkeypatch):
+    """Reconstructed from actual event field/reason; raw model body was not retained."""
+    payload = json.loads((Path(__file__).parent/'fixtures/deepseek_analysis_0003_evidence_overflow.json').read_text())
+    requests = []
+
+    class Transport:
+        def open(self, req, timeout):
+            requests.append(json.loads(req.data))
+            return io.BytesIO(json.dumps({'choices': [{'message': {'content': json.dumps(payload)},
+                'finish_reason': 'stop'}], 'model': 'deepseek-flash',
+                'usage': {'prompt_tokens': 6488, 'completion_tokens': 2198}}).encode())
+
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    provider = CompatibleLLMProvider(ProviderSpec(name='deepseek', kind='llm', type='openai-compatible',
+        model='deepseek-flash', base_url='https://api.deepseek.com'))
+    history = []
+    validated = []
+    result = ProviderChain([provider]).execute(task='analysis:0003:0001', kind='llm',
+        prompt_version='content-analysis-v3', input_hash='h',
+        invoke=lambda p: p.generate_structured('redacted chapter', EvidenceAnalysis),
+        persist=lambda value: validated.append(value) or {},
+        observe=lambda a: history.append(a.model_copy(deep=True)))
+    assert len(requests) == 2
+    assert result == {} and len(validated[0].evidence) == 6
+    terminal = [a for a in history if a.status in {'failed_retryable', 'completed'}]
+    assert [a.status for a in terminal] == ['failed_retryable', 'completed']
+    assert (terminal[0].error_type, terminal[0].validation_field, terminal[0].validation_reason) == (
+        'ValidationError', 'evidence', 'too_long')
+    assert 'evidence must contain at most 6 items' in requests[1]['messages'][0]['content']
+
+
+def test_deepseek_retry_still_rejects_invalid_evidence_item(monkeypatch):
+    payload = json.loads((Path(__file__).parent/'fixtures/deepseek_analysis_0003_evidence_overflow.json').read_text())
+    payload['evidence'] = payload['evidence'][:6]
+    payload['evidence'][0]['evidence_id'] = 'invalid'
+    count = 0
+
+    class Transport:
+        def open(self, req, timeout):
+            nonlocal count
+            count += 1
+            return io.BytesIO(json.dumps({'choices': [{'message': {'content': json.dumps(payload)},
+                'finish_reason': 'stop'}]}).encode())
+
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    provider = CompatibleLLMProvider(ProviderSpec(name='deepseek', kind='llm', type='openai-compatible',
+        model='deepseek-flash', base_url='https://api.deepseek.com'))
+    with pytest.raises(ProviderError) as failure:
+        ProviderChain([provider]).execute(task='analysis:0003:0001', kind='llm',
+            prompt_version='content-analysis-v3', input_hash='h',
+            invoke=lambda p: p.generate_structured('redacted chapter', EvidenceAnalysis),
+            persist=lambda _: {}, observe=lambda _: None)
+    assert count == 1
+    assert failure.value.kind == ErrorKind.SCHEMA
+    assert failure.value.validation_field == 'evidence.0.evidence_id'
 
 
 def test_real_failure_shape_deepseek_markdown_fence_is_safely_stripped(monkeypatch):
