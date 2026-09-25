@@ -27,3 +27,11 @@ EPUB 来源过滤后，同一源为 69 个 XHTML 内容单元、93 个分析 chu
 ```
 
 它在临时目录显式使用 Mock LLM/TTS，真实 API 调用数为 0。最终质量仍须在用户决定付费新运行后审听；离线投影不能证明主观质量或总 token 必然低于某个账单比例。
+
+## RC Stage 5：生产成本摘要
+
+新 Job 在创建时把无凭证的 Provider、model、pricing 配置及 `Asia/Shanghai` / `cn-workday-peak-v1` 计价策略冻结为 `manifest.cost_snapshot`；后续修改 `bookcast.toml` 或恢复时调整当前 Provider 选择，不会重定价历史 Attempt。每次终态 LLM/TTS Attempt 后，Runner 从该 Job 的 journal 更新 usage 视图，并原子写入 `usage/cost_summary.json`。摘要写入失败只产生不含异常正文的 `cost_summary_diagnostic` 事件，不中断主生成任务。
+
+摘要以 `(provider, model)` 分组。只有输入、缓存输入和输出 token 都由 Provider 报告，且快照中有对应 model 价格时，该 Attempt 的金额才是 `actual`。字段缺失为 `partial`，缺少创建时快照或价格为 `unavailable`；已知金额仅累加能完整计价的 Attempt，TTS 金额仍未知。旧 Job 没有完整创建快照时，不使用今天的配置补价。
+
+`bookcast cost <output>` 持 Job 锁读取 manifest、创建快照和本 Job usage 视图，以 journal 中的 Attempt 重新生成摘要；不接受 `--config`。`job_status` 和 Web DTO 只暴露通过 `job_id`、`output_id`、源文件 SHA、快照、选择及 journal 指纹验证的摘要；身份不符或源文件变化时返回空摘要。此金额是记录内已知部分，不能代替 Provider 账单。

@@ -126,7 +126,10 @@ class Pipeline:
                            and path.name.endswith(".tmp") and path.is_file() and not path.is_symlink())
                        for path in root.iterdir()):
                     raise BookCastError("目标任务目录非空且没有 manifest，拒绝覆盖已有数据。")
-                manifest = Manifest(job_id=uuid4().hex, book_id=book_id, source_sha256=digest, source_name=source.name,
+                from .cost import make_cost_snapshot
+                manifest = Manifest(job_id=uuid4().hex, output_id=root.name,
+                                    cost_snapshot=make_cost_snapshot(self.provider_settings),
+                                    book_id=book_id, source_sha256=digest, source_name=source.name,
                                     source_path=str(source), metadata_seed=metadata_seed, provider_settings=self.provider_settings,
                                     source_format=source_format, config=config, pipeline_version="2",
                                     content_options=options.model_dump(),
@@ -241,6 +244,10 @@ class _Runner:
             changed = True
         if changed:
             self.save()
+        if self.manifest.cost_snapshot is not None:
+            from .cost import read_valid_cost_summary
+            if read_valid_cost_summary(self.root, self.manifest) is None:
+                self.update_usage_views_safely()
         self.last_error = None
         self.event('job_finished', state='SUCCEEDED')
 
@@ -397,11 +404,8 @@ class _Runner:
         self.manifest.provider_status[f"{attempt.kind}:{attempt.provider}"] = report.model_dump(mode="json")
         self.current_provider = attempt.provider
         self.save()
-        if attempt.kind == 'llm' and attempt.status in {'completed', 'failed_retryable', 'failed_permanent'}:
-            try:
-                self.update_llm_usage()
-            except (OSError, ValueError, TypeError, AttributeError):
-                pass  # This derived view must not turn a durable AI result into failure.
+        if attempt.kind in {'llm', 'tts'} and attempt.status in {'completed', 'failed_retryable', 'failed_permanent'}:
+            self.update_usage_views_safely()
         self.event("attempt", state=attempt.state.value, error=attempt.error,
                    details={'model': attempt.model, 'task_id': attempt.task,
                             'schema_model': getattr(self, '_active_schema_name', None),
@@ -411,6 +415,16 @@ class _Runner:
                             'validation_field': attempt.validation_field,
                             'validation_reason': attempt.validation_reason,
                             'finish_reason': attempt.finish_reason})
+
+    def update_usage_views_safely(self) -> None:
+        try:
+            self.update_llm_usage()
+        except Exception as exc:
+            try:
+                self.event('cost_summary_diagnostic', details={'diagnostic': 'cost_summary_unavailable',
+                           'failure_type': type(exc).__name__})
+            except Exception:
+                pass  # The derived view and its diagnostic never fail the durable Attempt.
 
     def update_llm_usage(self) -> None:
         from .llm_usage import usage_snapshot, tts_usage_snapshot
@@ -429,30 +443,11 @@ class _Runner:
         for stage, count in self.pending_llm_reuse.items():
             reuse[stage] = reuse.get(stage, 0) + count
         write_json(path, usage_snapshot(self.manifest.ai_calls, reuse))
-        write_json(self.path('usage/tts_usage.json'), tts_usage_snapshot(self.manifest.ai_calls, self.root))
-        
-        try:
-            from .cost import calculate_cost_summary
-            from .provider_config import load_config
-            manifest_info = {
-                "source": {
-                    "title": self.manifest.metadata_seed.title if self.manifest.metadata_seed else Path(self.manifest.source_name).stem,
-                    "input_file": self.manifest.source_name,
-                    "input_hash": self.manifest.source_sha256
-                },
-                "usage_source": {
-                    "llm_usage_path": str(self.path('usage/llm_usage.json')),
-                    "tts_usage_path": str(self.path('usage/tts_usage.json'))
-                }
-            }
-            config_obj = load_config(getattr(self, 'config', None) or getattr(self.manifest, 'config', None))
-            cost_summary = calculate_cost_summary(self.manifest.ai_calls, config_obj, self.root, self.manifest.provider_settings, manifest_info)
-            write_json(self.path('usage/cost_summary.json'), cost_summary)
-        except Exception as exc:
-            import sys
-            print(f"Failed to write cost_summary.json: {exc}", file=sys.stderr)
-
         self.pending_llm_reuse.clear()
+        write_json(self.path('usage/tts_usage.json'), tts_usage_snapshot(self.manifest.ai_calls, self.root))
+
+        from .cost import refresh_cost_summary
+        refresh_cost_summary(self.root, self.manifest)
 
     def ai_operation(self, name: str, kind: str, version: str, inputs: object, invoke: Callable) -> list[str]:
         digest = fingerprint(inputs)

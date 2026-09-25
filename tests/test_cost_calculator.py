@@ -43,8 +43,7 @@ def test_cost_calculation():
     # 1M uncached = 1.0 (off peak)
     # 2M output = 4.0 (off peak)
     # Total = 5.25
-    assert summary['llm']['providers']['deepseek']['cost']['amount'] == 5.25
-    assert summary['llm']['providers']['deepseek']['usage']['reasoning_tokens'] == 500000
-    assert summary['tts']['providers']['mock-tts']['usage_available'] is False
+    assert summary['llm']['providers']['deepseek::deepseek-flash']['cost']['amount'] == 5.25
+    assert summary['llm']['providers']['deepseek::deepseek-flash']['usage']['reasoning_tokens'] == 500000
+    assert summary['tts']['providers']['mock-tts::gemini-3.8-flash-tts']['usage_available'] is False
     assert summary['total']['status'] == 'partial'
-

@@ -25,11 +25,11 @@ def test_provider_grouping_and_attribution():
     
     summary = calculate_cost_summary(calls, config, None)
     
-    assert 'kokoro' in summary['tts']['providers']
-    assert summary['tts']['providers']['kokoro']['request_count'] == 2
+    assert 'kokoro::kokoro-v1' in summary['tts']['providers']
+    assert summary['tts']['providers']['kokoro::kokoro-v1']['request_count'] == 2
     
-    assert 'gemini' in summary['tts']['providers']
-    assert summary['tts']['providers']['gemini']['request_count'] == 0
+    assert 'gemini::gemini' in summary['tts']['providers']
+    assert summary['tts']['providers']['gemini::gemini']['request_count'] == 0
     assert summary['tts']['current_provider'] == 'gemini'
     
     assert summary['llm']['current_provider'] == 'deepseek'
@@ -60,8 +60,8 @@ def test_deepseek_prices_and_reasoning_tokens():
     # 1M uncached * 1.0 = 1.0
     # 2M output * 4.0 = 8.0
     # Total = 9.02
-    assert summary_off['llm']['providers']['deepseek']['cost']['amount'] == 9.02
-    assert summary_off['llm']['providers']['deepseek']['usage']['reasoning_tokens'] == 1000000
+    assert summary_off['llm']['providers']['deepseek::deepseek-flash']['cost']['amount'] == 9.02
+    assert summary_off['llm']['providers']['deepseek::deepseek-flash']['usage']['reasoning_tokens'] == 1000000
     
     # Peak pricing: Monday 14:30 Beijing time -> 06:30 Z (2026-09-28 is a Monday)
     calls_peak = [
@@ -73,5 +73,4 @@ def test_deepseek_prices_and_reasoning_tokens():
     # 1M uncached * 2.0 = 2.0
     # 2M output * 8.0 = 16.0
     # Total = 18.04
-    assert summary_peak['llm']['providers']['deepseek']['cost']['amount'] == 18.04
-
+    assert summary_peak['llm']['providers']['deepseek::deepseek-flash']['cost']['amount'] == 18.04

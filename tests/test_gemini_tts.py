@@ -120,8 +120,9 @@ def test_request_failures_are_safe_with_existing_retry_policy(monkeypatch, mode)
 
 def test_missing_api_key_fails_before_transport(monkeypatch):
     monkeypatch.delenv('GEMINI_API_KEY', raising=False)
-    with pytest.raises(SystemExit, match='Gemini TTS requires GEMINI_API_KEY'):
+    with pytest.raises(ProviderError) as exc:
         GeminiTTSProvider(spec())._request({})
+    assert exc.value.kind == ErrorKind.AUTH
 
 
 @pytest.mark.parametrize('mode', ['missing_audio', 'failed', 'incomplete', 'cancelled'])

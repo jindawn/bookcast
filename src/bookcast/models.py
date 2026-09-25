@@ -218,6 +218,8 @@ class Attempt(ExecutionModel):
 class Job(ExecutionModel):
     schema_version: Literal[1, 2, 3] = 3
     job_id: str | None = None
+    output_id: str | None = None
+    cost_snapshot: dict | None = None
     source_path: str | None = None
     metadata_seed: BookMetadata | None = None
     provider_settings: dict | None = None

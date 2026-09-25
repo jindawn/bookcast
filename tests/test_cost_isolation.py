@@ -35,10 +35,9 @@ def test_job_isolation_identity():
     summary_b = calculate_cost_summary(calls_b, config, None, None, manifest_info_b)
     
     assert summary_a['job_identity']['job_id'] == 'job_a'
-    assert summary_a['llm']['providers']['deepseek']['usage']['cached_input_tokens'] == 100
-    assert summary_a['llm']['providers']['deepseek']['usage']['output_tokens'] == 200
+    assert summary_a['llm']['providers']['deepseek::deepseek-flash']['usage']['cached_input_tokens'] == 100
+    assert summary_a['llm']['providers']['deepseek::deepseek-flash']['usage']['output_tokens'] == 200
     
     assert summary_b['job_identity']['job_id'] == 'job_b'
-    assert summary_b['llm']['providers']['deepseek']['usage']['cached_input_tokens'] == 999
-    assert summary_b['llm']['providers']['deepseek']['usage']['output_tokens'] == 888
-
+    assert summary_b['llm']['providers']['deepseek::deepseek-flash']['usage']['cached_input_tokens'] == 999
+    assert summary_b['llm']['providers']['deepseek::deepseek-flash']['usage']['output_tokens'] == 888

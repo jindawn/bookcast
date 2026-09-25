@@ -79,6 +79,7 @@ def resolve_job(job: str, output_dir: Path = Path('output')) -> Path:
 
 def job_status(job: str, output_dir: Path = Path('output')) -> dict:
     from .pipeline import artifacts_valid, load_manifest
+    from .cost import read_valid_cost_summary
     path = resolve_job(job, output_dir)
     root, m = path.parent, load_manifest(path)
     active = job_is_locked(root)
@@ -135,6 +136,7 @@ def job_status(job: str, output_dir: Path = Path('output')) -> dict:
         dump['error_kind'] = None
 
     return {**dump, 'job_id': m.job_id or m.book_id,
+            'cost_summary': read_valid_cost_summary(root, m),
             'directory': str(root), 'active': active, 'stale': stale,
             'effective_state': effective_state,
             'integrity': 'damaged' if damaged else 'ok', 'damaged_steps': damaged,

@@ -686,15 +686,15 @@ export default function Home() {
                       <h4 style={{ margin: '0 0 0.5rem' }}>本期生成成本</h4>
                       
                       {Object.keys(current.cost_summary.llm.providers).map(prov => (
-                        <div key={prov} style={{ display: 'flex', justifyContent: 'space-between', color: prov === current.cost_summary.llm.current_provider ? 'inherit' : 'var(--muted)' }}>
-                          <span>{prov} {prov === current.cost_summary.llm.current_provider ? '' : '(历史)'}</span>
-                          <span>{current.cost_summary.llm.providers[prov].cost.status === 'unavailable' ? '未统计' : `¥${current.cost_summary.llm.providers[prov].cost.amount.toFixed(2)}`}</span>
+                        <div key={prov} style={{ display: 'flex', justifyContent: 'space-between', color: prov === current.cost_summary.llm.current_provider_model ? 'inherit' : 'var(--muted)' }}>
+                          <span>{current.cost_summary.llm.providers[prov].provider} / {current.cost_summary.llm.providers[prov].model} {prov === current.cost_summary.llm.current_provider_model ? '' : '(历史)'}</span>
+                          <span>{current.cost_summary.llm.providers[prov].cost.status === 'unavailable' ? '未统计' : `¥${current.cost_summary.llm.providers[prov].cost.amount.toFixed(2)} (${current.cost_summary.llm.providers[prov].cost.status})`}</span>
                         </div>
                       ))}
                       
                       {Object.keys(current.cost_summary.tts.providers).map(prov => (
-                        <div key={prov} style={{ display: 'flex', justifyContent: 'space-between', color: prov === current.cost_summary.tts.current_provider ? 'inherit' : 'var(--muted)' }}>
-                          <span>{prov} {prov === current.cost_summary.tts.current_provider ? '' : '(历史)'}</span>
+                        <div key={prov} style={{ display: 'flex', justifyContent: 'space-between', color: prov === current.cost_summary.tts.current_provider_model ? 'inherit' : 'var(--muted)' }}>
+                          <span>{current.cost_summary.tts.providers[prov].provider} / {current.cost_summary.tts.providers[prov].model} {prov === current.cost_summary.tts.current_provider_model ? '' : '(历史)'}</span>
                           <span>{current.cost_summary.tts.providers[prov].cost.status === 'unavailable' ? '未统计' : `¥${current.cost_summary.tts.providers[prov].cost.amount.toFixed(2)}`}</span>
                         </div>
                       ))}
@@ -702,7 +702,7 @@ export default function Home() {
                       <hr style={{ margin: '0.5rem 0', borderColor: 'var(--border)' }} />
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
                         <span>已知成本</span>
-                        <span>¥{current.cost_summary.total.known_amount.toFixed(2)}</span>
+                        <span>¥{current.cost_summary.total.known_amount.toFixed(2)} ({current.cost_summary.total.status})</span>
                       </div>
                       
                       <details style={{ marginTop: '1rem' }}>
@@ -715,13 +715,14 @@ export default function Home() {
                               <div style={{ color: 'var(--muted)', fontSize: '0.8em', marginBottom: '0.2rem' }}>数据来源校验</div>
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Job ID</span><span style={{ fontFamily: 'monospace' }}>{current.cost_summary.job_identity.job_id}</span></div>
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Output ID</span><span style={{ fontFamily: 'monospace' }}>{current.cost_summary.job_identity.output_id}</span></div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Source SHA</span><span style={{ fontFamily: 'monospace', fontSize: '0.8em' }}>{current.cost_summary.job_identity.source_hash}</span></div>
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>LLM Usage</span><span style={{ fontFamily: 'monospace', fontSize: '0.8em', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '200px' }} title={current.cost_summary.job_identity.usage_source?.llm_usage_path}>{current.cost_summary.job_identity.usage_source?.llm_usage_path}</span></div>
                             </div>
                           )}
                           <strong>LLM Token</strong>
                           {Object.keys(current.cost_summary.llm.providers).map(prov => (
-                             <div key={prov} style={{ marginBottom: '0.5rem', color: prov === current.cost_summary.llm.current_provider ? 'inherit' : 'var(--muted)' }}>
-                               <div>{prov} {prov === current.cost_summary.llm.current_provider ? '' : '(历史)'}</div>
+                             <div key={prov} style={{ marginBottom: '0.5rem', color: prov === current.cost_summary.llm.current_provider_model ? 'inherit' : 'var(--muted)' }}>
+                               <div>{current.cost_summary.llm.providers[prov].provider} / {current.cost_summary.llm.providers[prov].model} {prov === current.cost_summary.llm.current_provider_model ? '' : '(历史)'}</div>
                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>缓存输入</span><span>{current.cost_summary.llm.providers[prov].usage.cached_input_tokens}</span></div>
                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>未缓存输入</span><span>{current.cost_summary.llm.providers[prov].usage.uncached_input_tokens}</span></div>
                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>输出</span><span>{current.cost_summary.llm.providers[prov].usage.output_tokens}</span></div>
@@ -731,8 +732,8 @@ export default function Home() {
                           
                           <strong style={{ display: 'block', marginTop: '0.5rem' }}>TTS</strong>
                           {Object.keys(current.cost_summary.tts.providers).map(prov => (
-                             <div key={prov} style={{ marginBottom: '0.5rem', color: prov === current.cost_summary.tts.current_provider ? 'inherit' : 'var(--muted)' }}>
-                               <div>{prov} {prov === current.cost_summary.tts.current_provider ? '' : '(历史)'}</div>
+                             <div key={prov} style={{ marginBottom: '0.5rem', color: prov === current.cost_summary.tts.current_provider_model ? 'inherit' : 'var(--muted)' }}>
+                               <div>{current.cost_summary.tts.providers[prov].provider} / {current.cost_summary.tts.providers[prov].model} {prov === current.cost_summary.tts.current_provider_model ? '' : '(历史)'}</div>
                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>请求数</span><span>{current.cost_summary.tts.providers[prov].request_count}</span></div>
                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>重试</span><span>{current.cost_summary.tts.providers[prov].retry_count}</span></div>
                                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>音频时长</span><span>{Math.round(current.cost_summary.tts.providers[prov].audio_duration_seconds)}s</span></div>

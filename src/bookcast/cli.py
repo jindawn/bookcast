@@ -368,71 +368,52 @@ def doctor(
 def cost(
     job: Annotated[str, typer.Argument(help="任务目录、ID 或名称")],
     output_dir: Annotated[Path, typer.Option(help="产物根目录")] = Path("output"),
-    config: Annotated[Path | None, typer.Option(help="Provider TOML 文件")] = None
+    config: Annotated[Path | None, typer.Option(help="不支持重新定价历史任务；仅使用 Job 快照")] = None
 ) -> None:
-    """生成并展示指定任务的成本报告。"""
+    """从指定 Job 的创建时快照和 Attempt usage 生成成本报告。"""
     from .jobs import resolve_job
     from .pipeline import load_manifest
-    from .provider_config import load_config
-    from .cost import calculate_cost_summary
-    from .storage import artifact_path
-    import json
-    
+    from .cost import refresh_cost_summary
+    from .storage import job_lock
+
     try:
+        if config is not None:
+            raise BookCastError('cost 不接受 --config；历史任务只能使用创建时保存的计价快照。')
         path = resolve_job(job, output_dir)
         root = path.parent
-        manifest = load_manifest(path)
-    except Exception as exc:
-        raise BookCastError(f"读取任务失败：{exc}") from None
-        
-    cfg = load_config(config)
-    manifest_info = {
-        "job_id": job,
-        "output_id": root.name,
-        "source": {
-            "title": manifest.metadata_seed.title if manifest.metadata_seed else Path(manifest.source_name).stem,
-            "input_file": manifest.source_name,
-            "input_hash": manifest.source_sha256
-        },
-        "usage_source": {
-            "llm_usage_path": str(artifact_path(root, 'usage/llm_usage.json')),
-            "tts_usage_path": str(artifact_path(root, 'usage/tts_usage.json'))
-        }
-    }
-    
-    summary = calculate_cost_summary(manifest.ai_calls, cfg, root, manifest.provider_settings, manifest_info)
-    
-    # Save the updated cost summary
-    summary_path = artifact_path(root, 'usage/cost_summary.json')
-    summary_path.parent.mkdir(parents=True, exist_ok=True)
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
-    
-    print(f"\nJob ID: {manifest_info['job_id']}")
-    print(f"Output ID: {manifest_info['output_id']}")
-    print(f"LLM usage path: {manifest_info['usage_source']['llm_usage_path']}")
+        with job_lock(root):
+            manifest = load_manifest(path)
+            summary = refresh_cost_summary(root, manifest)
+    except (BookCastError, OSError, ValueError, TypeError) as exc:
+        typer.echo(f'错误：{exc if isinstance(exc, BookCastError) else "任务成本记录无效。"}', err=True)
+        raise typer.Exit(1) from None
 
-    
+    identity = summary['job_identity']
+    print(f"\nJob ID: {identity['job_id']}")
+    print(f"Output ID: {identity['output_id']}")
+    print(f"Source hash: {identity['source_hash']}")
+    print(f"LLM usage path: {identity['usage_source']['llm_usage_path']}")
     print("\nLLM")
-    for prov, p_dict in summary['llm']['providers'].items():
-        is_current = (prov == summary['llm']['current_provider'])
-        print(f"\n{prov} {'— Current' if is_current else '— Historical'}")
+    for key, p_dict in summary['llm']['providers'].items():
+        is_current = key == summary['llm']['current_provider_model']
+        print(f"\n{p_dict['provider']} / {p_dict['model']} {'— Current' if is_current else '— Historical'}")
         if p_dict['cost']['status'] == 'unavailable':
-            print("Cost: unavailable (no pricing configured)")
+            print('Cost: unavailable')
         else:
             print(f"Cached input: {p_dict['usage']['cached_input_tokens']}")
             print(f"Uncached input: {p_dict['usage']['uncached_input_tokens']}")
             print(f"Output: {p_dict['usage']['output_tokens']}")
-            print(f"Estimated cost: ¥{p_dict['cost']['amount']:.2f}")
-            
+            print(f"Known cost: ¥{p_dict['cost']['amount']:.2f} ({p_dict['cost']['status']})")
+
     print("\nTTS")
-    for prov, p_dict in summary['tts']['providers'].items():
-        is_current = (prov == summary['tts']['current_provider'])
-        print(f"\n{prov} {'— Current' if is_current else '— Historical'}")
+    for key, p_dict in summary['tts']['providers'].items():
+        is_current = key == summary['tts']['current_provider_model']
+        print(f"\n{p_dict['provider']} / {p_dict['model']} {'— Current' if is_current else '— Historical'}")
         print(f"Requests: {p_dict['request_count']}")
         print(f"Duration: {int(p_dict['audio_duration_seconds'])}s")
         print("Cost: unavailable")
-        
-    print(f"\nKnown total: ¥{summary['total']['known_amount']:.2f}")
+
+    print(f"\nKnown total: ¥{summary['total']['known_amount']:.2f} ({summary['total']['status']})")
 
 
 @app.command()
