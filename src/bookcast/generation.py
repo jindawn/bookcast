@@ -69,11 +69,13 @@ def task_type(task: str) -> TaskType:
 
 # Explicit opt-in preset. Live quality evaluation is required before calling it optimal.
 POLICY: dict[TaskType, GenerationConfig] = {
-    'extraction': GenerationConfig(thinking='disabled'),
-    'chapter_synthesis': GenerationConfig(thinking='enabled', reasoning_effort='low'),
-    'book_synthesis': GenerationConfig(thinking='enabled', reasoning_effort='high'),
-    'dialogue': GenerationConfig(thinking='enabled', reasoning_effort='low'),
-    'consistency': GenerationConfig(thinking='enabled', reasoning_effort='low'),
+    # Keep extraction's historical ceiling so existing evidence checkpoints
+    # remain valid when a job is resumed with the same provider configuration.
+    'extraction': GenerationConfig(thinking='disabled', max_tokens=16384),
+    'chapter_synthesis': GenerationConfig(thinking='disabled', max_tokens=4096),
+    'book_synthesis': GenerationConfig(thinking='enabled', reasoning_effort='high', max_tokens=16384),
+    'dialogue': GenerationConfig(thinking='enabled', reasoning_effort='low', max_tokens=12000),
+    'consistency': GenerationConfig(thinking='enabled', reasoning_effort='low', max_tokens=12000),
     'other': GenerationConfig(),
 }
 
@@ -88,4 +90,8 @@ def resolve_generation(task: str, policy: PolicyName | None, override: Generatio
         elif override.reasoning_effort is not None:
             fields['thinking'] = 'enabled'
         fields.update(updates)
+    # The policy budget is a ceiling; a user may request a smaller limit.
+    ceiling = POLICY[kind].max_tokens if policy else None
+    if ceiling is not None:
+        fields['max_tokens'] = min(fields.get('max_tokens', ceiling), ceiling)
     return GenerationAudit(policy=policy, task_type=kind, options=GenerationConfig(**fields))

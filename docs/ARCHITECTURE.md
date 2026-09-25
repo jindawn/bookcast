@@ -1,5 +1,7 @@
 # 架构
 
+Phase 18 内容预算说明：`ContentFlow` 在全源 EvidenceAnalysis 和逐章有界综合之后，先按目标时长选跨书序候选章节，再做全书综合与本地 EpisodePlan；只有计划中的 segment 进入 dialogue/consistency/quality/语音。`llm_usage.py` 从 Attempt journal 生成不含正文的阶段用量视图。详见 [LLM_COST.md](LLM_COST.md)；旧完成任务不会自动重制。
+
 ## 当前实际实现（Phase 17）
 
 Phase 17 在 Source 与 NormalizedBook 之间增加独立文档提取/OCR 边界。`inspect-document` 先分类 PDF 文本/图像/混合/空白页；只有显式 `--ocr auto` 才由隔离子进程调用 Apple Vision 处理扫描区域或 EPUB 内嵌图片。`SourceTextBlock` 将页码、资源、区域、置信度及源 SHA 映射回书稿；低置信和遗漏通过 metadata warning/coverage 显示。OCR 选项和实现版本进入 parse Step 指纹；其余 Content/LLM/TTS/Export 任务不分叉。细节和限制见 [OCR.md](OCR.md)、D-021。

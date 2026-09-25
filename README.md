@@ -64,6 +64,7 @@ Phase 9 已完成真实 LLM 技术验收：复用兼容适配器增加 DeepSeek 
 | [JOBS.md](docs/JOBS.md) | Job ID、崩溃恢复、缓存、日志与旧任务迁移 |
 | [BookCast Skill](skills/bookcast/SKILL.md) | 可选 Agent 入口：意图、命令参数、版权、失败与恢复 |
 | [CONTENT.md](docs/CONTENT.md) | 分层内容、三种模式、质量指标与定向修订 |
+| [LLM_COST.md](docs/LLM_COST.md) | 真实任务调用/用量审计、时长预算前移与离线成本烟测 |
 | [SOURCES.md](docs/SOURCES.md) | 书籍身份、合法来源、安全下载与获取检查点 |
 | [HANDOFF.md](docs/HANDOFF.md) | 给下一位 Agent 的最新交接快照 |
 | [WORKLOG.md](docs/WORKLOG.md) | 追加式开发事实记录 |

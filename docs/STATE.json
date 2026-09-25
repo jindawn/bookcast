@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-17",
-  "current_task": "EPUB 非正文推广过滤与来源审计",
+  "current_phase": "phase-18",
+  "current_task": "LLM clean-run 调用/输出成本审计与时长预算前移",
   "task_status": "completed",
   "branch": "main",
   "last_verified_commit": "a65f77dea69907fd05d5033350bfca264dc90c00",
@@ -107,10 +107,12 @@
     "真实 DeepSeek content synthesis 跨块 claim_ids 归约 business_error 修复：第30章归约因外推claim_ids超出allowed集合报business_error，在content层通过resolve_synthesis清洗有效子集，保持严格业务不变式且已有157步指纹不变。回归测试通过，真实API复验synthesis/chapters/0030/00-0001及后续00-0002均成功，累计完成159步后安全暂停。",
     "真实 DeepSeek chapter analysis 通用有界 schema 纠错与第 43～45 章有界验证：消除此前仅对 too_long 特判纠错的架构缺陷，实现通用 schema 纠错提示引导与有界单次模型 repair；增加可选数组 null 安全归一化与单元素提升。真实 API 复验第 43、44、45 连续三章（共 11 个 steps 全部成功，含第 45 章实测命中 schema 漂移并经单次纠错自动恢复成功），累计完成 246 步后安全暂停。",
     "实现 quality gate 矛盾/待核验发言局部定向修复（targeted repair）：当 quality gate 发现一致性 review 存在 contradicted 时，精确定位受影响 segment 及 turn_index，仅改写受影响段落并注入原引用证据及争议上下文；仅对修复段重跑 consistency review 并重新评估 quality；每个 segment 严格限制最多 2 次修复防止死循环；离线测试 157 passed / 1 deselected 验证 targeted repair、持久化 cache hit 与有界上限止损。",
-    "EPUB来源过滤在Chapter/LLM前排除确定性封面/目录/广告及正文推广段落，source_filter.json审计保留和移除单元；quality-v2脚本推广门禁在TTS前阻断，未改变targeted repair。真实源只读核对旧72个XHTML单元/96分析chunk，净化后69/93；未调用DeepSeek或改动已完成Job。功能提交a65f77d经相关113 passed/1 skipped、validator/compileall/diff复验。"
+    "EPUB来源过滤在Chapter/LLM前排除确定性封面/目录/广告及正文推广段落，source_filter.json审计保留和移除单元；quality-v2脚本推广门禁在TTS前阻断，未改变targeted repair。真实源只读核对旧72个XHTML单元/96分析chunk，净化后69/93；未调用DeepSeek或改动已完成Job。功能提交a65f77d经相关113 passed/1 skipped、validator/compileall/diff复验。",
+    "Phase18 离线审计真实已完成任务的 361 个唯一 LLM 步骤/429 次尝试；全源证据分析保留，逐章综合有界合批、全书综合前按时长跨书序选候选、20分钟最多16个脚本/复核片段；增加阶段用量视图和显式 Mock 成本烟测。未调用 DeepSeek/TTS 真人模型或修改原 Job。"
   ],
   "in_progress": [],
   "next_actions": [
+    "在用户显式选择的新真实任务上比较 Phase18 的成本与播客质量；旧完成任务保持不变，不自动重制。",
     "现存《狂人日记》20分钟Job已完成但音频保留旧广告；仅在用户需要净化重制时另建独立Job。先用小EPUB Mock烟测，不对原Job做全书retry或改动已完成音频。",
     "维护者确定BookCast LICENSE、PyMuPDF AGPL/商业/替代路径及Kokoro espeak-ng-data通知；解决前不发布可再分发V1包。",
     "在用户授权的复杂排版、多栏、脚注及低质扫描样本上人工核对OCR顺序/漏字；跨平台OCR与逐页持久缓存需单独设计，不因Phase17技术通过而承诺质量。",
@@ -605,6 +607,22 @@
       "scope": "commit",
       "summary": "ec1ad6f功能提交：clean-temp Demo doctor、Mock MP3及2章M4B/ffprobe通过；lock、validator、compileall、YAML和提交差异检查通过。",
       "checked_at": "2026-09-23T05:18:35Z"
+    },
+    {
+      "name": "phase18-relevant-offline",
+      "command": "cd /private/tmp && /Users/wumj/workspace/bookcast/.venv/bin/pytest -q /Users/wumj/workspace/bookcast/tests/test_content.py /Users/wumj/workspace/bookcast/tests/test_generation.py /Users/wumj/workspace/bookcast/tests/test_phase1.py /Users/wumj/workspace/bookcast/tests/test_providers.py /Users/wumj/workspace/bookcast/tests/test_job_recovery.py /Users/wumj/workspace/bookcast/tests/test_ocr.py /Users/wumj/workspace/bookcast/tests/test_sources.py /Users/wumj/workspace/bookcast/tests/test_web.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "244 passed, 1 skipped；覆盖 Mock 有界规划、已选证据、usage、原有来源过滤、质量门禁、targeted repair、恢复及 Web。",
+      "checked_at": "2026-09-25T00:54:31Z"
+    },
+    {
+      "name": "phase18-cost-smoke-static",
+      "command": ".venv/bin/python scripts/llm_cost_smoke.py; python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Mock smoke 13 个离线 LLM 请求、3 个 segment、0 真实 API；validator、compileall、diff check 通过。",
+      "checked_at": "2026-09-25T00:54:31Z"
     }
   ],
   "known_failures": [
@@ -623,7 +641,8 @@
     "可选实验Qwen extra的uv全锁审计有14条OSV记录（含别名）；不随默认/可再分发V1包分发，待上游兼容更新和本机复验。",
     "Phase17 OCR仅macOS Apple Vision显式可用；复杂多栏/脚注、矢量描边字及非macOS OCR未验收，低置信需核原页。",
     "OCR parse Step在提交前崩溃会重新识别整份文档；完成后resume复用有效Artifact，尚无逐页OCR持久缓存。",
-    "EPUB来源过滤使用保守确定性规则：未知广告仍可能漏检，标题独占XHTML仍保留为独立内容单元；不等同语义分章。已完成的《狂人日记》旧音频不会被本次代码修改自动净化。"
+    "EPUB来源过滤使用保守确定性规则：未知广告仍可能漏检，标题独占XHTML仍保留为独立内容单元；不等同语义分章。已完成的《狂人日记》旧音频不会被本次代码修改自动净化。",
+    "Phase18 清洁运行请求数/Token 降幅仅按已有真实任务 manifest 和离线 Mock 投影；新 DeepSeek 长书未调用，播客质量、真实花费及总 token < 历史调试账单 1/3 的目标尚未验证。"
   ],
   "blockers": [],
   "important_files": [
@@ -1026,7 +1045,19 @@
     {
       "path": "tests/test_ocr.py",
       "purpose": "PDF/EPUB检测、来源、恢复、安全反例与显式真实Vision验收"
+    },
+    {
+      "path": "docs/LLM_COST.md",
+      "purpose": "真实任务按阶段用量审计、离线调用数投影与使用限制"
+    },
+    {
+      "path": "src/bookcast/llm_usage.py",
+      "purpose": "由 Attempt journal 生成隐私安全阶段用量汇总"
+    },
+    {
+      "path": "scripts/llm_cost_smoke.py",
+      "purpose": "显式 Mock provider 的临时目录离线成本烟测"
     }
   ],
-  "updated_at": "2026-09-25T00:34:40Z"
+  "updated_at": "2026-09-25T00:54:31Z"
 }

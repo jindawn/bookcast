@@ -1,5 +1,19 @@
 # 给下一位 Coding Agent
 
+更新时间：2026-09-25。先读 AGENTS.md 和核对 Git。Phase18 的 LLM 成本审计与有界预算已在工作区实现；当前真实《狂人日记》完成 Job/音频未修改，未调用 DeepSeek 或 Kokoro。测试结果与决策见 [LLM_COST.md](LLM_COST.md) 和 D-023。
+
+## Phase18 本次工作
+
+- 已完成真实 Job manifest 只读审计：96 analysis、191 章综合、26 全书综合、24 dialogue、24 consistency 个成功唯一 LLM Step，共 361；含失败/修订的实际 LLM attempt 为 429。该 manifest 记录输入 1,135,571、输出 1,202,485 token（含 reasoning 915,704），不是整日 346 万 token 账单。
+- 新编排保留所有净化后的源块分析与精确证据；章综合批量从4提到12，在全书综合前按时长/书序选候选章节。20分钟最多32候选、16段脚本及一致性复核；新任务结构投影约210～220个 LLM 请求。未入选单元不进入 dialogue/consistency，仍列入 omitted_chapters。
+- chapter synthesis 关闭 reasoning、4096上限；book high/16384、dialogue/consistency low/12000；analysis 保留同配置的既有 16384 上限，以避免旧证据缓存大面积失效。质量门禁、来源过滤、targeted repair 和 TTS 代码未改。
+- Attempt journal 派生 `usage/llm_usage.json`，只记 provider/model/stage、请求与服务端 token/缓存用量；无价目表时 estimated_cost=null。不保存正文或密钥。新脚本 `.venv/bin/python scripts/llm_cost_smoke.py` 显式 Mock、临时目录、0 真实 API。
+- 离线相关 244 passed/1 skipped，成本 smoke、validator、compileall、diff check 通过。新真实长书的质量与账单对照尚无证据，不要声称已达 1/3 目标。下一步只在用户决定付费新任务时评估，不自动重制旧任务。提交以 `git log -1` 核对，STATE 的 last_verified_commit 遵循 D-006，不自引用交接快照。
+
+---
+
+# 给下一位 Coding Agent
+
 更新时间：2026-09-25。先读 AGENTS.md 并核对 Git；以下为最新 EPUB 来源过滤工作。已验证功能提交 `a65f77dea69907fd05d5033350bfca264dc90c00`，未 push。未运行真实 DeepSeek，也未修改现存已完成 Web Job。
 
 ## EPUB 非正文/广告过滤与来源审计

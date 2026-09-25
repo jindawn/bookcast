@@ -1,5 +1,6 @@
 """Hierarchical orchestration; providers enter only through the shared runner journal."""
 import json
+import math
 import re
 
 from .audio import merge_audio
@@ -13,8 +14,10 @@ from .storage import atomic_target, sha256_file, write_json
 
 CHUNK_CHARS = 4000
 FAN_IN = 4
+CHAPTER_FAN_IN = 12
 MAX_PROMPT_CHARS = 28000
 CONTENT_VERSION = 'content-v1'
+PLAN_VERSION = 'content-budget-v2'
 ANALYSIS_VERSION = 'content-analysis-v3'
 INSTRUCTIONS = {
     'consistency': '逐一检查 script.turns 中 attribution=source 的发言，返回其从0开始的 turn_index。对照提供的原文证据检查语义、否定关系、数字和归属。supported 表示给定证据支持，contradicted 表示矛盾，证据不够返回 unverifiable。只检查给定资料，不补造外部事实。',
@@ -92,7 +95,7 @@ def resolve_synthesis(value: Synthesis, allowed: set[str]) -> Synthesis:
     return value
 
 
-def planner(chapter_themes, book, claims, options):
+def planner(chapter_themes, book, claims, options, all_chapter_ids=None):
     """Stable, inspectable budget allocation; no unjournaled model calls."""
     grouped = {}
     duplicate = 0
@@ -108,7 +111,9 @@ def planner(chapter_themes, book, claims, options):
             grouped[key] = {'theme': theme, 'chapter_ids': {chapter_id},
                             'score': theme.importance + int(bool(global_ids.intersection(theme.claim_ids)))}
     # First give each chapter a place; then use remaining slots for important themes.
-    limit = min(24, max(1, options.minutes * 60 // 30))
+    # A 75-second topic is enough room for a question and an answer. Duration
+    # bounds the expensive script/review fan-out, independently of book length.
+    limit = min(24, max(2, math.ceil(options.minutes * 60 / 75)))
     ranked = sorted(grouped.values(), key=lambda x: -x['score'])
     selected, covered = [], set()
     for item in ranked:
@@ -134,9 +139,19 @@ def planner(chapter_themes, book, claims, options):
             target_chars=seconds[index] * 4,
             previous_topic=selected[index-1]['theme'].title if index else '',
             next_topic=selected[index+1]['theme'].title if index+1 < len(selected) else ''))
-    all_chapters = {cid for cid, _ in chapter_themes}
+    all_chapters = set(all_chapter_ids) if all_chapter_ids is not None else {cid for cid, _ in chapter_themes}
     return EpisodePlan(mode=options.mode, budget_seconds=total, segments=segments,
         covered_chapters=sorted(covered), omitted_chapters=sorted(all_chapters-covered), deduplicated_themes=duplicate)
+
+
+def synthesis_candidates(chapter_themes, options):
+    """Select chapter representatives before global synthesis, keeping source IDs."""
+    limit = min(len(chapter_themes), 2 * min(24, max(2, math.ceil(options.minutes * 60 / 75))))
+    # One candidate from each ordered range keeps later sections in scope.
+    return [max(chapter_themes[i * len(chapter_themes) // limit:
+                               (i + 1) * len(chapter_themes) // limit],
+                key=lambda item: max(t.importance for t in item[1]))
+            for i in range(limit)]
 
 
 class ContentFlow:
@@ -175,12 +190,13 @@ class ContentFlow:
     def reduce(self, themes, prefix):
         # Even a single leaf is explicitly synthesized. All merge levels are cached.
         level = 0
+        fan_in = CHAPTER_FAN_IN if prefix.startswith('synthesis/chapters/') else FAN_IN
         while True:
             merged = []
-            for i in range(0, len(themes), FAN_IN):
-                batch = themes[i:i+FAN_IN]
+            for i in range(0, len(themes), fan_in):
+                batch = themes[i:i+fan_in]
                 allowed = {cid for t in batch for cid in t.claim_ids}
-                name = f'{prefix}/{level:02}-{i//FAN_IN:04}'
+                name = f'{prefix}/{level:02}-{i//fan_in:04}'
                 def validate(value):
                     if any(not set(t.claim_ids).issubset(allowed) for t in value.themes):
                         raise ProviderError(ErrorKind.BUSINESS)
@@ -240,17 +256,24 @@ class ContentFlow:
             chapter_themes.append((cid, synthesis.themes))
         self.local('claims', {'version': CONTENT_VERSION, 'claims': claims}, 'analysis/claims.json', lambda: claims)
         # Global input is bounded chapter summaries, never raw chapter text.
+        candidates = synthesis_candidates(chapter_themes, self.options)
         root = self.reduce([Theme(title=ts[0].title, summary='；'.join(t.summary for t in ts)[:240],
                                  claim_ids=list(dict.fromkeys(c for t in ts for c in t.claim_ids))[:8],
-                                 importance=max(t.importance for t in ts)) for _, ts in chapter_themes], 'synthesis/book')
-        self.local('book_synthesis', {'chapters': {p: sha256_file(r.path(p)) for p in chapter_paths},
+                                 importance=max(t.importance for t in ts)) for _, ts in candidates], 'synthesis/book')
+        candidate_ids = {cid for cid, _ in candidates}
+        self.local('book_synthesis', {'chapters': {p: sha256_file(r.path(p))
+                                                   for cid, p in zip(self.metadata.chapter_ids, chapter_paths, strict=True)
+                                                   if cid in candidate_ids},
                                     'root': root.model_dump()}, 'synthesis/book.json',
                    lambda: {**root.model_dump(), 'analyzed_chapters': self.metadata.chapter_ids,
-                            'note': '根节点是代表性综合；完整证据在逐章、逐块缓存中。'})
-        self.local('plan', {'version': CONTENT_VERSION, 'options': self.options.model_dump(),
+                            'synthesized_chapters': sorted(candidate_ids),
+                            'note': '根节点是时长预算内候选主题的代表性综合；完整证据在逐章、逐块缓存中。'})
+        self.local('plan', {'version': PLAN_VERSION, 'options': self.options.model_dump(),
                            'book': sha256_file(r.path('synthesis/book.json')),
-                           'chapters': [(cid, [t.model_dump() for t in ts]) for cid, ts in chapter_themes]}, 'plans/episode.json',
-                   lambda: planner(chapter_themes, root, claims, self.options))
+                           'chapters': [(cid, [t.model_dump() for t in ts]) for cid, ts in candidates],
+                           'all_chapter_ids': self.metadata.chapter_ids}, 'plans/episode.json',
+                   lambda: planner(candidates, root, claims, self.options,
+                                   all_chapter_ids=self.metadata.chapter_ids))
         plan = self.read('plans/episode.json', EpisodePlan)
         has_unit_tts = any((p.capabilities().speech_units or p.capabilities().speech_segments)
                            and not p.capabilities().mock for p in r.tts.providers)
@@ -298,8 +321,9 @@ class ContentFlow:
             reviews.append(review)
         from .quality import evaluate
         chapters = [self.read(f'chapters/{cid}.json', Chapter) for cid in self.metadata.chapter_ids]
+        selected_claims = {cid: claims[cid] for seg in plan.segments for cid in seg.claim_ids}
         self.local('quality', {'version': 'quality-v2', 'scripts': [s.model_dump() for s in scripts],
-                              'plan': plan.model_dump(), 'reviews': [v.model_dump() for v in reviews], 'claims': sha256_file(r.path('analysis/claims.json')),
+                              'plan': plan.model_dump(), 'reviews': [v.model_dump() for v in reviews], 'claims': selected_claims,
                               'source': self.metadata.source_sha256}, 'evaluation/quality.json',
                    lambda: evaluate(plan, scripts, claims, chapters, reviews))
         report = json.loads(r.path('evaluation/quality.json').read_text(encoding='utf-8'))
@@ -391,7 +415,7 @@ class ContentFlow:
 
             self.local('quality', {'version': 'quality-v2', 'scripts': [s.model_dump() for s in scripts],
                                   'plan': plan.model_dump(), 'reviews': [v.model_dump() for v in reviews],
-                                  'claims': sha256_file(r.path('analysis/claims.json')),
+                                  'claims': selected_claims,
                                   'source': self.metadata.source_sha256}, 'evaluation/quality.json',
                        lambda: evaluate(plan, scripts, claims, chapters, reviews))
             report = json.loads(r.path('evaluation/quality.json').read_text(encoding='utf-8'))

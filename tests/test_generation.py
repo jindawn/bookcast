@@ -12,6 +12,8 @@ from bookcast.adapters.compatible import CompatibleLLMProvider, classify_http
 from bookcast.cli import app
 from bookcast.content_models import EvidenceAnalysis, Synthesis, SegmentScript, ConsistencyReview
 from bookcast.generation import GenerationConfig, ProviderUsage, resolve_generation
+from bookcast.llm_usage import usage_snapshot
+from bookcast.models import AIAttempt
 from bookcast.pipeline import Pipeline, load_manifest
 from bookcast.provider_api import ErrorKind, ProviderError
 from bookcast.provider_chain import ProviderChain, provider_config_hash
@@ -38,7 +40,7 @@ def test_options_are_bounded_and_strict(options):
 
 def test_task_policy_and_explicit_override():
     expected = {'analysis:0001:0001': ('extraction', 'disabled', None),
-                'synthesis/chapters/0001/00-0000': ('chapter_synthesis', 'enabled', 'low'),
+                'synthesis/chapters/0001/00-0000': ('chapter_synthesis', 'disabled', None),
                 'synthesis/book/00-0000': ('book_synthesis', 'enabled', 'high'),
                 'script:0001': ('dialogue', 'enabled', 'low'),
                 'consistency:0001': ('consistency', 'enabled', 'low')}
@@ -46,7 +48,8 @@ def test_task_policy_and_explicit_override():
         audit = resolve_generation(task, 'bookcast-v1', None)
         assert (audit.task_type, audit.options.thinking, audit.options.reasoning_effort) == (kind, thinking, effort)
         disabled = resolve_generation(task, 'bookcast-v1', GenerationConfig(thinking='disabled'))
-        assert disabled.options.request_fields() == {'thinking': {'type': 'disabled'}}
+        assert disabled.options.request_fields() == {'thinking': {'type': 'disabled'},
+                                                      'max_tokens': audit.options.max_tokens}
         low = resolve_generation(task, 'bookcast-v1', GenerationConfig(reasoning_effort='low'))
         assert low.options.thinking == 'enabled' and low.options.reasoning_effort == 'low'
     assert resolve_generation('future-task', 'bookcast-v1', None).options.request_fields() == {}
@@ -83,6 +86,47 @@ def test_usage_unknown_and_strict_counts():
         'completion_tokens_details': {'reasoning_tokens': -1}, 'prompt_cache_hit_tokens': 2**64})
     assert set(usage.model_dump().values()) == {None}
     assert ProviderUsage.from_response({'prompt_tokens_details': {'cached_tokens': 0}}).cache_hit_tokens == 0
+
+
+def test_stage_usage_telemetry_counts_failures_reuse_and_optional_cost():
+    base = dict(kind='llm', provider='deepseek', model='deepseek-flash',
+                prompt_version='v1', input_hash='hash')
+    calls = [
+        AIAttempt(id='one', task='analysis:0001:0001', status='completed',
+                  provider_reported_usage=ProviderUsage(input_tokens=100, cache_hit_tokens=20,
+                                                        output_tokens=40, reasoning_tokens=10), **base),
+        AIAttempt(id='two', task='synthesis/chapters/0001/00-0000', status='failed_permanent',
+                  provider_reported_usage=ProviderUsage(input_tokens=30, output_tokens=50), **base),
+    ]
+    usage = usage_snapshot(calls, {'extraction': 2},
+                           {('deepseek', 'deepseek-flash'): {'input': 1, 'cached_input': .2, 'output': 4}})
+    assert usage['total']['request_count'] == 2
+    assert usage['total']['input_tokens'] == 130
+    assert usage['total']['cached_input_tokens'] == 20
+    assert usage['total']['output_tokens'] == 90  # reasoning is included in output
+    assert usage['total']['cache_reuse_count'] == 2
+    assert usage['by_stage']['chapter_synthesis']['request_count'] == 1
+    assert usage['total']['estimated_cost'] == round((110 + 20*.2 + 90*4)/1_000_000, 6)
+    assert usage_snapshot(calls)['total']['estimated_cost'] is None
+
+
+def test_policy_stage_budgets_bound_broad_provider_override():
+    override = GenerationConfig(max_tokens=16384)
+    assert resolve_generation('analysis:0001:0001', 'bookcast-v1', override).options.max_tokens == 16384
+    assert resolve_generation('synthesis/chapters/0001/00-0000', 'bookcast-v1', override).options.max_tokens == 4096
+    assert resolve_generation('script:0001', 'bookcast-v1', override).options.max_tokens == 12000
+    assert resolve_generation('consistency:0001', 'bookcast-v1', override).options.max_tokens == 12000
+
+
+def test_mock_job_emits_usage_file_without_prompt_or_secret(tmp_path):
+    source = Path(__file__).parents[1]/'examples/content-demo.txt'
+    job = Pipeline(MockLLMProvider(), MockTTSProvider(), tmp_path).generate(source, minutes=3)
+    data = json.loads((job/'usage/llm_usage.json').read_text())
+    assert data['total']['request_count'] > 0
+    assert data['total']['unknown_usage_count'] == data['total']['request_count']
+    assert data['total']['estimated_cost'] is None
+    assert 'prompt' not in json.dumps(data).lower()
+    assert 'key' not in json.dumps(data).lower()
 
 
 @pytest.mark.parametrize('broken', [False, 'length', 'malformed', 'schema'])
@@ -349,7 +393,8 @@ def test_completed_calls_resume_and_only_effective_changes_invalidate(tmp_path, 
     source = Path(__file__).parents[1]/'examples/content-demo.txt'
     original = CompatibleLLMProvider(spec(reasoning_policy='bookcast-v1'))
     job = Pipeline(original, MockTTSProvider(), tmp_path/'out').generate(source)
-    before = {p:(p.stat().st_mtime_ns,sha256_file(p)) for p in job.rglob('*') if p.is_file() and p.name != '.lock'}
+    before = {p:(p.stat().st_mtime_ns,sha256_file(p)) for p in job.rglob('*')
+              if p.is_file() and p.name != '.lock' and 'usage' not in p.parts}
     count = len(calls)
     Pipeline(CompatibleLLMProvider(spec(reasoning_policy='bookcast-v1')), MockTTSProvider(), tmp_path/'out').resume_job(job)
     assert len(calls) == count

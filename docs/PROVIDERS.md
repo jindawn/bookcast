@@ -99,9 +99,9 @@ generation 只接受以下字段，拒绝额外字段、类型转换和矛盾参
 - reasoning_effort：low / high / max；显式设置时启用 thinking，不能与 disabled 同用。
 - max_tokens：严格整数1–65536，包含服务端推理/生成预算；示例16384，不是费用保证。截断为永久错误，需评估预算后显式 retry。
 
-`reasoning_policy="bookcast-v1"` 显式选择中央任务策略：抽取 disabled；章节综合 low；整书综合 high；对话和一致性 low。Planner 继续本地确定性计算；未识别任务不附加策略参数。已通过自制三章真实样例；low 写作能产生追问和反例，low 复核报告了来源归属问题。尚未进行多强度对照，不能称为最优策略。
+`reasoning_policy="bookcast-v1"` 显式选择中央任务策略：抽取 disabled/16384 上限；章节综合 disabled/4096；整书综合 high/16384；对话和一致性 low/12000。Planner 继续本地确定性计算；未识别任务不附加策略参数。章节综合减推理的质量影响尚未用新真实任务验收，不能称为最优策略。
 
-显式 generation 字段优先于策略；thinking=disabled 清除策略中的 effort，reasoning_effort=low 为所有任务启用 low。仅设置 max_tokens 保留各任务差异。完全使用 Provider 级配置时省略 reasoning_policy。两者均省略不增加请求参数、不改变历史适配器 cache key。
+显式 generation 可覆盖 thinking/effort；thinking=disabled 清除策略中的 effort，reasoning_effort=low 为所有任务启用 low。max_tokens 可设置更小的上限；启用策略时各 stage 上限是 ceiling，不被宽松全局配置抬高。完全使用 Provider 级配置时省略 reasoning_policy。两者均省略不增加请求参数、不改变历史适配器 cache key。
 
 config providers 的 effective_generation 展示各任务实际参数；Attempt.generation 保存策略名、任务类别、最终 options，调用前即落盘。配置和任务映射集中在 generation.py，Pipeline 无厂商分支。
 
@@ -116,7 +116,7 @@ manifest v3 的 Attempt 增加可选 generation、reported_model、provider_repo
 | reasoning_tokens | usage.completion_tokens_details.reasoning_tokens |
 | cache_hit_tokens | usage.prompt_cache_hit_tokens，或 prompt_tokens_details.cached_tokens |
 
-仅接受非负整数；未返回或非法值为 null。服务完全未返回 usage 时整项为 null。响应后的 schema/业务验证失败仍可能收费，保存已收到的 usage；HTTP/传输失败无 usage 不猜测。每次调用清空响应元数据，避免继承上次用量。不保存 reasoning_content、完整响应或错误正文；不使用本地 tokenizer 冒充计费数据、不实现 estimated_cost、不硬编码价格。reasoning_tokens 通常是 output_tokens 的子集，不能重复相加。
+仅接受非负整数；未返回或非法值为 null。服务完全未返回 usage 时整项为 null。响应后的 schema/业务验证失败仍可能收费，保存已收到的 usage；HTTP/传输失败无 usage 不猜测。每次调用清空响应元数据，避免继承上次用量。不保存 reasoning_content、完整响应或错误正文；不使用本地 tokenizer 冒充计费数据、不硬编码价格。`usage/llm_usage.json` 按 stage 汇总请求、token 和缓存复用；没有价格输入时 estimated_cost 为 null。reasoning_tokens 通常是 output_tokens 的子集，不能重复相加。
 
 ## Gemini TTS 与能力选择
 

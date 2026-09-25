@@ -428,3 +428,9 @@
 - 新 Parser 在 Chapter/LLM 前过滤明确封面、目录、版权/出版页、整页广告及高置信推广段落，保留序言、普通 URL/数字/微信讨论。`source_filter.json` 记资源/段落、分类、是否移除、原因、规则和短预览；EPUB parse 缓存按规则版本失效。quality 最终检查对明显脚本推广记 `source_contamination` 并在 TTS 前阻断，quality 缓存版本同步升级；targeted repair 和 TTS 未修改。
 - 对真实源只读解析：72→69 个内容单元，96→93 个 4000 字分析 chunk；移除封面、链接目录、2页广告、正文 4 段推广/制作信息。剩余章节未检出 `ireadweek.com`、`免费电子书` 或旧广告 QQ 号。实际已完成 Job 和音频未改，未调用 DeepSeek/Kokoro。
 - 真实风格小 EPUB 的 Mock 端到端测试覆盖分析/综合/脚本无广告、来源审计和不误删序言/普通 URL/数字；另有脚本污染注入测试证实 quality 阻断且 TTS 0 次调用。功能提交 `a65f77dea69907fd05d5033350bfca264dc90c00` 上隔离 cwd 相关模块 113 passed、1 skipped；validator、compileall、提交diff通过。根目录 CLI 用例受本机 DeepSeek 配置且无凭证影响，隔离 cwd 同一用例通过。未推送。
+
+## 2026-09-25 Phase18 LLM 成本与时长预算
+
+- 对已完成真实 EPUB Job 的 manifest 作只读分阶段审计；361 唯一步骤/429 次 LLM attempt，主要输出 token 来自章/全书综合和 reasoning。旧任务正文与音频未改，未调用真实 DeepSeek。逐项计数见 `docs/LLM_COST.md`。
+- `content.py` 保留来源分析和证据，章综合批次 12，先按时长/书序筛选全书综合候选并将 20 分钟片段上限降至16；`generation.py` 增加分阶段输出预算；`llm_usage.py` 和 Runner 从 Attempt 聚合用量，不含 prompt/secret。
+- 八模块离线 244 passed/1 skipped；Mock 成本 smoke 13 个请求、3 个 segment、0 真实 API；项目 validator/compileall/diff check 通过。新真实账单与质量未验证，禁止把离线投影当成实际降幅。

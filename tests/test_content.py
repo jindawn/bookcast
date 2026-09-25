@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 from bookcast.cli import app
-from bookcast.content import (CHUNK_CHARS, FAN_IN, MAX_PROMPT_CHARS, chunks, planner,
+from bookcast.content import (CHUNK_CHARS, FAN_IN, CHAPTER_FAN_IN, MAX_PROMPT_CHARS, chunks, planner,
                               prompt, resolve_analysis, validate_analysis)
 from bookcast.content_models import (CATEGORIES, ClaimReview, ConsistencyReview, ContentOptions, EpisodePlan,
                                     EvidenceAnalysis, RichAnalysis, SegmentScript, Synthesis, Theme)
@@ -37,7 +37,8 @@ class Recording(MockLLMProvider):
 
 
 def snapshot(root):
-    return {str(p): (p.stat().st_mtime_ns, sha256_file(p)) for p in root.rglob('*') if p.is_file() and p.name != '.lock'}
+    return {str(p): (p.stat().st_mtime_ns, sha256_file(p)) for p in root.rglob('*')
+            if p.is_file() and p.name != '.lock' and 'usage' not in p.parts}
 
 
 def unchanged(before):
@@ -93,11 +94,38 @@ def test_long_chapter_and_book_use_bounded_hierarchy(tmp_path):
     assert ''.join(d['chapter']['text'] for d in parts) == chapter.text
     assert len(parts)>FAN_IN and len(analyses)>18
     assert max(n for _, n in llm.calls)<=MAX_PROMPT_CHARS
-    assert all(len(d['themes'])<=FAN_IN for d, _ in llm.calls if d['operation']=='synthesis')
+    assert all(len(d['themes']) <= (CHAPTER_FAN_IN if any(t.startswith('0001:') for theme in d['themes']
+                        for t in theme['claim_ids']) else FAN_IN)
+               for d, _ in llm.calls if d['operation']=='synthesis')
     assert all('chapter' not in d for d, _ in llm.calls if d['operation']!='analysis')
-    assert (job/'synthesis/book/02-0000.json').exists()
-    assert list((job/'synthesis/chapters/0001').glob('01-*.json'))
+    assert list((job/'synthesis/book').glob('*.json'))
+    assert list((job/'synthesis/chapters/0001').glob('*.json'))
     assert job_status(str(job))['integrity']=='ok'
+
+
+def test_shorter_duration_bounds_final_work_and_global_candidates(tmp_path):
+    source = tmp_path/'many.txt'
+    source.write_text(''.join(f'Chapter {i}\nTopic{i} has a distinct discussion.\n'
+                              for i in range(1, 19)))
+    results = []
+    for minutes in (2, 20):
+        llm = Recording()
+        job = Pipeline(llm, MockTTSProvider(), tmp_path/f'out-{minutes}').generate(
+            source, mode='summary', minutes=minutes)
+        plan = EpisodePlan.model_validate_json((job/'plans/episode.json').read_text())
+        script = [d for d, _ in llm.calls if d['operation'] == 'dialogue']
+        reviews = [d for d, _ in llm.calls if d['operation'] == 'consistency']
+        analyses = [d for d, _ in llm.calls if d['operation'] == 'analysis']
+        assert len(script) == len(reviews) == len(plan.segments)
+        assert len(analyses) == 18
+        selected = {cid for segment in plan.segments for cid in segment.chapter_ids}
+        assert all(set(segment['chapter_ids']) <= selected for call in script
+                   for segment in [call['segment']])
+        assert all(set(claim['chapter_id'] for claim in call['claims'].values()) <= selected
+                   for call in reviews)
+        results.append((plan, len(script), len(json.loads((job/'synthesis/book.json').read_text())['synthesized_chapters'])))
+    assert results[0][1] < results[1][1] <= 16
+    assert results[0][2] < results[1][2]
 
 
 @pytest.mark.parametrize('operation', ['analysis', 'synthesis', 'dialogue', 'consistency'])

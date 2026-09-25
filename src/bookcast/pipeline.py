@@ -196,6 +196,7 @@ class _Runner:
         self.log_enabled = manifest.status != 'completed'
         self.current_stage = None
         self.current_provider = None
+        self.pending_llm_reuse: dict[str, int] = {}
         self.last_error = next((c.error for c in reversed(manifest.ai_calls) if c.error), None)
         self.session_id = uuid4().hex
         recovered = manifest.owner is not None or manifest.status == 'running'
@@ -332,6 +333,10 @@ class _Runner:
                 if any(p not in self.manifest.artifact_records for p in previous.artifacts):
                     self.record_artifacts(name, previous)
                     self.save()
+                if call and call.kind == 'llm':
+                    from .generation import task_type
+                    stage = task_type(name)
+                    self.pending_llm_reuse[stage] = self.pending_llm_reuse.get(stage, 0) + 1
                 self.event("cache_hit", state="SKIPPED")
                 return
             if self.manifest.legacy_config and legacy_inputs is not None:
@@ -385,6 +390,11 @@ class _Runner:
         self.manifest.provider_status[f"{attempt.kind}:{attempt.provider}"] = report.model_dump(mode="json")
         self.current_provider = attempt.provider
         self.save()
+        if attempt.kind == 'llm' and attempt.status in {'completed', 'failed_retryable', 'failed_permanent'}:
+            try:
+                self.update_llm_usage()
+            except (OSError, ValueError, TypeError, AttributeError):
+                pass  # This derived view must not turn a durable AI result into failure.
         self.event("attempt", state=attempt.state.value, error=attempt.error,
                    details={'model': attempt.model, 'chapter': attempt.task.split(':')[1]
                             if attempt.task.startswith('analysis:') else None,
@@ -392,6 +402,25 @@ class _Runner:
                             'validation_field': attempt.validation_field,
                             'validation_reason': attempt.validation_reason,
                             'finish_reason': attempt.finish_reason})
+
+    def update_llm_usage(self) -> None:
+        from .llm_usage import usage_snapshot
+
+        path = self.path('usage/llm_usage.json')
+        reuse = {}
+        if path.is_file():
+            try:
+                prior = json.loads(path.read_text(encoding='utf-8'))
+                reuse = {stage: row['cache_reuse_count']
+                         for stage, row in prior.get('by_stage', {}).items()
+                         if isinstance(row, dict) and type(row.get('cache_reuse_count')) is int
+                         and row['cache_reuse_count'] >= 0}
+            except (OSError, ValueError, TypeError, AttributeError):
+                pass  # The attempt journal is authoritative; rebuild totals.
+        for stage, count in self.pending_llm_reuse.items():
+            reuse[stage] = reuse.get(stage, 0) + count
+        write_json(path, usage_snapshot(self.manifest.ai_calls, reuse))
+        self.pending_llm_reuse.clear()
 
     def ai_operation(self, name: str, kind: str, version: str, inputs: object, invoke: Callable) -> list[str]:
         digest = fingerprint(inputs)
