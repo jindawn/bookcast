@@ -1,34 +1,49 @@
 import json
 from pathlib import Path
-from bookcast.provider_api import PodcastScript, ProviderError, ErrorKind
+from bookcast.models import PodcastScript, DialogueTurn
+from bookcast.provider_api import ProviderError, ErrorKind
+from bookcast.content_models import SegmentScript
 from bookcast.adapters.gemini import GeminiTTSProvider
 from bookcast.adapters.kokoro import KokoroTTSProvider
 from bookcast.provider_config import ProviderSpec, CloudTTSConfig, LocalTTSConfig
 from bookcast.speech_segments import render_segments, speech_segments
 from bookcast.audio import concat_wav
 
+
 def synthesize_mock_runner(provider, script, output_dir, prefix):
     import shutil
     from unittest.mock import MagicMock
     from bookcast.pipeline import _Runner
     from bookcast.storage import atomic_target, sha256_file
+    from bookcast.speech import speech_units
+    from bookcast.provider_api import ProviderError, ErrorKind
     
-    parts = list(speech_segments(script))
-    audio_files = []
-    
-    print(f"Synthesizing {prefix} for {script.chapter_id}...")
-    for idx, segment in parts:
-        dest = output_dir / f"{prefix}_{script.chapter_id}_{idx}.wav"
-        if not dest.exists():
-            provider.synthesize_segment(segment, dest)
-        audio_files.append(dest)
+    if hasattr(provider, 'synthesize_segment'):
+        from bookcast.speech_segments import speech_segments
+        parts = list(speech_segments(script))
+        audio_files = []
+        print(f"Synthesizing {prefix} for {script.chapter_id} (segment mode)...")
+        for idx, segment in parts:
+            dest = output_dir / f"{prefix}_{script.chapter_id}_{idx}.wav"
+            if not dest.exists():
+                provider.synthesize_segment(segment, dest)
+            audio_files.append(dest)
+    else:
+        parts = list(speech_units(script))
+        audio_files = []
+        print(f"Synthesizing {prefix} for {script.chapter_id} (unit mode)...")
+        for name, unit in parts:
+            dest = output_dir / f"{prefix}_{script.chapter_id}_{name}.wav"
+            if not dest.exists():
+                provider.synthesize_unit(unit, dest)
+            audio_files.append(dest)
         
     final_dest = output_dir / f"{prefix}_{script.chapter_id}.wav"
     with atomic_target(final_dest) as temporary:
         pauses = []
         for i in range(1, len(audio_files)):
-            prev_turn = int(audio_files[i-1].name.split('_')[-1].split('.')[0])
-            curr_turn = int(audio_files[i].name.split('_')[-1].split('.')[0])
+            prev_turn = int(audio_files[i-1].name.split('_')[-1].split('-')[0])
+            curr_turn = int(audio_files[i].name.split('_')[-1].split('-')[0])
             pauses.append(0.5 if prev_turn != curr_turn else 0.2)
         concat_wav(audio_files, temporary, pause_seconds=pauses if pauses else 0.18)
     return final_dest
@@ -39,7 +54,16 @@ if __name__ == '__main__':
     out_dir.mkdir(parents=True, exist_ok=True)
     
     script_files = [base_dir / 'scripts/0001.json', base_dir / 'scripts/0002.json']
-    scripts = [PodcastScript.model_validate_json(p.read_text()) for p in script_files if p.exists()]
+    raw_scripts = [SegmentScript.model_validate_json(p.read_text()) for p in script_files if p.exists()]
+    scripts = []
+    for s in raw_scripts:
+        scripts.append(PodcastScript(
+            chapter_id=s.segment_id,
+            title=s.title,
+            source_locator="A/B Test Artifact",
+            is_mock=s.is_mock,
+            turns=[DialogueTurn(speaker=t.speaker, text=t.text) for t in s.turns]
+        ))
     if not scripts:
         print("Scripts not found")
         exit(1)
@@ -47,7 +71,7 @@ if __name__ == '__main__':
     # Kokoro Baseline
     kokoro_spec = ProviderSpec(
         name="kokoro", kind="tts", type="kokoro-local", model="kokoro-multi-lang-v1_0",
-        local_tts=LocalTTSConfig(host_voice="47", guest_voice="52", speed=1.05)
+        local_tts=LocalTTSConfig(host_voice="47", guest_voice="52", speed=1.05, model_dir=".")
     )
     kokoro_provider = KokoroTTSProvider(kokoro_spec)
     
