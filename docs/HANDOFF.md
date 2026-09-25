@@ -1,5 +1,19 @@
 # 给下一位 Coding Agent
 
+更新时间：2026-09-25。先读 AGENTS.md 并核对 Git；以下为最新 EPUB 来源过滤工作。已验证功能提交 `a65f77dea69907fd05d5033350bfca264dc90c00`，未 push。未运行真实 DeepSeek，也未修改现存已完成 Web Job。
+
+## EPUB 非正文/广告过滤与来源审计
+
+当前真实 EPUB《狂人日记》已完成 DeepSeek+Kokoro 20 分钟双人播客，targeted repair/quality gate 均工作；本次没有覆盖这些逻辑。只读核对原 Job `3a591bfdaac14dbbb254ae8b9e138e85` 的源 EPUB：73 个 spine 项中一个空封面，其余原解析成 72 个 XHTML 文档对应的 Chapter，**不是 72 个语义章节**。原 `parse_epub` 按 spine 收集文本，仅跳过显式 nav，未识别普通链接目录、独立广告页和正文页的推广段落，因此前三个“章节”中包括目录与广告。
+
+新 `source_sanitation.py` 在 Chapter/LLM 前用 EPUB 资源名/属性、链接目录结构及促销上下文规则过滤；独立 `source_filter.json` 记录保留/移除资源及段落的分类、规则和短预览。普通 URL、数字、微信讨论及真实序言默认保留。quality 末端新增 `source_contamination` 阻断并升至 `quality-v2` 缓存版本，targeted repair 判定/次数、TTS 和 Provider 未改。parse 指纹含过滤规则版本；EPUB by-ID 恢复不再绕过新指纹。
+
+对真实源的只读解析得到 69 个保留 XHTML 单元、93 个分析 chunk（旧 72/96）；排除封面、普通目录、前后两页广告及正文中的 4 段推广/制作信息，保留章节中未发现已知推广字符串。未生成全书音频或更新真实 Job。小 EPUB Mock 回归覆盖正文与序言保留、广告在分析/综合/脚本前消失、审计记录、普通数字/URL保留、脚本污染阻断 TTS、解析版本变化恢复。功能提交上相关测试 `113 passed、1 skipped`，validator/compileall/diff check通过。当前已完成音频仍是旧内容；如需净化结果，应另起生成任务并按用户意愿承担费用，不能把旧音频视作自动修复。
+
+---
+
+# 给下一位 Coding Agent
+
 更新时间：2026-09-25。先读 AGENTS.md 和项目文档并核对 Git。当前工作区已实现 Quality Gate 矛盾发言局部定向修复（Targeted Repair）机制，并添加了有界上限与回归测试验证。
 
 ## Quality Gate 矛盾发言局部定向修复（Targeted Repair）与有界验证
