@@ -386,6 +386,186 @@ def test_deepseek_retry_still_rejects_invalid_evidence_item(monkeypatch):
     assert failure.value.validation_field == 'evidence.0.evidence_id'
 
 
+def test_required_field_overflow_on_retry_is_not_silently_clamped(monkeypatch):
+    """If core_ideas (minItems=1) is the warned field, its overflow must NOT be
+    silently truncated on the retry — the model must fix it.  If it doesn't,
+    the call fails permanently after exactly 2 API calls."""
+    finding = {'text': '简短转述', 'evidence_id': 'e0001'}
+    # First call: core_ideas has 7 items → too_long → retry
+    # Second call: model still returns 7 core_ideas → should NOT be clamped → permanent fail
+    payload = {'chapter_id': '0003', 'chunk_id': '0001',
+               'core_ideas': [finding] * 7,
+               **{name: [] for name in ('arguments', 'evidence', 'examples', 'people', 'concepts',
+                                         'counter_arguments', 'connections', 'key_passages')},
+               'is_mock': False}
+    sent = []
+
+    class Transport:
+        def open(self, req, timeout):
+            sent.append(json.loads(req.data))
+            return io.BytesIO(json.dumps({'choices': [{'message': {'content': json.dumps(payload)},
+                'finish_reason': 'stop'}], 'model': 'deepseek-flash',
+                'usage': {'prompt_tokens': 5000, 'completion_tokens': 1500}}).encode())
+
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    provider = CompatibleLLMProvider(ProviderSpec(name='deepseek', kind='llm', type='openai-compatible',
+        model='deepseek-flash', base_url='https://api.deepseek.com'))
+    history = []
+    with pytest.raises(ProviderError) as exc_info:
+        ProviderChain([provider]).execute(task='analysis:0003:0001', kind='llm',
+            prompt_version='content-analysis-v3', input_hash='h',
+            invoke=lambda p: p.generate_structured('payload', EvidenceAnalysis),
+            persist=lambda _: {}, observe=lambda a: history.append(a.model_copy(deep=True)))
+    assert exc_info.value.kind == ErrorKind.SCHEMA
+    assert len(sent) == 2  # exactly one retry, then permanent failure
+    terminal = [a for a in history if a.status in {'failed_retryable', 'failed_permanent'}]
+    assert terminal[0].validation_field == 'core_ideas' and terminal[0].validation_reason == 'too_long'
+    assert terminal[1].validation_field == 'core_ideas' and terminal[1].validation_reason == 'too_long'
+    assert terminal[1].status == 'failed_permanent'
+
+
+def test_unknown_validation_reason_is_not_retried(monkeypatch):
+    """Validation reasons outside the known safe set must NOT trigger a retry."""
+    finding = {'text': '简短转述', 'evidence_id': 'e0001'}
+    payload = {'chapter_id': '0003', 'chunk_id': '0001',
+               'core_ideas': [finding], 'is_mock': False,
+               **{name: [] for name in ('arguments', 'evidence', 'examples', 'people', 'concepts',
+                                         'counter_arguments', 'connections', 'key_passages')}}
+    # Tamper: make evidence_id violate the pattern constraint → reason = 'string_pattern_mismatch'
+    payload['core_ideas'][0]['evidence_id'] = 'bad_id_format'
+    count = 0
+
+    class Transport:
+        def open(self, req, timeout):
+            nonlocal count
+            count += 1
+            return io.BytesIO(json.dumps({'choices': [{'message': {'content': json.dumps(payload)},
+                'finish_reason': 'stop'}]}).encode())
+
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    provider = CompatibleLLMProvider(ProviderSpec(name='deepseek', kind='llm', type='openai-compatible',
+        model='deepseek-flash', base_url='https://api.deepseek.com'))
+    with pytest.raises(ProviderError) as exc_info:
+        ProviderChain([provider]).execute(task='analysis:0003:0001', kind='llm',
+            prompt_version='content-analysis-v3', input_hash='h',
+            invoke=lambda p: p.generate_structured('payload', EvidenceAnalysis),
+            persist=lambda _: {}, observe=lambda _: None)
+    assert count == 1  # no retry
+    assert exc_info.value.kind == ErrorKind.SCHEMA
+
+
+def test_deepseek_clamped_retry_still_runs_full_pydantic_validation(monkeypatch):
+    """When retry clamps an overflowing evidence list to 6 items, full Pydantic validation
+    must still execute on the clamped data. If any element has invalid fields, it must fail
+    permanently with ErrorKind.SCHEMA and not be swallowed."""
+    finding = {'text': '简短转述', 'evidence_id': 'e0001'}
+    bad_finding = {'text': '简短转述', 'evidence_id': 'invalid_id'}
+    call1_payload = {'chapter_id': '0003', 'chunk_id': '0001',
+                     'core_ideas': [finding],
+                     'evidence': [finding] * 7,
+                     **{name: [] for name in ('arguments', 'examples', 'people', 'concepts',
+                                               'counter_arguments', 'connections', 'key_passages')},
+                     'is_mock': False}
+    call2_payload = {'chapter_id': '0003', 'chunk_id': '0001',
+                     'core_ideas': [finding],
+                     'evidence': [bad_finding] + [finding] * 6,
+                     **{name: [] for name in ('arguments', 'examples', 'people', 'concepts',
+                                               'counter_arguments', 'connections', 'key_passages')},
+                     'is_mock': False}
+    sent = []
+
+    class Transport:
+        def open(self, req, timeout):
+            sent.append(json.loads(req.data))
+            payload = call1_payload if len(sent) == 1 else call2_payload
+            return io.BytesIO(json.dumps({'choices': [{'message': {'content': json.dumps(payload)},
+                'finish_reason': 'stop'}], 'model': 'deepseek-flash'}).encode())
+
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    provider = CompatibleLLMProvider(ProviderSpec(name='deepseek', kind='llm', type='openai-compatible',
+        model='deepseek-flash', base_url='https://api.deepseek.com'))
+    history = []
+    with pytest.raises(ProviderError) as exc_info:
+        ProviderChain([provider]).execute(task='analysis:0003:0001', kind='llm',
+            prompt_version='content-analysis-v3', input_hash='h',
+            invoke=lambda p: p.generate_structured('payload', EvidenceAnalysis),
+            persist=lambda _: {}, observe=lambda a: history.append(a.model_copy(deep=True)))
+    assert len(sent) == 2
+    assert exc_info.value.kind == ErrorKind.SCHEMA
+    assert exc_info.value.validation_field == 'evidence.0.evidence_id'
+    terminal = [a for a in history if a.status in {'failed_retryable', 'failed_permanent'}]
+    assert [a.status for a in terminal] == ['failed_retryable', 'failed_permanent']
+    assert terminal[1].validation_field == 'evidence.0.evidence_id'
+
+
+def test_2026_09_25_analysis_0015_concepts_overflow_and_conversational_retry(monkeypatch):
+    """Real failure pattern on chapter 15:
+    Call 1: concepts has 7 items (> maxItems 6) -> triggers schema retry for concepts.
+    Call 2: DeepSeek returns corrected concepts wrapped in conversational preamble and markdown fence.
+    Verifies that preamble and code fence are safely stripped, concepts validated, and task completes."""
+    fixture_path = Path(__file__).parent / 'fixtures/deepseek_analysis_0015_concepts_overflow.json'
+    call1_payload = json.loads(fixture_path.read_text())
+    call2_payload = json.loads(fixture_path.read_text())
+    call2_payload['concepts'] = call2_payload['concepts'][:6]
+    call2_text = (
+        "Here is the corrected JSON matching the schema with concepts limited to at most 6 items:\n"
+        "```json\n"
+        f"{json.dumps(call2_payload, ensure_ascii=False)}\n"
+        "```\n"
+        "Note: I have adjusted the concepts list to conform strictly to the limit."
+    )
+    sent = []
+
+    class Transport:
+        def open(self, req, timeout):
+            sent.append(json.loads(req.data))
+            content = json.dumps(call1_payload) if len(sent) == 1 else call2_text
+            return io.BytesIO(json.dumps({'choices': [{'message': {'content': content},
+                'finish_reason': 'stop'}], 'model': 'deepseek-flash',
+                'usage': {'prompt_tokens': 4614, 'completion_tokens': 2019}}).encode())
+
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    provider = CompatibleLLMProvider(ProviderSpec(name='deepseek', kind='llm', type='openai-compatible',
+        model='deepseek-flash', base_url='https://api.deepseek.com'))
+    history = []
+    validated = []
+    result = ProviderChain([provider]).execute(task='analysis:0015:0001', kind='llm',
+        prompt_version='content-analysis-v3', input_hash='h',
+        invoke=lambda p: p.generate_structured('chapter 15 payload', EvidenceAnalysis),
+        persist=lambda value: validated.append(value) or {'analysis/0015/0001.json': 'hash15'},
+        observe=lambda a: history.append(a.model_copy(deep=True)))
+    assert len(sent) == 2
+    assert result == {'analysis/0015/0001.json': 'hash15'}
+    assert len(validated[0].concepts) == 6
+    terminal = [a for a in history if a.status in {'failed_retryable', 'completed'}]
+    assert [a.status for a in terminal] == ['failed_retryable', 'completed']
+    assert (terminal[0].error_type, terminal[0].validation_field, terminal[0].validation_reason) == (
+        'ValidationError', 'concepts', 'too_long')
+    assert 'concepts must contain at most 6 items' in sent[1]['messages'][0]['content']
+
+
+def test_deepseek_json_with_raw_newlines_and_conversational_postamble(monkeypatch):
+    """DeepSeek occasionally outputs raw newlines inside string values or adds post-brace commentary."""
+    finding = {'text': '简短转述包含换行', 'evidence_id': 'e0001'}
+    payload = {'chapter_id': '0015', 'chunk_id': '0001',
+               'core_ideas': [finding], 'arguments': [], 'examples': [], 'people': [], 'concepts': [],
+               'counter_arguments': [], 'connections': [], 'key_passages': [], 'evidence': [], 'is_mock': False}
+    raw_json_with_newline = json.dumps(payload, ensure_ascii=False).replace('包含换行', '\n第二行')
+    conversational_text = f"Certainly! Here is the JSON:\n{raw_json_with_newline}\nHope this helps!"
+
+    class Transport:
+        def open(self, req, timeout):
+            return io.BytesIO(json.dumps({'choices': [{'message': {'content': conversational_text},
+                'finish_reason': 'stop'}], 'model': 'deepseek-flash'}).encode())
+
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    provider = CompatibleLLMProvider(ProviderSpec(name='deepseek', kind='llm', type='openai-compatible',
+        model='deepseek-flash', base_url='https://api.deepseek.com'))
+    result = provider.generate_structured('prompt', EvidenceAnalysis)
+    assert result.chapter_id == '0015'
+    assert result.core_ideas[0].text == '简短转述\n第二行'
+
+
 def test_real_failure_shape_deepseek_markdown_fence_is_safely_stripped(monkeypatch):
     """Real failure pattern on chapter 22: DeepSeek wrapped valid JSON in ```json ... ``` markdown fence."""
     finding = {'text': '简短转述', 'evidence_id': 'e0001'}
@@ -680,3 +860,39 @@ def test_openai_provider_unaffected_by_schema_drift_retry(monkeypatch):
     assert len(sent) == 1  # exactly 1 call: OpenAI does not trigger DeepSeek schema correction
     terminal = [a for a in history if a.status == 'failed_permanent']
     assert len(terminal) == 1
+
+def test_consistency_reasoning_effort_low(monkeypatch):
+    monkeypatch.setenv('TEST_DEEPSEEK_KEY', 'sk-wire-only')
+    calls = []
+    
+    # 1. Test consistency stage
+    provider = CompatibleLLMProvider(spec(api_key_env='TEST_DEEPSEEK_KEY', reasoning_policy='bookcast-v1')).for_task('consistency:0001')
+    response = {'choices': [{'message': {'content': '{}', 'reasoning_content': 'thinking'}, 'finish_reason': 'stop'}], 'model': 'deepseek', 'usage': {}}
+    class Transport:
+        def open(self, req, timeout):
+            calls.append(req)
+            return io.BytesIO(json.dumps(response).encode())
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    provider._chat("test")
+    
+    sent = json.loads(calls[0].data)
+    assert sent.get('thinking') == {'type': 'enabled'}
+    assert sent.get('reasoning_effort') == 'low'
+    
+    # 2. Test another stage (e.g., book_synthesis) to ensure they are not affected
+    calls.clear()
+    provider_synth = CompatibleLLMProvider(spec(api_key_env='TEST_DEEPSEEK_KEY', reasoning_policy='bookcast-v1')).for_task('synthesis/book/00')
+    provider_synth._chat("test")
+    
+    sent_synth = json.loads(calls[0].data)
+    assert sent_synth.get('thinking') == {'type': 'enabled'}
+    assert sent_synth.get('reasoning_effort') == 'high'
+
+    # 3. Test extraction stage
+    calls.clear()
+    provider_ext = CompatibleLLMProvider(spec(api_key_env='TEST_DEEPSEEK_KEY', reasoning_policy='bookcast-v1')).for_task('analysis:0001')
+    provider_ext._chat("test")
+    
+    sent_ext = json.loads(calls[0].data)
+    assert sent_ext.get('thinking') == {'type': 'disabled'}
+    assert sent_ext.get('reasoning_effort') is None
