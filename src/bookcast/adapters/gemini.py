@@ -138,7 +138,7 @@ class GeminiTTSProvider:
                         "physical_attempt_index": attempts,
                         "started_at": started,
                         "finished_at": finished,
-                        "http_status": int(status) if isinstance(status, int) else (int(str(status)) if str(status).isdigit() else 200),
+                        "http_status": status if status is None else (int(status) if isinstance(status, int) else (int(str(status)) if str(status).isdigit() else 200)),
                         "result": result_status,
                         "retry_reason": retry_reason,
                         "usage_available": usage_avail,
