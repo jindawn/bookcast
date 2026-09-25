@@ -49,7 +49,7 @@ def test_tts_final_script_checkpointing_and_metadata(mock_opener, tmp_path):
     mock_opener.return_value.open.return_value.__enter__.return_value = mock_response
     
     with patch('bookcast.adapters.gemini.request.Request') as mock_req:
-        with open('generate_tts_final.py') as f:
+        with open('generate_gemini_final_5min.py') as f:
             code = f.read()
             
         code = code.replace("base_dir = Path('output/llm-cost-clean-5min-v5/b288c0f91d3e46f32eb95916')", f"base_dir = Path('{base_dir}')")
