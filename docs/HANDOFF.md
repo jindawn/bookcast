@@ -1,3 +1,12 @@
+
+## 2026-09-25 ConsistencyReview 质量修复
+
+用户报告 fresh 5-min v3 run 在 `consistency:0001` 产生 FAILED_PERMANENT `schema_error`。经查 `output/llm-cost-clean-5min-v3/b288c0f91d3e46f32eb95916/logs/events.jsonl`，错误是 `ValueError`，`validation_reason=finish_reason`，`finish_reason=length`。这是由于 DeepSeek 在 `consistency:0001` 生成 `ConsistencyReview` 时，陷入 CoT reasoning loop 耗尽了 12000 output tokens，触发了 length limit。
+同时，用户期望修复 `ConsistencyReview` 关于 checks 数量不一致的 quality error。因为 Pydantic 不感知源 script turn indices，旧的验证会在 `content.py` 抛出 `ProviderError(ErrorKind.BUSINESS)`。
+
+修改了 `src/bookcast/adapters/compatible.py`，让 `prepare_schema_retry` 捕获 `finish_reason == 'length'` 并添加 retry_guidance。修改了 `src/bookcast/content.py` 的 `validate_review`，对于 extra checks 执行确定性删除（语义对齐），对于 missing checks 抛出 `ProviderError(ErrorKind.SCHEMA)` 并携带 `validation_reason=missing_turns`。`prepare_schema_retry` 支持识别 `missing_turns` 并提供 guidance。
+没有关闭 consistency validation，没有修改 Token/TTS 优化，完全复用 existing normalization。所有 72 个线下 tests 通过。已 push 修复。
+
 # 给下一位 Coding Agent
 
 更新时间：2026-09-25。真实 5 分钟独立 DeepSeek 任务 `output/llm-cost-clean-5min-5f94c8665518/b288c0f91d3e46f32eb95916`（job_id `69dbb0d591bd4c04a6a54a74140f8baf`）已在 `analysis:0003:0001` 永久失败，不能计作 clean-run 成本。只读事件显示两次 HTTP/JSON 正常，`finish_reason=stop`，Pydantic `EvidenceAnalysis.evidence` 列表两次 `too_long`（上限6）。原始响应正文未持久化，因此只能确认超限，无法声称具体列表长度或内容。第三单元 2693 字、64 证据候选、prompt 10156 字；前两章无异常输入，analysis prompt/schema 未被 Phase18 token 优化改变。
