@@ -11,25 +11,51 @@ from .storage import atomic_target, fingerprint, sha256_file, write_json
 UNIT_VERSION = "speech-unit-v1:pcm24k"
 
 
-def split_text(text: str, limit: int = 80) -> list[str]:
-    """Preserve every character; prefer sentence boundaries without splitting decimals."""
-    if not 1 <= limit <= 80:
-        raise ValueError("speech unit limit must be between 1 and 80")
+def normalize_tts_text(text: str) -> str:
+    import re
+    # 1. Remove Markdown formatting
+    text = re.sub(r'[*_]{1,2}(.*?)[*_]{1,2}', r'\1', text)
+    # 2. Remove Markdown links
+    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1', text)
+    # 3. Remove raw URLs
+    text = re.sub(r'https?://[^\s]+', '', text)
+    # 4. Remove parenthesis and their content
+    text = re.sub(r'（[^）]*）|\([^)]*\)', '', text)
+    # 5. Remove some punctuation that TTS struggles with or is unnecessary
+    text = re.sub(r'[《》“”‘’"\'\']', '', text)
+    # 6. Normalize spaces
+    return re.sub(r'\s+', ' ', text).strip()
+
+def split_text(text: str, limit: int = 200) -> list[str]:
+    """Normalize text and split by punctuation up to a reasonable limit."""
+    import re
+    text = normalize_tts_text(text)
     result = []
     while text:
         if len(text) <= limit:
             result.append(text)
             break
-        matches = list(re.finditer(r'[。！？!?；;\n]|[，,、]\s*|\s+', text[:limit]))
-        cut = matches[-1].end() if matches else limit
-        if len(text) - cut < limit and not any(c.isalnum() for c in text[cut:]):
-            # Keep a final quotation mark/period attached to spoken text.
-            last_word = next((i for i in range(cut - 1, 0, -1) if text[i].isalnum()), cut)
-            if len(text) - last_word <= limit:
+        
+        # Prefer strong punctuation
+        matches = list(re.finditer(r'[。！？!?；;\n]', text[:limit]))
+        if matches:
+            cut = matches[-1].end()
+        else:
+            # Fallback to weak punctuation
+            matches = list(re.finditer(r'[，,、：:——]\s*|\s+', text[:limit]))
+            cut = matches[-1].end() if matches else limit
+            
+        # Avoid splitting numbers/English words
+        if cut < len(text) and text[cut-1].isalnum() and text[cut].isalnum():
+            # Backtrack to the last non-alnum character
+            last_word = next((i for i in range(cut - 1, 0, -1) if not text[i].isalnum()), cut)
+            if last_word > 0:
                 cut = last_word
-        result.append(text[:cut])
-        text = text[cut:]
-    return result
+
+        result.append(text[:cut].strip())
+        text = text[cut:].strip()
+        
+    return [r for r in result if r]
 
 
 def speech_units(script):
@@ -131,8 +157,20 @@ def render_speech(r, script, inputs, version, legacy_inputs=None):
         reports.append(info_name)
 
     def assemble():
+        pauses = []
+        for i in range(1, len(audio)):
+            prev_turn = int(audio[i-1].split('-')[-2])
+            curr_turn = int(audio[i].split('-')[-2])
+            if prev_turn != curr_turn:
+                # Different turn (usually speaker change)
+                pauses.append(0.5)
+            else:
+                # Same turn
+                pauses.append(0.2)
+                
         with atomic_target(r.path(audio_name)) as temporary:
-            concat_wav([r.path(name) for name in audio], temporary)
+            concat_wav([r.path(name) for name in audio], temporary, pause_seconds=pauses if pauses else 0.18)
+            
         values = [json.loads(r.path(name).read_text(encoding="utf-8")) for name in reports]
         kinds = {value["audio_kind"] for value in values}
         info_name = f"audio/{segment}.json"
@@ -142,7 +180,7 @@ def render_speech(r, script, inputs, version, legacy_inputs=None):
                            {k: v[k] for k in ('provider', 'model', 'voice', 'speaker')} for v in values}.values())})
         return [audio_name, info_name]
     r.step(f"tts:{segment}", {"units": [(name, sha256_file(r.path(name))) for name in [*audio, *reports]],
-                              "assembly": "pcm24k:pause-0.18-v1"}, assemble)
+                              "assembly": "pcm24k:pause-dynamic-v1"}, assemble)
 
 
 def check_audio(path):

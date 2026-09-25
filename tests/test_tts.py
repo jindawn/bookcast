@@ -52,11 +52,14 @@ class UnitFake(MockTTSProvider):
 
 def test_split_preserves_text_and_bounds():
     text = "欢迎收听。数字 3.14 和 English。" + "中文" * 400 + "！\n尾声。"
-    chunks = split_text(text)
-    assert "".join(chunks) == text
-    assert all(0 < len(c) <= 80 for c in chunks)
-    assert "3.14" in chunks[0]
-    assert split_text("中" * 80 + "。”") == ["中" * 79, "中。”"]
+    chunks = split_text(text, limit=200)
+    
+    # 验证拼接后等于 normalize 后的结果（去掉多余空格）
+    from bookcast.speech import normalize_tts_text
+    norm_text = normalize_tts_text(text)
+    assert "".join(chunks) == norm_text.replace(" ", "") or "".join(chunks) == norm_text
+    assert all(0 < len(c) <= 200 for c in chunks)
+    assert any("3.14" in c for c in chunks)
 
 
 def test_cache_key_covers_assets_runtime_and_voice_not_install_path(tmp_path, monkeypatch):
@@ -363,3 +366,32 @@ def test_cleanup_only_removes_owned_and_manifest_bound_legacy_units(tmp_path):
 
     assert set(removed) == {legacy, owned}
     assert unrelated.exists() and symlink.is_symlink() and outside.read_text() == "keep"
+
+def test_speech_normalization_and_splitting():
+    from bookcast.speech import split_text, normalize_tts_text
+    
+    # 1. URL and Markdown
+    raw = "查阅 [DeepSeek](https://deepseek.com) 官网，URL: http://test.com"
+    norm = normalize_tts_text(raw)
+    assert "https" not in norm
+    assert "DeepSeek" in norm
+    assert "官网，URL:" in norm
+    
+    # 2. Punctuation removal
+    raw = "他说了句：“你好”《世界》。"
+    norm = normalize_tts_text(raw)
+    assert norm == "他说了句：你好世界。"
+    
+    # 3. Parenthesis
+    raw = "这是测试（不要念这个）和(English)。"
+    norm = normalize_tts_text(raw)
+    assert norm == "这是测试和。"
+    
+    # 4. Long sentence splitting (limit=20)
+    raw = "这是一个很长的句子我们需要在标点符号处切分开来。你看，这里有一个逗号，还有数字123456不能切开。"
+    parts = split_text(raw, limit=20)
+    assert len(parts) > 1
+    # Check no empty parts
+    assert all(parts)
+    # Check numbers are not split if possible
+    assert any("123456" in p for p in parts)

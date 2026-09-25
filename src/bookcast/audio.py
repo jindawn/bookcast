@@ -14,15 +14,19 @@ def wav_seconds(path: Path) -> float:
         return audio.getnframes() / audio.getframerate()
 
 
-def concat_wav(parts: list[Path], destination: Path, pause_seconds: float = 0.18) -> None:
+def concat_wav(parts: list[Path], destination: Path, pause_seconds: float | list[float] = 0.18) -> None:
     if not parts:
         raise BookCastError("没有可拼接的语音单元。")
+    if isinstance(pause_seconds, list) and len(pause_seconds) != len(parts) - 1:
+        raise BookCastError("动态停顿列表长度必须等于片段数减一。")
     with wave.open(str(destination), "wb") as output:
         output.setparams((1, 2, 24000, 0, "NONE", "not compressed"))
         for index, part in enumerate(parts):
             validate_wav(part)
             if index:
-                output.writeframes(b"\0\0" * round(24000 * pause_seconds))
+                p = pause_seconds[index - 1] if isinstance(pause_seconds, list) else pause_seconds
+                if p > 0:
+                    output.writeframes(b"\0\0" * round(24000 * p))
             with wave.open(str(part), "rb") as source:
                 while frames := source.readframes(24000):
                     output.writeframes(frames)
