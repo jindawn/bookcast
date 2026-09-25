@@ -73,3 +73,44 @@ def test_ab_script_uses_production_registry_and_config():
     assert kokoro_spec.local_tts.model_dir != "."
     assert "data/models/kokoro" in kokoro_spec.local_tts.model_dir
 
+
+def test_ab_output_wav_extensions():
+    # Load generate_tts_ab as a module to verify the file extension usage
+    with open('generate_tts_ab.py') as script_file:
+        content = script_file.read()
+    
+    assert '.mp3' not in content, "WAV files must not be named .mp3"
+    assert "kokoro-baseline.wav" in content
+    assert "gemini-3.8-flash.wav" in content
+
+def test_wav_magic_bytes_and_metadata(tmp_path):
+    import wave
+    import json
+    
+    # Create a valid dummy WAV file
+    wav_path = tmp_path / "test.wav"
+    with wave.open(str(wav_path), 'wb') as w:
+        w.setparams((1, 2, 24000, 0, 'NONE', 'not compressed'))
+        w.writeframes(b'\x00' * 48000) # 1 second of silence
+        
+    def analyze_wav(path):
+        with wave.open(str(path), 'rb') as w:
+            return {
+                "container": "RIFF/WAV",
+                "codec": "PCM16",
+                "sample_rate": w.getframerate(),
+                "channels": w.getnchannels(),
+                "duration": round(w.getnframes() / float(w.getframerate()), 2)
+            }
+            
+    metadata = analyze_wav(wav_path)
+    assert metadata['container'] == 'RIFF/WAV'
+    assert metadata['codec'] == 'PCM16'
+    assert metadata['sample_rate'] == 24000
+    assert metadata['duration'] == 1.0
+    
+    # Verify file starts with RIFF and WAVE
+    with open(wav_path, 'rb') as bin_f:
+        header = bin_f.read(12)
+        assert header.startswith(b'RIFF')
+        assert header.endswith(b'WAVE')

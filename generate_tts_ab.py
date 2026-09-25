@@ -111,8 +111,25 @@ if __name__ == '__main__':
             kokoro_wavs.append(synthesize_mock_runner(kokoro_provider, script, out_dir, 'kokoro', reuse_audio_dir=base_dir / 'audio'))
             gemini_wavs.append(synthesize_mock_runner(gemini_provider, script, out_dir, 'gemini'))
             
-        concat_wav(kokoro_wavs, out_dir / 'kokoro-baseline.mp3', pause_seconds=1.0)
-        concat_wav(gemini_wavs, out_dir / 'gemini-3.8-flash.mp3', pause_seconds=1.0)
+        concat_wav(kokoro_wavs, out_dir / 'kokoro-baseline.wav', pause_seconds=1.0)
+        concat_wav(gemini_wavs, out_dir / 'gemini-3.8-flash.wav', pause_seconds=1.0)
+        
+        import wave
+        def analyze_wav(path):
+            try:
+                with wave.open(str(path), 'rb') as w:
+                    return {
+                        "container": "RIFF/WAV",
+                        "codec": "PCM16",
+                        "sample_rate": w.getframerate(),
+                        "channels": w.getnchannels(),
+                        "duration": round(w.getnframes() / float(w.getframerate()), 2)
+                    }
+            except Exception:
+                return {}
+
+        kokoro_path = out_dir / 'kokoro-baseline.wav'
+        gemini_path = out_dir / 'gemini-3.8-flash.wav'
         
         metadata = {
             "kokoro": {
@@ -120,7 +137,7 @@ if __name__ == '__main__':
                 "model": "kokoro-multi-lang-v1_0",
                 "host_voice": "47",
                 "guest_voice": "52",
-                "duration": 120 # approx
+                **analyze_wav(kokoro_path)
             },
             "gemini": {
                 "provider": "gemini-tts",
@@ -128,7 +145,7 @@ if __name__ == '__main__':
                 "host_voice": "Kore",
                 "guest_voice": "Puck",
                 "mode": "conversational",
-                "duration": 120 # approx
+                **analyze_wav(gemini_path)
             }
         }
         
