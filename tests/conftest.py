@@ -11,7 +11,7 @@ UNIT_MODULES = {
     "test_source_http", "test_validate_project", "test_qwen_spike",
 }
 INTEGRATION_MODULES = {
-    "test_content", "test_export", "test_gemini_tts", "test_generation",
+    "test_content", "test_export", "test_gemini_tts", "test_gemini_interactions", "test_generation",
     "test_job_cli", "test_job_recovery", "test_ocr", "test_onboarding", "test_phase1",
     "test_providers", "test_qwen_tts", "test_skill", "test_sources", "test_tts",
     "test_tts_ab", "test_web",

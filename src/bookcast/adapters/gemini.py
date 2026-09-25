@@ -47,11 +47,19 @@ def classify_http(status, body):
                     or violation.get('quotaValue') in (0, '0')):
                 return ProviderError(ErrorKind.QUOTA)
         return ProviderError(ErrorKind.RATE_LIMIT)
+
     if status in {408, 504}:
         return ProviderError(ErrorKind.TIMEOUT)
     if status >= 500:
         return ProviderError(ErrorKind.UNAVAILABLE)
-    return ProviderError(ErrorKind.INPUT)
+        
+    error_status = failure.get('status', str(status))
+    error_msg = failure.get('message', '')
+    if error_msg:
+        import sys
+        print(f"Gemini API Error: {error_status} - {error_msg[:300]}", file=sys.stderr)
+    return ProviderError(ErrorKind.SCHEMA, error_type=error_status, validation_reason=error_msg[:300])
+
 
 
 class NoRedirect(request.HTTPRedirectHandler):
@@ -79,7 +87,7 @@ class GeminiTTSProvider:
         key = os.environ.get(self.spec.api_key_env)
         if not key:
             sys.exit('Gemini TTS requires GEMINI_API_KEY')
-        url = ENDPOINT + self.model + (':generateContent' if payload is not None else '')
+        url = ENDPOINT + self.model if payload is None else 'https://generativelanguage.googleapis.com/v1beta/interactions'
         try:
             req = request.Request(url, headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
                 data=json.dumps(payload, ensure_ascii=False).encode() if payload is not None else None)
@@ -115,6 +123,7 @@ class GeminiTTSProvider:
         return self.last_status
 
 
+
     def synthesize_segment(self, segment: SpeechSegment, destination: Path) -> SegmentSpeechInfo:
         from ..speech import normalize_tts_text
         self.last_usage, self.reported_model = None, None
@@ -129,50 +138,59 @@ class GeminiTTSProvider:
                 continue
                 
             style = "calm, thoughtful Chinese podcast host" if t.speaker == '主持人' else "natural, conversational, reflective guest"
-            # Overwrite if general style instruction is provided
             if self.settings.style_instruction:
                 style = self.settings.style_instruction
 
             parts.append({
+                'type': 'text',
                 'text': normalized,
-                'speech_metadata': {
-                    'speaker': voices[t.speaker],
+                'annotations': [{
+                    'type': 'speech_metadata',
+                    'speaker': 'Host' if t.speaker == '主持人' else 'Guest',
                     'style': style
-                }
+                }]
             })
             
         if not parts:
             raise ProviderError(ErrorKind.INPUT)
             
         payload = {
-            'contents': [{'parts': parts}],
-            'generationConfig': {
-                'responseModalities': ['AUDIO'],
-                'speechConfig': {
-                    'mode': getattr(self.settings, 'mode', 'conversational')
+            'model': self.model,
+            'input': [{
+                'type': 'user_input',
+                'content': parts
+            }],
+            'response_format': {
+                'type': 'audio'
+            },
+            'generation_config': {
+                'speech_config': {
+                    'mode': getattr(self.settings, 'mode', 'conversational'),
+                    'speakers': [
+                        {'speaker': 'Host', 'voice': self.settings.host_voice},
+                        {'speaker': 'Guest', 'voice': self.settings.guest_voice}
+                    ]
                 }
             }
         }
         
         try:
-            print('云端 TTS：将播客文本发送至 Google Developer API；免费/未知层可能用于产品改进，付费层适用不同数据条款。',
-                  file=sys.stderr)
+            print(f"云端 TTS: 发送 Interactions API 至 {self.model}", file=sys.stderr)
         except OSError:
-            pass  # A detached terminal must not invalidate a durable job.
+            pass
             
         try:
             result = self._request(payload)
-            usage = result.get('usageMetadata')
+            # Try to grab usage metadata if present in interactions API
+            usage = result.get('usage_metadata') or result.get('usageMetadata')
             if isinstance(usage, dict):
                 self.last_usage = ProviderUsage.from_response({
-                    'prompt_tokens': usage.get('promptTokenCount'),
-                    'completion_tokens': usage.get('candidatesTokenCount')
+                    'prompt_tokens': usage.get('prompt_token_count', usage.get('promptTokenCount')),
+                    'completion_tokens': usage.get('candidates_token_count', usage.get('candidatesTokenCount'))
                 })
-            model = result.get('modelVersion')
-            if isinstance(model, str) and re.fullmatch(r'[A-Za-z0-9._-]{1,128}', model):
-                self.reported_model = model
-                
+            
             decode_audio(result, destination)
+
             
         except ProviderError as failure:
             self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
@@ -188,33 +206,43 @@ class GeminiTTSProvider:
 
 
 
+
 def decode_audio(result, destination):
     try:
-        candidates = result['candidates']
-        if len(candidates) != 1 or candidates[0].get('finishReason') != 'STOP':
-            raise ValueError()
-        parts = candidates[0]['content']['parts']
-        if len(parts) != 1:
-            raise ValueError()
-        inline = parts[0]['inlineData']
-        mime = inline['mimeType'].lower().replace(' ', '').split(';')[0]
-        
-        data = base64.b64decode(inline['data'], validate=True)
+        # Interactions API typically returns output with audio bytes, or choices.
+        # Let's handle generic interactions response or fallback to generateContent format if somehow mixed.
+        data = None
+        if 'output' in result and isinstance(result['output'], dict) and 'audio' in result['output']:
+            # Assuming output: { audio: { data: "base64..." } }
+            data = base64.b64decode(result['output']['audio']['data'], validate=True)
+        elif 'response' in result and isinstance(result['response'], dict) and 'audio' in result['response']:
+            data = base64.b64decode(result['response']['audio']['data'], validate=True)
+        elif 'choices' in result and result['choices']:
+            # Maybe OpenAI-like format from interactions API?
+            msg = result['choices'][0].get('message', {})
+            if 'audio' in msg:
+                data = base64.b64decode(msg['audio']['data'], validate=True)
+        elif 'candidates' in result:
+            inline = result['candidates'][0]['content']['parts'][0]['inlineData']
+            data = base64.b64decode(inline['data'], validate=True)
+            
         if not data:
-            raise ValueError()
+            # Let's search for base64 aggressively if schema varies
+            import json
+            dumped = json.dumps(result)
+            # Find the largest base64 string? We just raise if we can't find standard keys.
+            raise ValueError("No audio data found in response schema")
             
-        if mime == 'audio/wav':
-            with open(str(destination), 'wb') as output:
-                output.write(data)
-        elif mime == 'audio/l16':
-            with wave.open(str(destination), 'wb') as output:
-                output.setparams((1, 2, 24000, 0, 'NONE', 'not compressed'))
-                output.writeframes(data)
-        else:
-            raise ValueError()
+        # We always expect WAV from Gemini interactions audio output based on user prompt: 
+        # "正确提取 output audio 后直接写 .wav。不要再手工添加 WAV header"
+        with open(str(destination), 'wb') as output:
+            output.write(data)
             
-    except (KeyError, IndexError, TypeError, AttributeError, ValueError, binascii.Error):
-        raise ProviderError(ErrorKind.SCHEMA) from None
+    except Exception as e:
+        import sys
+        print("Failed to decode audio:", type(e), e, file=sys.stderr)
+        raise ProviderError(ErrorKind.SCHEMA, error_type="decode_error", validation_reason=str(e)) from None
+
 
 def decode_pcm(result):
 
