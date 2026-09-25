@@ -1,4 +1,13 @@
 
+## 2026-09-25 too_short validation error recovery
+
+分析 v4 fresh run 中 `analysis:0057:0001` 的失败，发现由于输入文本（chunk 0001）非常短（只有 900+ tokens），模型找不到 core_ideas 并合法地输出了空数组 `[]`。
+但 `EvidenceAnalysis` schema 约束 `core_ideas: Field(min_length=1)`，导致 Pydantic 抛出 `ValidationError(reason='too_short')`。
+由于原 `compatible.py` 的 schema 恢复逻辑漏掉了对 `too_short` 的处理，没有给模型下发 retry guidance（"Must contain at least 1 items"），直接变成了 `FAILED_PERMANENT`。
+
+**Fix**: 在 `prepare_schema_retry` 增加了对 `reason == 'too_short'` 的显式捕获与 retry 提示生成（同 `too_long` 的统一处理层级），保持了原 Schema 的业务约束。并补充了对应的回归测试。
+
+
 ## 2026-09-25 ConsistencyReview 质量修复
 
 用户报告 fresh 5-min v3 run 在 `consistency:0001` 产生 FAILED_PERMANENT `schema_error`。经查 `output/llm-cost-clean-5min-v3/b288c0f91d3e46f32eb95916/logs/events.jsonl`，错误是 `ValueError`，`validation_reason=finish_reason`，`finish_reason=length`。这是由于 DeepSeek 在 `consistency:0001` 生成 `ConsistencyReview` 时，陷入 CoT reasoning loop 耗尽了 12000 output tokens，触发了 length limit。
