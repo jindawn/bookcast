@@ -395,3 +395,102 @@ def test_speech_normalization_and_splitting():
     assert all(parts)
     # Check numbers are not split if possible
     assert any("123456" in p for p in parts)
+
+
+def test_kokoro_long_sentence_splitting_bounds():
+    from bookcast.speech import split_text, normalize_tts_text
+
+    # 1. 79 字
+    raw79 = "甲" * 79
+    chunks79 = split_text(raw79)
+    assert len(chunks79) == 1
+    assert len(chunks79[0]) == 79
+    assert "".join(chunks79) == normalize_tts_text(raw79)
+
+    # 2. 80 字
+    raw80 = "乙" * 80
+    chunks80 = split_text(raw80)
+    assert len(chunks80) == 1
+    assert len(chunks80[0]) == 80
+    assert "".join(chunks80) == normalize_tts_text(raw80)
+
+    # 3. 81 字
+    raw81 = "丙" * 81
+    chunks81 = split_text(raw81)
+    assert len(chunks81) == 2
+    assert [len(c) for c in chunks81] == [80, 1]
+    assert all(0 < len(c) <= 80 for c in chunks81)
+    assert "".join(chunks81) == normalize_tts_text(raw81)
+
+    # 4. 100 字无标点
+    raw100 = "丁" * 100
+    chunks100 = split_text(raw100)
+    assert len(chunks100) == 2
+    assert [len(c) for c in chunks100] == [80, 20]
+    assert all(0 < len(c) <= 80 for c in chunks100)
+    assert "".join(chunks100) == normalize_tts_text(raw100)
+
+    # 5. 200 字无标点
+    raw200 = "戊" * 200
+    chunks200 = split_text(raw200)
+    assert len(chunks200) == 3
+    assert [len(c) for c in chunks200] == [80, 80, 40]
+    assert all(0 < len(c) <= 80 for c in chunks200)
+    assert "".join(chunks200) == normalize_tts_text(raw200)
+
+    # 6. 中文标点长句
+    long_punctuated = "鲁迅先生在《伤逝》中写道：如果我能够，我要写下我的悔恨和悲哀，为子君，为自己。会馆里的被遗忘在偏僻里的破屋是这样地寂静和空虚。时间过得飞快，孤独的创伤虽然微小，却如巨石压在胸口。"
+    norm = normalize_tts_text(long_punctuated)
+    chunks_punct = split_text(long_punctuated)
+    assert len(chunks_punct) > 1
+    assert all(0 < len(c) <= 80 for c in chunks_punct)
+    assert "".join(chunks_punct) == norm
+    assert chunks_punct[0].endswith("。")
+
+
+def test_render_speech_long_sentence_regression(tmp_path):
+    from bookcast.models import PodcastScript, DialogueTurn, Manifest
+    from bookcast.pipeline import _Runner
+    from bookcast.provider_chain import ProviderChain
+    from bookcast.providers import MockLLMProvider
+    from bookcast.speech import render_speech
+    from bookcast.audio import validate_wav
+
+    long_punctuated = "鲁迅先生在《伤逝》中写道：如果我能够，我要写下我的悔恨和悲哀，为子君，为自己。会馆里的被遗忘在偏僻里的破屋是这样地寂静和空虚。时间过得飞快，孤独的创伤虽然微小，却如巨石压在胸口。"
+    script = PodcastScript(
+        chapter_id="0001",
+        title="long_sentences",
+        source_locator="test",
+        turns=[
+            DialogueTurn(speaker="主持人", text="甲" * 79),
+            DialogueTurn(speaker="嘉宾", text="乙" * 80),
+            DialogueTurn(speaker="主持人", text="丙" * 81),
+            DialogueTurn(speaker="嘉宾", text="丁" * 100),
+            DialogueTurn(speaker="主持人", text="戊" * 200),
+            DialogueTurn(speaker="嘉宾", text=long_punctuated),
+        ]
+    )
+
+    fake_tts = UnitFake("kokoro")
+    llm = ProviderChain([MockLLMProvider()])
+    tts = ProviderChain([fake_tts])
+    manifest = Manifest(book_id="offline", source_sha256="a" * 64,
+                        source_name="offline.txt", source_format="txt", config={})
+    runner = _Runner(tmp_path, manifest, llm, tts)
+
+    render_speech(runner, script, {"title": "test"}, "pcm24k-v1")
+
+    assert len(fake_tts.calls) == 11
+    for unit in fake_tts.calls:
+        assert 1 <= len(unit.text) <= 80
+        assert unit.speaker in ["主持人", "嘉宾"]
+
+    wav_path = tmp_path / "audio/0001.wav"
+    assert wav_path.is_file()
+    validate_wav(wav_path)
+
+    json_path = tmp_path / "audio/0001.json"
+    assert json_path.is_file()
+    info = json.loads(json_path.read_text(encoding="utf-8"))
+    assert info["audio_kind"] == "speech"
+    assert len(info["units"]) == 11

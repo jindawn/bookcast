@@ -118,8 +118,8 @@ class GeminiTTSProvider:
     def _request(self, payload=None, destination=None):
         from ..models import utc_now
         key = os.environ.get(self.spec.api_key_env)
-        if not key:
-            sys.exit('Gemini TTS requires GEMINI_API_KEY')
+        if not key or not key.strip():
+            raise ProviderError(ErrorKind.AUTH)
         url = ENDPOINT + self.model if payload is None else 'https://generativelanguage.googleapis.com/v1beta/interactions'
         
         attempts = 0

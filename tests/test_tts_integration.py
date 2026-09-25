@@ -33,17 +33,40 @@ def test_registry_creates_providers():
     assert p_gemini.settings.host_voice == 'Kore'  # Default mapping
     assert p_gemini.settings.guest_voice == 'Puck'
 
-def test_gemini_missing_api_key_fail_fast():
+def test_gemini_missing_api_key_fail_fast(monkeypatch):
     registry = default_registry()
     spec_gemini = ProvidersConfig.model_validate({
         'schema_version': 1, 'llm_priority': ['mock'], 'tts_priority': ['gemini'], 'providers': [{'name': 'mock', 'kind': 'llm', 'type': 'mock', 'model': 'm'}, {'name': 'gemini', 'kind': 'tts', 'type': 'gemini-tts', 'model': 'gemini-3.8-flash-tts', 'api_key_env': 'FAKE_API_KEY', 'cloud_tts': {'send_text_to_cloud': True}}]
     }).providers[1]
     p_gemini = registry.create(spec_gemini)
-    if 'FAKE_API_KEY' in os.environ:
-        del os.environ['FAKE_API_KEY']
-        
-    with pytest.raises(SystemExit):
+
+    # 1. Env var absent
+    monkeypatch.delenv('FAKE_API_KEY', raising=False)
+    with pytest.raises(ProviderError) as exc:
         p_gemini._request({})
+    assert exc.value.kind == ErrorKind.AUTH
+    assert not isinstance(exc.value, SystemExit)
+    assert not isinstance(exc.value, UnboundLocalError)
+
+    # 2. Env var empty
+    monkeypatch.setenv('FAKE_API_KEY', '')
+    with pytest.raises(ProviderError) as exc:
+        p_gemini._request({})
+    assert exc.value.kind == ErrorKind.AUTH
+
+    monkeypatch.setenv('FAKE_API_KEY', '   ')
+    with pytest.raises(ProviderError) as exc:
+        p_gemini._request({})
+    assert exc.value.kind == ErrorKind.AUTH
+
+    # 3. Valid key proceeds past auth
+    secret_val = 'AIzaSySecretValidKey12345'
+    monkeypatch.setenv('FAKE_API_KEY', secret_val)
+    with pytest.raises(Exception) as exc_valid:
+        # Will fail at transport or network, NOT at auth check
+        p_gemini._request({})
+    assert not (isinstance(exc_valid.value, ProviderError) and exc_valid.value.kind == ErrorKind.AUTH)
+    assert secret_val not in str(exc_valid.value)
 
 def test_config_overrides_voice():
     spec_gemini = ProvidersConfig.model_validate({

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-18",
-  "current_task": "真实 DeepSeek 5 分钟 clean-run 成本验证",
+  "current_task": "RC Stage 3: Kokoro 长连续句与 Gemini 缺失 API Key 异常分类修复",
   "task_status": "blocked",
   "branch": "main",
   "last_verified_commit": "4f841063a320da78f4b20c94471f49809fbb75c3",
@@ -110,7 +110,8 @@
     "EPUB来源过滤在Chapter/LLM前排除确定性封面/目录/广告及正文推广段落，source_filter.json审计保留和移除单元；quality-v2脚本推广门禁在TTS前阻断，未改变targeted repair。真实源只读核对旧72个XHTML单元/96分析chunk，净化后69/93；未调用DeepSeek或改动已完成Job。功能提交a65f77d经相关113 passed/1 skipped、validator/compileall/diff复验。",
     "Phase18 离线审计真实已完成任务的 361 个唯一 LLM 步骤/429 次尝试；全源证据分析保留，逐章综合有界合批、全书综合前按时长跨书序选候选、20分钟最多16个脚本/复核片段；增加阶段用量视图和显式 Mock 成本烟测。未调用 DeepSeek/TTS 真人模型或修改原 Job。",
     "只读审计独立 5 分钟真实任务：analysis:0003:0001 两次 DeepSeek 正常 stop/JSON 解析成功，EvidenceAnalysis.evidence 超过 maxItems=6，第二次仍超限；实现 DeepSeek 有界可选数组归约并保留严格验证，事件增加 task_id/schema_model；未调用真实 API。",
-    "RC Stage 0：Gemini虚拟时间、默认suite主/子进程禁网、Interactions fixture和chunk恢复真实回归；核心58通过，未调用真实API"
+    "RC Stage 0：Gemini虚拟时间、默认suite主/子进程禁网、Interactions fixture和chunk恢复真实回归；核心58通过，未调用真实API",
+    "RC Stage 3: 修复 Kokoro 长连续句 80 字符 Pydantic 越界（split_text/speech_units 限制 80）与 Gemini 缺 Key 时抛 ProviderError(AUTH) 而非 sys.exit/UnboundLocalError"
   ],
   "in_progress": [],
   "next_actions": [
@@ -124,6 +125,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "rc-stage-3-kokoro-long-sentence-and-gemini-auth",
+      "command": ".venv/bin/pytest -q tests/test_tts.py tests/test_tts_integration.py; python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "37 passed；覆盖 Kokoro 长句 79/80/81/100/200 字与中文标点切分 <= 80 边界、render_speech 完整执行回归；Gemini 缺失/空 API Key 稳定分类为 ProviderError(AUTH) 且不泄露凭据。",
+      "checked_at": "2026-09-25T08:35:50Z"
+    },
     {
       "name": "deepseek-real-5min-evidence-overflow-regression",
       "command": "cd /private/tmp && /Users/wumj/workspace/bookcast/.venv/bin/pytest -q /Users/wumj/workspace/bookcast/tests/test_generation.py /Users/wumj/workspace/bookcast/tests/test_content.py /Users/wumj/workspace/bookcast/tests/test_job_recovery.py /Users/wumj/workspace/bookcast/tests/test_providers.py /Users/wumj/workspace/bookcast/tests/test_phase1.py /Users/wumj/workspace/bookcast/tests/test_sources.py; cd /Users/wumj/workspace/bookcast && python3 scripts/validate_project.py && .venv/bin/python -m compileall -q src tests scripts && git diff --check",

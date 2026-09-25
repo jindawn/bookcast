@@ -26,7 +26,7 @@ def normalize_tts_text(text: str) -> str:
     # 6. Normalize spaces
     return re.sub(r'\s+', ' ', text).strip()
 
-def split_text(text: str, limit: int = 200) -> list[str]:
+def split_text(text: str, limit: int = 80) -> list[str]:
     """Normalize text and split by punctuation up to a reasonable limit."""
     import re
     text = normalize_tts_text(text)
@@ -60,7 +60,7 @@ def split_text(text: str, limit: int = 200) -> list[str]:
 
 def speech_units(script):
     for turn_index, turn in enumerate(script.turns, 1):
-        for chunk_index, text in enumerate(split_text(turn.text), 1):
+        for chunk_index, text in enumerate(split_text(turn.text, limit=80), 1):
             if not text.strip():
                 continue
             yield f"{turn_index:04}-{chunk_index:04}", SpeechUnit(speaker=turn.speaker, text=text)

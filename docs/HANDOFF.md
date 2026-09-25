@@ -1,3 +1,17 @@
+## 2026-09-25 RC Stage 3：Kokoro 长连续句与 Gemini 缺失 API Key 异常分类修复
+
+目标：解决两个独立的小型 P0 问题：
+1. **Kokoro 长连续句**：`split_text` 的默认 limit 从 200 修正为 80，`speech_units` 显式强制 `limit=80`，确保生成的每个 `SpeechUnit.text` 长度 <= 80，消除 Pydantic `ValidationError`；同时保留自然标点优先切分、无标点确定性 fallback、顺序一致性与字符不丢失。新增 79/80/81/100/200 字与标点长句单元测试，以及 `render_speech` 完整端到端离线回归。
+2. **Gemini 缺失 API Key**：`GeminiTTSProvider._request` 中移除 `sys.exit`，在 `key` 缺失或为空字符串时稳定抛出 `ProviderError(ErrorKind.AUTH)`，杜绝 `UnboundLocalError`、`SystemExit` 或通用 `schema_error`，且错误信息不包含密钥明文内容。新增缺失、空串、有效 key 测试。
+
+验证：
+- `tests/test_tts.py` 与 `tests/test_tts_integration.py` 共 37 项全部 passed；
+- `scripts/validate_project.py` 通过；
+- `compileall` 与 `git diff --check` 通过；
+- 未调用真实 TTS/LLM API。
+
+---
+
 ## 2026-09-25 RC Stage 0：离线测试基础设施
 
 目标：使核心 RC 测试在不调用真实 Gemini/DeepSeek/Kokoro API 的条件下快速、确定性运行。当前代码已在 Gemini Provider 注入 `clock`/`sleeper`，生产默认仍为真实时间，25 秒 RPM、10/20/40/60 秒退避及 `Retry-After` 数值未改。默认 pytest 的 socket 禁网保护覆盖主进程和 Python 子进程；意外连接立即以 AssertionError 失败。`unit`/离线 `integration` 仍是默认层，`live`/`large_model` 保持显式 opt-in。
