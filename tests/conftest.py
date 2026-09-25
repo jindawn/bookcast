@@ -14,7 +14,7 @@ INTEGRATION_MODULES = {
     "test_content", "test_export", "test_gemini_tts", "test_gemini_interactions", "test_generation",
     "test_job_cli", "test_job_recovery", "test_ocr", "test_onboarding", "test_phase1",
     "test_providers", "test_qwen_tts", "test_skill", "test_sources", "test_tts",
-    "test_tts_ab", "test_tts_voice_test", "test_tts_final", "test_tts_integration", "test_gemini_retry", "test_cost_calculator", "test_web",
+    "test_tts_ab", "test_tts_voice_test", "test_tts_final", "test_tts_integration", "test_gemini_retry", "test_cost_calculator", "test_cost_regression", "test_web",
 }
 LIVE_MODULES = {
     "test_live_deepseek", "test_live_gemini", "test_live_kokoro", "test_live_qwen",

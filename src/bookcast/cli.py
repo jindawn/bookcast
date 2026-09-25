@@ -393,21 +393,28 @@ def cost(
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     
-    print("\nDeepSeek")
-    if summary['llm']['cost']['status'] == 'unavailable':
-        print("Cost: unavailable (no pricing configured)")
-    else:
-        print(f"Cached input: {summary['llm']['usage']['cached_input_tokens']}")
-        print(f"Uncached input: {summary['llm']['usage']['uncached_input_tokens']}")
-        print(f"Output: {summary['llm']['usage']['output_tokens']}")
-        print(f"Estimated cost: ¥{summary['llm']['cost']['amount']:.2f}")
+    print("\nLLM")
+    for prov, p_dict in summary['llm']['providers'].items():
+        is_current = (prov == summary['llm']['current_provider'])
+        print(f"\n{prov} {'— Current' if is_current else '— Historical'}")
+        if p_dict['cost']['status'] == 'unavailable':
+            print("Cost: unavailable (no pricing configured)")
+        else:
+            print(f"Cached input: {p_dict['usage']['cached_input_tokens']}")
+            print(f"Uncached input: {p_dict['usage']['uncached_input_tokens']}")
+            print(f"Output: {p_dict['usage']['output_tokens']}")
+            print(f"Estimated cost: ¥{p_dict['cost']['amount']:.2f}")
+            
+    print("\nTTS")
+    for prov, p_dict in summary['tts']['providers'].items():
+        is_current = (prov == summary['tts']['current_provider'])
+        print(f"\n{prov} {'— Current' if is_current else '— Historical'}")
+        print(f"Requests: {p_dict['request_count']}")
+        print(f"Duration: {int(p_dict['audio_duration_seconds'])}s")
+        print("Cost: unavailable")
         
-    print("\nGemini TTS")
-    print(f"Requests: {summary['tts']['request_count']}")
-    print(f"Duration: {int(summary['tts']['audio_duration_seconds'])}s")
-    print("Cost: unavailable")
-    
     print(f"\nKnown total: ¥{summary['total']['known_amount']:.2f}")
+
 
 @app.command()
 def status(

@@ -427,7 +427,7 @@ class _Runner:
         try:
             from .cost import calculate_cost_summary
             from .provider_config import load_config
-            cost_summary = calculate_cost_summary(self.manifest.ai_calls, load_config(self.config), self.root)
+            cost_summary = calculate_cost_summary(self.manifest.ai_calls, load_config(self.config), self.root, self.manifest.settings)
             write_json(self.path('usage/cost_summary.json'), cost_summary)
         except Exception as exc:
             import sys
