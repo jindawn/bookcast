@@ -113,7 +113,9 @@ class CompatibleLLMProvider(CompatibleBase):
         self.reported_model: str | None = None
         self.finish_reason: str | None = None
         self._schema_retry_guidance: str | None = None
+        self._schema_retry_field: str | None = None
         self._last_schema: dict | None = None
+        self._last_raw_response: str | None = None
 
     def for_task(self, task: str) -> 'CompatibleLLMProvider':
         # A call-scoped view prevents response metadata leaking between attempts.
@@ -184,26 +186,126 @@ class CompatibleLLMProvider(CompatibleBase):
     def generate(self, prompt: str) -> str:
         return self._chat(prompt)
 
+    def _resolve_ref(self, node: dict, schema: dict) -> dict:
+        while isinstance(node, dict) and "$ref" in node:
+            ref_name = node["$ref"].split("/")[-1]
+            node = schema.get("$defs", {}).get(ref_name, node)
+        return node
+
+    def _get_field_schema(self, path: str, schema: dict) -> dict:
+        if not isinstance(schema, dict) or not path or path == "$":
+            return schema
+        parts = path.split(".")
+        cur = schema
+        for part in parts:
+            cur = self._resolve_ref(cur, schema)
+            if part.isdigit():
+                if isinstance(cur, dict) and "items" in cur:
+                    cur = self._resolve_ref(cur["items"], schema)
+            elif isinstance(cur, dict) and "properties" in cur and part in cur["properties"]:
+                cur = self._resolve_ref(cur["properties"][part], schema)
+            else:
+                break
+        return self._resolve_ref(cur, schema) if isinstance(cur, dict) else {}
+
+    def _normalize_deepseek_json(self, text: str, schema: dict, warned_field: str | None = None) -> str:
+        """Safely normalize null arrays, single strings into string arrays, and secondary array clamp."""
+        try:
+            data = json.loads(text)
+            if not isinstance(data, dict):
+                return text
+            modified = False
+            properties = schema.get('properties', {})
+            for key, raw_field in properties.items():
+                field = self._resolve_ref(raw_field, schema)
+                # 1. Null array normalization (only when minItems is not required)
+                if field.get('type') == 'array' and key in data and data[key] is None and not field.get('minItems'):
+                    data[key] = []
+                    modified = True
+                # 2. String to array of strings
+                elif field.get('type') == 'array' and isinstance(data.get(key), str) and field.get('items', {}).get('type') == 'string':
+                    val = data[key].strip()
+                    data[key] = [val] if val else []
+                    modified = True
+                # 3. Secondary array clamping on retry
+                if warned_field and key != warned_field:
+                    limit = field.get('maxItems')
+                    if isinstance(limit, int) and limit > 0:
+                        val = data.get(key)
+                        if isinstance(val, list) and len(val) > limit:
+                            data[key] = val[:limit]
+                            modified = True
+            return json.dumps(data, ensure_ascii=False) if modified else text
+        except (ValueError, TypeError):
+            return text
+
+    def _strip_markdown_fence(self, text: str) -> str:
+        """Strip markdown code fence wrapper (```json ... ```) safely for deepseek."""
+        cleaned = text.strip()
+        if cleaned.startswith('```'):
+            first_newline = cleaned.find('\n')
+            if first_newline != -1:
+                cleaned = cleaned[first_newline + 1:]
+            else:
+                cleaned = cleaned.lstrip('`')
+            cleaned = cleaned.strip()
+            if cleaned.endswith('```'):
+                cleaned = cleaned[:-3].strip()
+        return cleaned
+
     def generate_structured(self, prompt: str, response_model: type[T]) -> T:
         schema = response_model.model_json_schema()
         self._last_schema = schema
+        warned_field = self._schema_retry_field
+        self._schema_retry_field = None
+        text = self._chat(prompt, schema)
+        if urlsplit(self.spec.base_url).hostname == 'api.deepseek.com':
+            text = self._strip_markdown_fence(text)
+            text = self._normalize_deepseek_json(text, schema, warned_field=warned_field)
         try:
-            return response_model.model_validate_json(self._chat(prompt, schema))
+            return response_model.model_validate_json(text)
         except ValidationError as exc:
+            self._last_raw_response = text
             failure = schema_failure(exc)
             self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
             raise failure from None
 
     def prepare_schema_retry(self, failure: ProviderError) -> bool:
-        """Allow one journaled correction only for a known DeepSeek array limit violation."""
+        """Allow one journaled bounded correction for DeepSeek schema drift."""
         if (urlsplit(self.spec.base_url).hostname != 'api.deepseek.com'
                 or failure.kind != ErrorKind.SCHEMA or failure.error_type != 'ValidationError'
-                or failure.validation_reason != 'too_long' or not failure.validation_field
-                or not self._last_schema):
+                or not failure.validation_field or not self._last_schema):
             return False
-        field = self._last_schema.get('properties', {}).get(failure.validation_field)
-        limit = field.get('maxItems') if isinstance(field, dict) else None
-        if not isinstance(limit, int) or limit < 1:
-            return False
-        self._schema_retry_guidance = f'{failure.validation_field} must contain at most {limit} items. Regenerate the full JSON with all required fields.'
+
+        field_schema = self._get_field_schema(failure.validation_field, self._last_schema)
+        reason = failure.validation_reason
+        field_name = failure.validation_field
+        primary_prop = field_name.split('.')[0]
+        self._schema_retry_field = primary_prop
+
+        if reason == 'too_long':
+            limit = field_schema.get('maxItems') if isinstance(field_schema, dict) else None
+            if not isinstance(limit, int) or limit < 1:
+                limit = 6
+            self._schema_retry_guidance = f'{field_name} must contain at most {limit} items. Regenerate the full JSON with all required fields.'
+        elif reason == 'model_type':
+            req = field_schema.get('required') if isinstance(field_schema, dict) else None
+            props = list(field_schema.get('properties', {}).keys()) if isinstance(field_schema, dict) else []
+            exp = req or props or "an object matching the schema"
+            self._schema_retry_guidance = (
+                f"Property '{field_name}' must be an object with fields {exp}, not a plain string or invalid type. "
+                f"Regenerate the full JSON with all required fields."
+            )
+        elif reason == 'missing':
+            self._schema_retry_guidance = f"Required property '{field_name}' was omitted. Regenerate the full JSON including all required fields."
+        elif reason in ('list_type', 'string_type', 'type_error'):
+            exp_type = field_schema.get('type', 'valid type') if isinstance(field_schema, dict) else 'valid type'
+            self._schema_retry_guidance = f"Property '{field_name}' must have type '{exp_type}'. Regenerate the full JSON with all required fields."
+        else:
+            self._schema_retry_guidance = f"Property '{field_name}' failed validation ({reason}). Regenerate the full JSON strictly conforming to the schema."
+
+        if getattr(self, '_last_raw_response', None) and isinstance(self._last_raw_response, str):
+            snippet = self._last_raw_response.strip()
+            if snippet:
+                self._schema_retry_guidance += f' Fix structure while preserving content semantics: {snippet[:2000]}'
         return True

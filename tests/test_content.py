@@ -8,8 +8,8 @@ from typer.testing import CliRunner
 from bookcast.cli import app
 from bookcast.content import (CHUNK_CHARS, FAN_IN, MAX_PROMPT_CHARS, chunks, planner,
                               prompt, resolve_analysis, validate_analysis)
-from bookcast.content_models import (CATEGORIES, ContentOptions, EpisodePlan, EvidenceAnalysis, RichAnalysis,
-                                    SegmentScript, Synthesis, Theme)
+from bookcast.content_models import (CATEGORIES, ClaimReview, ConsistencyReview, ContentOptions, EpisodePlan,
+                                    EvidenceAnalysis, RichAnalysis, SegmentScript, Synthesis, Theme)
 from bookcast.errors import BookCastError
 from bookcast.models import Chapter
 from bookcast.pipeline import Pipeline, load_manifest, job_status
@@ -345,3 +345,117 @@ def test_evidence_id_resolves_duplicate_text_without_guessing_position():
     assert resolved.core_ideas[0].quote==target['quote']
     selection.core_ideas[0].evidence_id='e9999'
     with pytest.raises(ProviderError): resolve_analysis(selection,payload)
+
+
+def test_synthesis_resolves_hallucinated_claim_ids_and_preserves_business_invariant():
+    from bookcast.content import resolve_synthesis
+    from bookcast.content_models import Synthesis, Theme
+
+    allowed = {'0030:0001:core_ideas:0', '0030:0001:core_ideas:1', '0030:0002:arguments:0'}
+
+    # 1. Valid + hallucinated/whitespace claim_ids are safely resolved to valid subset
+    synth = Synthesis(themes=[
+        Theme(title='有效主题', summary='有效摘要',
+              claim_ids=[' 0030:0001:core_ideas:0 ', '0030:0001:evidence:99', '0030:0002:arguments:0'],
+              importance=3)
+    ])
+    resolved = resolve_synthesis(synth, allowed)
+    assert resolved.themes[0].claim_ids == ['0030:0001:core_ideas:0', '0030:0002:arguments:0']
+    assert set(resolved.themes[0].claim_ids).issubset(allowed)
+
+    # 2. Entirely hallucinated claim_ids cannot be resolved and still fail validation
+    completely_invalid = Synthesis(themes=[
+        Theme(title='编造主题', summary='编造摘要', claim_ids=['0030:0099:fake_id:0'], importance=1)
+    ])
+    not_resolved = resolve_synthesis(completely_invalid, allowed)
+    assert not set(not_resolved.themes[0].claim_ids).issubset(allowed)
+
+
+def test_targeted_repair_of_contradicted_segment_and_tts_allowed(tmp_path):
+    cons_count = {'0002': 0}
+
+    def mutate(data, result):
+        if data.get('operation') == 'consistency' and data['script']['segment_id'] == '0002':
+            cons_count['0002'] += 1
+            if cons_count['0002'] == 1:
+                target_turn = result.checks[0].turn_index
+                return ConsistencyReview(
+                    segment_id='0002',
+                    is_mock=True,
+                    checks=[ClaimReview(turn_index=target_turn, verdict='contradicted', reason='与原文记载相反')] + [
+                        ClaimReview(turn_index=c.turn_index, verdict=c.verdict, reason=c.reason)
+                        for c in result.checks if c.turn_index != target_turn
+                    ]
+                )
+            else:
+                return ConsistencyReview(
+                    segment_id='0002',
+                    is_mock=True,
+                    checks=[ClaimReview(turn_index=c.turn_index, verdict='supported', reason='证据支持')
+                            for c in result.checks]
+                )
+        return result
+
+    llm = Recording(mutation=mutate)
+    Pipeline(llm, MockTTSProvider(), tmp_path).generate(DEMO)
+    job = next(tmp_path.iterdir())
+
+    assert (job / 'podcast.mp3').exists()
+    quality = json.loads((job / 'evaluation/quality.json').read_text())
+    assert not quality['blocking_issues']
+    assert quality['status'] != 'blocked'
+
+    manifest = load_manifest(job / 'manifest.json')
+    assert manifest.status == 'completed'
+    assert manifest.segment_revisions == {'0002': 1}
+
+    # Dialogue calls: segment 0001, 0003 called once, segment 0002 called twice
+    dialogue_calls = [d for d, _ in llm.calls if d.get('operation') == 'dialogue']
+    assert [d['segment']['id'] for d in dialogue_calls] == ['0001', '0002', '0003', '0002']
+
+    repair_call = dialogue_calls[3]
+    assert repair_call['revision'] == 1
+    assert 'repair_issues' in repair_call
+    assert repair_call['repair_issues'][0]['turn_index'] == 1
+    assert repair_call['repair_issues'][0]['verdict'] == 'contradicted'
+    assert repair_call['repair_issues'][0]['reason'] == '与原文记载相反'
+
+    # Consistency calls: segment 0001, 0003 called once, segment 0002 called twice
+    consistency_calls = [d for d, _ in llm.calls if d.get('operation') == 'consistency']
+    assert [d['script']['segment_id'] for d in consistency_calls] == ['0001', '0002', '0003', '0002']
+
+    # Resume causes 0 new dialogue calls and 0 new consistency calls
+    resume_llm = Recording('b')
+    Pipeline(resume_llm, MockTTSProvider(), tmp_path).generate(DEMO, resume=True)
+    assert not [d for d, _ in resume_llm.calls if d.get('operation') in ('dialogue', 'consistency')]
+
+
+def test_targeted_repair_bounded_limit_halts_on_persistent_contradiction(tmp_path):
+    def always_contradict(data, result):
+        if data.get('operation') == 'consistency' and data['script']['segment_id'] == '0002':
+            target_turn = result.checks[0].turn_index
+            return ConsistencyReview(
+                segment_id='0002',
+                is_mock=True,
+                checks=[ClaimReview(turn_index=target_turn, verdict='contradicted', reason='始终与原文矛盾')] + [
+                    ClaimReview(turn_index=c.turn_index, verdict=c.verdict, reason=c.reason)
+                    for c in result.checks if c.turn_index != target_turn
+                ]
+            )
+        return result
+
+    llm = Recording(mutation=always_contradict)
+    with pytest.raises(BookCastError, match='内容质量检查未通过'):
+        Pipeline(llm, MockTTSProvider(), tmp_path).generate(DEMO)
+
+    job = next(tmp_path.iterdir())
+    assert not (job / 'podcast.mp3').exists()
+
+    dialogue_calls = [d for d, _ in llm.calls if d.get('operation') == 'dialogue']
+    assert [d['segment']['id'] for d in dialogue_calls] == ['0001', '0002', '0003', '0002', '0002']
+
+    consistency_calls = [d for d, _ in llm.calls if d.get('operation') == 'consistency']
+    assert [d['script']['segment_id'] for d in consistency_calls] == ['0001', '0002', '0003', '0002', '0002']
+
+    manifest = load_manifest(job / 'manifest.json')
+    assert manifest.segment_revisions == {'0002': 2}

@@ -99,7 +99,8 @@ class Pipeline:
                     raise BookCastError("旧任务保留原流水线；使用新的 --output-dir 创建分层内容任务。")
                 if (_by_id and not _retry and not revise_segment and (manifest.state == TaskState.FAILED_PERMANENT
                         or any(s.state == TaskState.FAILED_PERMANENT for s in manifest.steps.values()))):
-                    raise BookCastError("任务存在永久失败；修复原因后使用 bookcast retry 显式重试。")
+                    if not (manifest.error and '内容质量检查未通过' in manifest.error):
+                        raise BookCastError("任务存在永久失败；修复原因后使用 bookcast retry 显式重试。")
                 if manifest.schema_version >= 2 and manifest.config != config and not resume:
                     raise BookCastError("Provider 配置已改变。使用 --resume 保留已完成章节，或另选 --output-dir 创建新任务。")
                 if not resume and manifest.status != "completed":

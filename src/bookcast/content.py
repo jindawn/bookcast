@@ -20,7 +20,7 @@ INSTRUCTIONS = {
     'consistency': '逐一检查 script.turns 中 attribution=source 的发言，返回其从0开始的 turn_index。对照提供的原文证据检查语义、否定关系、数字和归属。supported 表示给定证据支持，contradicted 表示矛盾，证据不够返回 unverifiable。只检查给定资料，不补造外部事实。',
     'analysis': '用中文提取九类信息；不存在的项目返回空数组。每个 finding.text 是转述，evidence_id 必须选择支持该转述的 evidence_spans 条目ID；同一证据可支持多个信息项。不要输出quote/start/end，它们由系统从已选证据精确查表。禁止猜造人名、证据或跨章联系。保留 chapter_id/chunk_id。',
     'synthesis': '用中文综合输入的主题，合并重复观点，保留论证差异和反面条件；最多8个主题，每个至多8个已有 claim_ids；importance 1至5表示对理解核心论证的重要性。不得引入新事实。',
-    'dialogue': '按 segment 和 mode 写中文节目。先前/后续主题用于自然衔接，勿重复开场。summary 聚焦核心结论；deep_read 解释论证、证据与限制；two_host 中主持人A讲解，嘉宾B必须追问、质疑、提出反例或现实应用，A回应。source 发言必须引用给定 claim_ids；讨论不得冒充作者原话，假设案例须标为 hypothetical 并在口语中说明是假设。不用大段引文，优先转述。长度靠近 target_chars，单段总字符不得超过12000；保留 segment_id。revision 大于0表示用户要求改写此段，应重新检查已有问题。',
+    'dialogue': '按 segment 和 mode 写中文节目。先前/后续主题用于自然衔接，勿重复开场。summary 聚焦核心结论；deep_read 解释论证、证据与限制；two_host 中主持人A讲解，嘉宾B必须追问、质疑、提出反例或现实应用，A回应。source 发言必须引用给定 claim_ids；讨论不得冒充作者原话，假设案例须标为 hypothetical 并在口语中说明是假设。不用大段引文，优先转述。长度靠近 target_chars，单段总字符不得超过12000；保留 segment_id。revision 大于0表示改写此段。若提供 repair_issues，必须针对指出的 turn_index 修正：对 contradicted 必须纠正与原文矛盾处并严格符合原文证据；对 unverifiable 优先改写为已有证据明确支持的表述，删除或弱化无依据推断，严禁编造证据。保持其他正常内容稳定。',
 }
 
 
@@ -82,6 +82,14 @@ def validate_analysis(result, payload):
         for item in getattr(result, category):
             if not (start <= item.start < item.end <= start + len(text)) or text[item.start-start:item.end-start] != item.quote:
                 raise ProviderError(ErrorKind.BUSINESS)
+
+
+def resolve_synthesis(value: Synthesis, allowed: set[str]) -> Synthesis:
+    for theme in value.themes:
+        valid = [c.strip() for c in theme.claim_ids if isinstance(c, str) and c.strip() in allowed]
+        if valid:
+            theme.claim_ids = list(dict.fromkeys(valid))[:8]
+    return value
 
 
 def planner(chapter_themes, book, claims, options):
@@ -177,7 +185,8 @@ class ContentFlow:
                     if any(not set(t.claim_ids).issubset(allowed) for t in value.themes):
                         raise ProviderError(ErrorKind.BUSINESS)
                 result = self.call(name, name+'.json', 'synthesis',
-                                   {'themes': [t.model_dump() for t in batch]}, Synthesis, validate)
+                                   {'themes': [t.model_dump() for t in batch]}, Synthesis, validate,
+                                   transform=lambda value, allowed=allowed: resolve_synthesis(value, allowed))
                 merged.append(result)
             if len(merged) == 1:
                 return merged[0]
@@ -254,9 +263,24 @@ class ContentFlow:
             def validate(value):
                 if value.segment_id != segment.id:
                     raise ProviderError(ErrorKind.BUSINESS)
+            rev = r.manifest.segment_revisions.get(segment.id, 0)
+            repairs_path = r.path(f'evaluation/repairs/{segment.id}.json')
+            repair_issues = None
+            if repairs_path.is_file() and rev > 0:
+                try:
+                    saved = json.loads(repairs_path.read_text(encoding='utf-8'))
+                    if isinstance(saved, dict) and saved.get('revision') == rev:
+                        repair_issues = saved.get('issues')
+                    elif isinstance(saved, list):
+                        repair_issues = saved
+                except Exception:
+                    repair_issues = None
+            payload = {'mode': plan.mode, 'segment': segment.model_dump(), 'claims': evidence,
+                       'previous_ending': prior, 'revision': rev}
+            if repair_issues:
+                payload['repair_issues'] = repair_issues
             script = self.call(f'script:{segment.id}', f'scripts/{segment.id}.json', 'dialogue',
-                               {'mode': plan.mode, 'segment': segment.model_dump(), 'claims': evidence,
-                                'previous_ending': prior, 'revision': r.manifest.segment_revisions.get(segment.id, 0)}, SegmentScript, validate)
+                               payload, SegmentScript, validate)
             scripts.append(script)
         reviews = []
         for segment, script in zip(plan.segments, scripts, strict=True):
@@ -265,20 +289,116 @@ class ContentFlow:
                 if (value.segment_id != segment.id or len(value.checks) != len(expected)
                         or {c.turn_index for c in value.checks} != expected):
                     raise ProviderError(ErrorKind.BUSINESS)
+            rev = r.manifest.segment_revisions.get(segment.id, 0)
             review = self.call(f'consistency:{segment.id}', f'evaluation/segments/{segment.id}.json',
                                'consistency', {'script': script.model_dump(),
-                                               'claims': {cid: claims[cid] for cid in segment.claim_ids}},
+                                               'claims': {cid: claims[cid] for cid in segment.claim_ids},
+                                               'revision': rev},
                                ConsistencyReview, validate_review)
             reviews.append(review)
         from .quality import evaluate
+        chapters = [self.read(f'chapters/{cid}.json', Chapter) for cid in self.metadata.chapter_ids]
         self.local('quality', {'version': 'quality-v1', 'scripts': [s.model_dump() for s in scripts],
                               'plan': plan.model_dump(), 'reviews': [v.model_dump() for v in reviews], 'claims': sha256_file(r.path('analysis/claims.json')),
                               'source': self.metadata.source_sha256}, 'evaluation/quality.json',
-                   lambda: evaluate(plan, scripts, claims,
-                       [self.read(f'chapters/{cid}.json', Chapter) for cid in self.metadata.chapter_ids], reviews))
+                   lambda: evaluate(plan, scripts, claims, chapters, reviews))
         report = json.loads(r.path('evaluation/quality.json').read_text(encoding='utf-8'))
+
+        MAX_SEGMENT_REPAIRS = 2
+        while any(c.get('verdict') == 'contradicted' for c in report.get('factual_consistency', {}).get('semantic_reviews', [])):
+            semantic_reviews = report.get('factual_consistency', {}).get('semantic_reviews', [])
+            contradicted_segments = {c['segment'] for c in semantic_reviews if c.get('verdict') == 'contradicted'}
+            repairable = [
+                (idx, seg) for idx, seg in enumerate(plan.segments)
+                if seg.id in contradicted_segments and r.manifest.segment_revisions.get(seg.id, 0) < MAX_SEGMENT_REPAIRS
+            ]
+            if not repairable:
+                break
+
+            for idx, segment in repairable:
+                new_rev = r.manifest.segment_revisions.get(segment.id, 0) + 1
+                r.manifest.segment_revisions[segment.id] = new_rev
+                r.save()
+
+                evidence = {cid: claims[cid] for cid in segment.claim_ids}
+                prior = [{'speaker': t.speaker, 'text': t.text[-240:]} for t in scripts[idx-1].turns[-2:]] if idx > 0 else []
+                old_script = scripts[idx]
+                segment_issues = [c for c in semantic_reviews if c.get('segment') == segment.id]
+
+                formatted_issues = []
+                for issue in segment_issues:
+                    t_idx = issue.get('turn_index')
+                    item = {
+                        'turn_index': t_idx,
+                        'verdict': issue.get('verdict'),
+                        'reason': issue.get('reason'),
+                    }
+                    if t_idx is not None and 0 <= t_idx < len(old_script.turns):
+                        turn = old_script.turns[t_idx]
+                        item['speaker'] = turn.speaker
+                        item['text'] = turn.text[:500]
+                        item['cited_claims'] = [
+                            {'text': claims[cid]['text'][:200], 'quote': claims[cid]['quote'][:200]}
+                            for cid in turn.claim_ids if cid in claims
+                        ]
+                    formatted_issues.append(item)
+
+                repair_file = r.path(f'evaluation/repairs/{segment.id}.json')
+                repair_file.parent.mkdir(parents=True, exist_ok=True)
+                write_json(repair_file, {'revision': new_rev, 'issues': formatted_issues})
+
+                def validate_script(value):
+                    if value.segment_id != segment.id:
+                        raise ProviderError(ErrorKind.BUSINESS)
+
+                payload = {
+                    'mode': plan.mode,
+                    'segment': segment.model_dump(),
+                    'claims': evidence,
+                    'previous_ending': prior,
+                    'revision': new_rev,
+                    'repair_issues': formatted_issues,
+                }
+                repaired_script = self.call(
+                    f'script:{segment.id}',
+                    f'scripts/{segment.id}.json',
+                    'dialogue',
+                    payload,
+                    SegmentScript,
+                    validate_script,
+                )
+                scripts[idx] = repaired_script
+
+                expected = {i for i, t in enumerate(repaired_script.turns) if t.attribution == 'source'}
+                def validate_review(value):
+                    if (value.segment_id != segment.id or len(value.checks) != len(expected)
+                            or {c.turn_index for c in value.checks} != expected):
+                        raise ProviderError(ErrorKind.BUSINESS)
+
+                repaired_review = self.call(
+                    f'consistency:{segment.id}',
+                    f'evaluation/segments/{segment.id}.json',
+                    'consistency',
+                    {
+                        'script': repaired_script.model_dump(),
+                        'claims': evidence,
+                        'revision': new_rev,
+                    },
+                    ConsistencyReview,
+                    validate_review,
+                )
+                reviews[idx] = repaired_review
+
+            self.local('quality', {'version': 'quality-v1', 'scripts': [s.model_dump() for s in scripts],
+                                  'plan': plan.model_dump(), 'reviews': [v.model_dump() for v in reviews],
+                                  'claims': sha256_file(r.path('analysis/claims.json')),
+                                  'source': self.metadata.source_sha256}, 'evaluation/quality.json',
+                       lambda: evaluate(plan, scripts, claims, chapters, reviews))
+            report = json.loads(r.path('evaluation/quality.json').read_text(encoding='utf-8'))
+
         if report['blocking_issues']:
             raise BookCastError('内容质量检查未通过；请检查 evaluation/quality.json，未调用 TTS。')
+
         speeches, unit_tasks = [], []
         for segment, script in zip(plan.segments, scripts, strict=True):
             speech = PodcastScript(chapter_id=segment.id, title=script.title,
