@@ -1,3 +1,24 @@
+## 2026-09-26 RC Stage 6：统一 Gemini TTS Audio Decoder
+
+目标：解决 Gemini TTS 音频解码路径并存（`decode_audio` 与 `decode_pcm`）及校验缺失隐患，统一为单一 canonical decode path。
+1. **单一规范解码器与结构契约**：
+   - 彻底移除废弃的 `decode_pcm`；生产环境仅保留统一入口 `decode_audio(result, destination=None) -> AudioPayload`。
+   - 定义不可变 `AudioPayload` 契约结构（`audio_bytes`/`bytes`/`data`、`container`、`codec`、`sample_rate`、`channels`），消除不同入口不同类型的歧义。
+2. **规范解码与格式校验**：
+   - Interactions 响应中按 `steps[].content[]` 严格定位单一 `type == 'audio'` 块；支持合法多 step 搜寻与 text+audio 混合内容过滤；多 audio block 视为异常拦截。
+   - 严格 Base64 解码，非法编码安全分类为 `decode_error`。
+   - 容器/MIME 校验：仅放行合法 WAV MIME 或在明确声明 raw PCM 时包裹标准头，杜绝无头 raw 伪装。
+   - 严格 WAV 校验：基于标准库 `wave` 校验 RIFF 容器、1 通道单声道、16 位采样、24,000 Hz 采样率、非空且帧长不截断；校验完全通过后方写入 destination，失败绝不残留目标文件。
+3. **安全脱敏与日志保护**：
+   - 错误统一为 `ProviderError(ErrorKind.SCHEMA, error_type="decode_error")`，严禁在 `validation_reason`、错误消息或终端日志中记录 Base64 数据、原始完整响应或脚本文本。移除旧 `decode_audio` 中向 stderr 打印 response 键和步骤信息的调试代码。
+4. **测试与回归**：
+   - 覆盖 valid WAV、invalid RIFF、missing audio、text + audio、audio 在后续 step、多个 audio block 拦截、invalid base64，以及采样率/通道/空帧/截断 WAV 边界测试；
+   - 现存 Interactions 与 voice test 模拟数据同步接入规范 WAV 结构；
+   - 62 项 Gemini 专项测试全部通过，全量 suite 495 passed、1 skipped、5 deselected、10 subtests 全部通过。未调用真实 Gemini API。
+   - 功能提交 `0992207bbd986ad4ff8eaccc1f76d15d35adb50d` 已验证，`last_verified_commit` 已同步。
+
+---
+
 ## 2026-09-26 仓库未跟踪文件收口与测试资产补全
 
 目标：处理仓库中残留的未跟踪文件，保持工作区整洁且不遗漏必要测试资产。
