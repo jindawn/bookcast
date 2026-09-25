@@ -309,9 +309,17 @@ class ContentFlow:
         for segment, script in zip(plan.segments, scripts, strict=True):
             expected = {i for i, t in enumerate(script.turns) if t.attribution == 'source'}
             def validate_review(value):
-                if (value.segment_id != segment.id or len(value.checks) != len(expected)
-                        or {c.turn_index for c in value.checks} != expected):
+                if value.segment_id != segment.id:
                     raise ProviderError(ErrorKind.BUSINESS)
+                # Deterministic semantic alignment
+                value.checks = [c for c in value.checks if c.turn_index in expected]
+                actual = {c.turn_index for c in value.checks}
+                if actual != expected:
+                    e = ProviderError(ErrorKind.SCHEMA)
+                    e.error_type = "ValidationError"
+                    e.validation_field = "checks"
+                    e.validation_reason = f"missing_turns:{sorted(list(expected - actual))}"
+                    raise e
             rev = r.manifest.segment_revisions.get(segment.id, 0)
             review = self.call(f'consistency:{segment.id}', f'evaluation/segments/{segment.id}.json',
                                'consistency', {'script': script.model_dump(),
@@ -395,9 +403,16 @@ class ContentFlow:
 
                 expected = {i for i, t in enumerate(repaired_script.turns) if t.attribution == 'source'}
                 def validate_review(value):
-                    if (value.segment_id != segment.id or len(value.checks) != len(expected)
-                            or {c.turn_index for c in value.checks} != expected):
+                    if value.segment_id != segment.id:
                         raise ProviderError(ErrorKind.BUSINESS)
+                    value.checks = [c for c in value.checks if c.turn_index in expected]
+                    actual = {c.turn_index for c in value.checks}
+                    if actual != expected:
+                        e = ProviderError(ErrorKind.SCHEMA)
+                        e.error_type = "ValidationError"
+                        e.validation_field = "checks"
+                        e.validation_reason = f"missing_turns:{sorted(list(expected - actual))}"
+                        raise e
 
                 repaired_review = self.call(
                     f'consistency:{segment.id}',

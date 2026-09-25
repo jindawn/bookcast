@@ -211,7 +211,7 @@ class CompatibleLLMProvider(CompatibleBase):
     def _normalize_deepseek_json(self, text: str, schema: dict, warned_field: str | None = None) -> str:
         """Normalize safe JSON-mode drift; cap optional arrays after one failed attempt."""
         try:
-            data = json.loads(text)
+            data = json.loads(text, strict=False)
             if not isinstance(data, dict):
                 return text
             modified = False
@@ -237,13 +237,31 @@ class CompatibleLLMProvider(CompatibleBase):
                         if isinstance(val, list) and len(val) > limit:
                             data[key] = val[:limit]
                             modified = True
-            return json.dumps(data, ensure_ascii=False) if modified else text
+            return json.dumps(data, ensure_ascii=False)
         except (ValueError, TypeError):
             return text
 
     def _strip_markdown_fence(self, text: str) -> str:
         """Strip markdown code fence wrapper (```json ... ```) safely for deepseek."""
         cleaned = text.strip()
+        if '```' in cleaned:
+            start_marker = cleaned.find('```')
+            first_newline = cleaned.find('\n', start_marker)
+            last_marker = cleaned.rfind('```')
+            if first_newline != -1 and last_marker > first_newline:
+                candidate = cleaned[first_newline + 1:last_marker].strip()
+                if (candidate.startswith('{') and candidate.endswith('}')) or (candidate.startswith('[') and candidate.endswith(']')):
+                    return candidate
+        if not (cleaned.startswith('{') and cleaned.endswith('}')):
+            first_brace = cleaned.find('{')
+            last_brace = cleaned.rfind('}')
+            if first_brace != -1 and last_brace > first_brace:
+                candidate = cleaned[first_brace:last_brace + 1].strip()
+                try:
+                    json.loads(candidate, strict=False)
+                    return candidate
+                except (ValueError, TypeError):
+                    pass
         if cleaned.startswith('```'):
             first_newline = cleaned.find('\n')
             if first_newline != -1:
@@ -274,16 +292,25 @@ class CompatibleLLMProvider(CompatibleBase):
 
     def prepare_schema_retry(self, failure: ProviderError) -> bool:
         """Allow one journaled bounded correction for DeepSeek schema drift."""
-        if (urlsplit(self.spec.base_url).hostname != 'api.deepseek.com'
-                or failure.kind != ErrorKind.SCHEMA or failure.error_type != 'ValidationError'
-                or not failure.validation_field or not self._last_schema):
+        if urlsplit(self.spec.base_url).hostname != 'api.deepseek.com' or failure.kind != ErrorKind.SCHEMA:
+            return False
+            
+        if failure.validation_reason == 'finish_reason':
+            self._schema_retry_guidance = 'The previous response was incomplete due to length limits. Regenerate the full JSON without excessive reasoning.'
+            return True
+            
+        if failure.error_type != 'ValidationError' or not failure.validation_field or not self._last_schema:
             return False
 
         field_schema = self._get_field_schema(failure.validation_field, self._last_schema)
         reason = failure.validation_reason
         field_name = failure.validation_field
         primary_prop = field_name.split('.')[0]
-        if reason == 'too_long':
+        
+        if reason and reason.startswith('missing_turns:'):
+            self._schema_retry_guidance = f'The array {field_name} is missing entries for specific source turns. Include all requested checks. {reason}'
+            return True
+        elif reason == 'too_long':
             limit = field_schema.get('maxItems') if isinstance(field_schema, dict) else None
             if not isinstance(limit, int) or limit < 1:
                 return False
