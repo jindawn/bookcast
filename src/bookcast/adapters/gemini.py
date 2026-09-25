@@ -22,6 +22,19 @@ WIRE_VERSION = "gemini-generate-content-tts-v1:pcm-s16le-24k"
 MAX_RESPONSE = 32 * 1024 * 1024
 
 
+import re
+
+def sanitize_gemini_error(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    text = re.sub(r'AIza[0-9A-Za-z-_]{35}', '[REDACTED]', text)
+    text = re.sub(r'(Bearer\s+)[A-Za-z0-9\-\._~\+/]+', r'\1[REDACTED]', text)
+    text = re.sub(r'(x-goog-api-key:?\s*)[A-Za-z0-9\-_]+', r'\1[REDACTED]', text)
+    text = re.sub(r'(?:[A-Za-z0-9+/]{4}){10,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?', '[REDACTED]', text)
+    if 'transcript' in text.lower() or len(text) > 200:
+        text = text[:100] + '... [REDACTED]'
+    return text
+
 def classify_http(status, body, headers=None):
     """Use structured status/reasons/quota IDs, never persist or match error prose."""
     try:
@@ -33,10 +46,7 @@ def classify_http(status, body, headers=None):
         failure, details, reasons = {}, [], set()
         
     error_status = failure.get('status', str(status))
-    error_msg = failure.get('message', '')
-    if error_msg:
-        import sys
-        print(f"Gemini API Error: {error_status} - {error_msg[:300]}", file=sys.stderr)
+    # DO NOT print or persist raw message to prevent leaking transcripts or keys.
         
     retry_after = None
     if headers and 'Retry-After' in headers:
@@ -65,7 +75,7 @@ def classify_http(status, body, headers=None):
         # Determine exact 429 reason
         if error_status == 'RESOURCE_EXHAUSTED':
             error_status = 'quota_exceeded' if kind == ErrorKind.QUOTA else 'rate_limit_exceeded'
-            if 'too_many_requests' in error_msg.lower():
+            if 'too_many_requests' in failure.get('message', '').lower():
                 error_status = 'too_many_requests'
     elif status in {408, 504}:
         kind = ErrorKind.TIMEOUT
@@ -74,7 +84,7 @@ def classify_http(status, body, headers=None):
     else:
         kind = ErrorKind.SCHEMA
 
-    err = ProviderError(kind, error_type=error_status, validation_reason=error_msg[:300])
+    err = ProviderError(kind, error_type=error_status)
     err.retry_after = retry_after
     return err
 
@@ -105,7 +115,8 @@ class GeminiTTSProvider:
         return fingerprint({'adapter': WIRE_VERSION, 'model': self.model, 'endpoint': ENDPOINT,
                             'settings': self.settings.model_dump()})
 
-    def _request(self, payload=None):
+    def _request(self, payload=None, destination=None):
+        from ..models import utc_now
         key = os.environ.get(self.spec.api_key_env)
         if not key:
             sys.exit('Gemini TTS requires GEMINI_API_KEY')
@@ -114,6 +125,26 @@ class GeminiTTSProvider:
         attempts = 0
         backoffs = [10, 20, 40, 60]
         
+        chunk_id = destination.stem if destination else "unknown"
+        physical_log = destination.parents[3] / 'usage' / 'physical_requests.jsonl' if destination else None
+        
+        def log_physical(status, result_status, retry_reason, usage_avail, billing, started, finished):
+            if physical_log:
+                physical_log.parent.mkdir(parents=True, exist_ok=True)
+                with physical_log.open('a', encoding='utf-8') as pf:
+                    import json
+                    pf.write(json.dumps({
+                        "chunk_id": chunk_id,
+                        "physical_attempt_index": attempts,
+                        "started_at": started,
+                        "finished_at": finished,
+                        "http_status": status,
+                        "result": result_status,
+                        "retry_reason": retry_reason,
+                        "usage_available": usage_avail,
+                        "billing_status": billing
+                    }) + '\n')
+
         while True:
             # Active RPM throttling
             now = self.clock()
@@ -122,6 +153,10 @@ class GeminiTTSProvider:
                 sleep_time = interval - (now - GeminiTTSProvider._last_request_time)
                 self.sleeper(sleep_time)
             
+            started_at = utc_now()
+            http_status = None
+            usage_available = False
+            
             try:
                 if payload is not None:
                     GeminiTTSProvider._last_request_time = self.clock()
@@ -129,36 +164,59 @@ class GeminiTTSProvider:
                 req = request.Request(url, headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
                     data=json.dumps(payload, ensure_ascii=False).encode() if payload is not None else None)
                 with request.build_opener(NoRedirect()).open(req, timeout=self.spec.timeout_seconds) as response:
+                    http_status = getattr(response, 'getcode', lambda: 200)()
                     raw = response.read(MAX_RESPONSE + 1)
+                
+                finished_at = utc_now()
                 if len(raw) > MAX_RESPONSE:
                     raise ProviderError(ErrorKind.SCHEMA)
                 value = json.loads(raw)
                 if not isinstance(value, dict):
                     raise ProviderError(ErrorKind.SCHEMA)
+                
+                # Check for usage
+                usage_metadata = value.get('usage_metadata') or value.get('usageMetadata')
+                if isinstance(usage_metadata, dict):
+                    usage_available = True
+                    
+                log_physical(http_status, "success", None, usage_available, "billed", started_at, finished_at)
                 return value
             except error.HTTPError as exc:
+                finished_at = utc_now()
+                http_status = exc.code
                 failure = classify_http(exc.code, exc.read(64 * 1024), exc.headers)
             except error.URLError as exc:
+                finished_at = utc_now()
                 failure = ProviderError(ErrorKind.TIMEOUT if isinstance(exc.reason, TimeoutError) else ErrorKind.UNAVAILABLE)
             except TimeoutError:
+                finished_at = utc_now()
                 failure = ProviderError(ErrorKind.TIMEOUT)
             except (ValueError, UnicodeError):
+                finished_at = utc_now()
                 failure = ProviderError(ErrorKind.SCHEMA)
             except OSError:
+                finished_at = utc_now()
                 failure = ProviderError(ErrorKind.UNAVAILABLE)
+
+            # Determine billing status
+            billing_status = "unknown"
+            if http_status is not None:
+                # If we got a status code, the server rejected it or failed it, but usage isn't returned for non-200s in interactions API usually
+                billing_status = "unbilled" if http_status >= 400 else "unknown"
 
             # Retry logic
             if failure.kind in {ErrorKind.RATE_LIMIT, ErrorKind.TIMEOUT, ErrorKind.UNAVAILABLE} and attempts < 4:
+                log_physical(http_status, "failed", failure.kind.value, False, billing_status, started_at, finished_at)
                 delay = getattr(failure, 'retry_after', None)
                 if not delay:
                     delay = backoffs[attempts] + random.uniform(0, 2)
-                print(f"Gemini 限流/临时错误，正在等待自动重试... 下一次重试约 {int(delay)} 秒后", file=sys.stderr)
+                # DO NOT print raw messages to avoid leak
                 self.sleeper(delay)
                 attempts += 1
-                # reset request time so we don't double sleep on next loop iteration
                 GeminiTTSProvider._last_request_time = self.clock() - interval
                 continue
                 
+            log_physical(http_status, "failed", failure.kind.value, False, billing_status, started_at, finished_at)
             raise failure from None
 
     def health_check(self):
@@ -231,7 +289,7 @@ class GeminiTTSProvider:
             pass
             
         try:
-            result = self._request(payload)
+            result = self._request(payload, destination)
             # Try to grab usage metadata if present in interactions API
             usage = result.get('usage_metadata') or result.get('usageMetadata')
             if isinstance(usage, dict):

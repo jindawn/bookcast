@@ -167,7 +167,7 @@ def test_success_chunk_no_repeat(monkeypatch, setup, tmp_path):
     runner = _Runner(tmp_path, manifest, llm, tts)
     with pytest.raises(ProviderError) as exc:
         render_segments(runner, script)
-    assert exc.value.kind == ErrorKind.PERMISSION
+    assert exc.value.kind == ErrorKind.PERMISSION, exc.value.error_type
     assert [text[:7] for text in requests] == ['first-甲', 'second-']
     checkpoint = load_manifest(tmp_path/'manifest.json')
     assert checkpoint.steps['tts_segment:0001:0001'].status == 'completed'
