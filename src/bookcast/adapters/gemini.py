@@ -44,7 +44,9 @@ REASON_BY_KIND = {
 
 def safe_failure(failure: ProviderError) -> ProviderError:
     """Constrain every value that can reach an Attempt, event, or Web DTO."""
-    reason = REASON_BY_KIND.get(failure.kind, 'UNKNOWN')
+    internal_reason = (failure.error_type if failure.error_type == failure.validation_reason
+                       and failure.error_type in SAFE_REASONS else None)
+    reason = internal_reason or REASON_BY_KIND.get(failure.kind, 'UNKNOWN')
     if reason not in SAFE_REASONS:
         reason = 'UNKNOWN'
     result = ProviderError(failure.kind, error_type=reason, validation_reason=reason)
@@ -111,7 +113,10 @@ def classify_http(status, body, headers=None, *, wall_clock=time.time):
     else:
         kind = ErrorKind.SCHEMA
 
-    err = safe_failure(ProviderError(kind))
+    if kind == ErrorKind.SCHEMA:
+        err = ProviderError(kind, error_type='INVALID_REQUEST', validation_reason='INVALID_REQUEST')
+    else:
+        err = safe_failure(ProviderError(kind))
     err.retry_after = _retry_after_seconds(headers, wall_clock)
     err.quota_reason = quota_reason
     return err

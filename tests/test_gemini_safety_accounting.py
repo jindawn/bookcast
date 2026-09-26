@@ -12,7 +12,7 @@ from bookcast.adapters.gemini import classify_http
 from bookcast.jobs import job_status
 from bookcast.models import DialogueTurn, Manifest, PodcastScript
 from bookcast.pipeline import _Runner
-from bookcast.provider_api import ProviderRequestContext
+from bookcast.provider_api import ProviderRequestContext, SpeechSegment, SpeechTurn
 from bookcast.provider_api import ErrorKind, ProviderError
 from bookcast.provider_chain import ProviderChain
 from bookcast.provider_config import CloudTTSConfig, ProviderSpec
@@ -193,5 +193,20 @@ def test_malicious_upstream_status_and_reason_are_mapped():
     malicious = 'arbitrary_status_with_transcript_and_AIza_secret'
     failure = classify_http(400, json.dumps({'error': {'status': malicious,
         'message': malicious, 'details': [{'reason': malicious}]}}).encode())
-    assert failure.error_type == failure.validation_reason == 'DECODE_ERROR'
+    assert failure.error_type == failure.validation_reason == 'INVALID_REQUEST'
     assert malicious not in str(failure.__dict__)
+
+
+def test_http_invalid_request_reason_survives_adapter_boundary(monkeypatch, tmp_path):
+    monkeypatch.setenv('TEST_KEY', 'offline-key')
+    provider, _ = provider_for(tmp_path)
+
+    def opening(req, timeout):
+        raise http_error(400, {'error': {'status': 'ARBITRARY_UPSTREAM_STATUS',
+                                        'message': 'TRANSCRIPT_MARKER'}})
+
+    install_transport(monkeypatch, opening)
+    segment = SpeechSegment(turns=[SpeechTurn(speaker='主持人', text='你好。')])
+    with pytest.raises(ProviderError) as raised:
+        provider.synthesize_segment(segment, tmp_path / 'out.wav')
+    assert raised.value.error_type == raised.value.validation_reason == 'INVALID_REQUEST'
