@@ -73,7 +73,17 @@ def resolve_analysis(selected, payload):
                 raise ProviderError(ErrorKind.BUSINESS)
             span = spans[item.evidence_id]
             fields[category].append({'text': item.text, **{k: span[k] for k in ('quote','start','end')}})
-    return RichAnalysis(chapter_id=selected.chapter_id, chunk_id=selected.chunk_id,
+    cid = payload['chapter']['id']
+    chunk_id = payload['chunk_id']
+    try:
+        resolved_cid = cid if int(selected.chapter_id) == int(cid) else selected.chapter_id
+    except (ValueError, TypeError):
+        resolved_cid = selected.chapter_id
+    try:
+        resolved_chunk = chunk_id if int(selected.chunk_id) == int(chunk_id) else selected.chunk_id
+    except (ValueError, TypeError):
+        resolved_chunk = selected.chunk_id
+    return RichAnalysis(chapter_id=resolved_cid, chunk_id=resolved_chunk,
                         is_mock=selected.is_mock, **fields)
 
 
@@ -330,7 +340,7 @@ class ContentFlow:
         from .quality import evaluate
         chapters = [self.read(f'chapters/{cid}.json', Chapter) for cid in self.metadata.chapter_ids]
         selected_claims = {cid: claims[cid] for seg in plan.segments for cid in seg.claim_ids}
-        self.local('quality', {'version': 'quality-v2', 'scripts': [s.model_dump() for s in scripts],
+        self.local('quality', {'version': 'quality-v3', 'scripts': [s.model_dump() for s in scripts],
                               'plan': plan.model_dump(), 'reviews': [v.model_dump() for v in reviews], 'claims': selected_claims,
                               'source': self.metadata.source_sha256}, 'evaluation/quality.json',
                    lambda: evaluate(plan, scripts, claims, chapters, reviews))
@@ -428,11 +438,11 @@ class ContentFlow:
                 )
                 reviews[idx] = repaired_review
 
-            self.local('quality', {'version': 'quality-v2', 'scripts': [s.model_dump() for s in scripts],
-                                  'plan': plan.model_dump(), 'reviews': [v.model_dump() for v in reviews],
-                                  'claims': selected_claims,
-                                  'source': self.metadata.source_sha256}, 'evaluation/quality.json',
-                       lambda: evaluate(plan, scripts, claims, chapters, reviews))
+            self.local('quality', {'version': 'quality-v3', 'scripts': [s.model_dump() for s in scripts],
+                              'plan': plan.model_dump(), 'reviews': [v.model_dump() for v in reviews],
+                              'claims': selected_claims,
+                              'source': self.metadata.source_sha256}, 'evaluation/quality.json',
+                   lambda: evaluate(plan, scripts, claims, chapters, reviews))
             report = json.loads(r.path('evaluation/quality.json').read_text(encoding='utf-8'))
 
         if report['blocking_issues']:

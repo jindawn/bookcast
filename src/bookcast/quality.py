@@ -36,7 +36,10 @@ def evaluate(plan, scripts, claims, chapters, reviews=()):
                 allowed_numbers = set(re.findall(r'\d+(?:\.\d+)?', ' '.join(c['quote'] for c in valid)))
                 if set(re.findall(r'\d+(?:\.\d+)?', turn.text)) - allowed_numbers:
                     source_issues.append({'segment': segment.id, 'issue': 'unsupported_numeric_claim'})
-            if turn.attribution == 'hypothetical' and not any(w in turn.text for w in ('假设', '假如', '设想', '比如说')):
+            if turn.attribution == 'hypothetical' and not any(w in turn.text for w in (
+                '假设', '假如', '设想', '比如说', '比如', '譬如', '假使', '假若', '如果',
+                '假設', '設想', '比如說', '假若', '假使'
+            )):
                 source_issues.append({'segment': segment.id, 'issue': 'unlabelled_hypothetical'})
         if plan.mode == 'two_host':
             if {t.speaker for t in script.turns} != {'主持人', '嘉宾'} or not any(

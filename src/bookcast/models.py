@@ -137,6 +137,8 @@ def task_state(status: str, error_kind: str | None = None) -> TaskState:
 
 
 class ExecutionModel(Model):
+    model_config = ConfigDict(extra="ignore")
+
     @model_validator(mode='before')
     @classmethod
     def read_state_projection(cls, data):
@@ -243,6 +245,8 @@ class Job(ExecutionModel):
     legacy_config: dict[str, str] | None = None
     warnings: list[str] = Field(default_factory=list)
     error: str | None = None
+    retry_after: float | None = None
+    quota_reason: str | None = None
     created_at: str = Field(default_factory=utc_now)
     updated_at: str = Field(default_factory=utc_now)
 

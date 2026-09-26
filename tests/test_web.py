@@ -404,3 +404,25 @@ run_worker(Path(sys.argv[1]),sys.argv[2])
     finally:
         if process.poll() is None:
             process.kill(); process.wait(timeout=5)
+
+
+def test_web_status_reports_official_retry_after_and_quota_reason(client):
+    identifier, _ = submit(client, minutes=1)
+    service = client.app.state.service
+    record = service.read(identifier)
+    record.status = 'FAILED_RETRYABLE'
+    record.error = 'rate_limit'
+    record.retry_after = 58.0
+    record.quota_reason = None
+    write_json(id_path(service.root, 'jobs', identifier) / 'submission.json', record.model_dump(mode='json'))
+    
+    status = client.get(f'/api/jobs/{identifier}').json()
+    assert status['state'] == 'FAILED_RETRYABLE'
+    assert status['retry_after'] == 58.0
+    assert status['quota_reason'] is None
+    assert status['can_resume'] is True
+
+    record.quota_reason = 'DAILY_LIMIT'
+    write_json(id_path(service.root, 'jobs', identifier) / 'submission.json', record.model_dump(mode='json'))
+    status2 = client.get(f'/api/jobs/{identifier}').json()
+    assert status2['quota_reason'] == 'DAILY_LIMIT'

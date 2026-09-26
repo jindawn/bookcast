@@ -25,6 +25,8 @@ type Job = {
   core_job_id: string | null;
   error: string | null;
   active_error?: string | null;
+  retry_after?: number | null;
+  quota_reason?: string | null;
   warnings: string[];
   audio_url: string | null;
   m4b_url: string | null;
@@ -91,6 +93,26 @@ const states: Record<string, string> = {
   FAILED_RETRYABLE: "可恢复",
   FAILED_PERMANENT: "需要处理",
 };
+
+const ERROR_DESCRIPTIONS: Record<string, string> = {
+  business_error: "业务或质量校验未通过（内容质量审查或证据匹配未通过）",
+  schema_error: "模型输出格式不符合结构规范（Schema 校验失败）",
+  auth_failure: "API 密钥无效或未配置，请检查 API Key",
+  quota_exhausted: "API 额度耗尽或账户余额不足",
+  rate_limit: "请求过于频繁，触发 API 速率限制",
+  timeout: "模型请求超时，网络响应过慢",
+  temporary_unavailable: "模型服务暂时不可用或网络异常",
+  bad_input: "输入内容或参数无效",
+  interrupted: "任务已中断",
+};
+
+function formatError(error: string | null | undefined, quotaReason?: string | null): string | null {
+  if (!error) return null;
+  if ((error === "quota_exhausted" || error === "quota") && quotaReason === "DAILY_LIMIT") {
+    return "Google Gemini 免费层每日配额已耗尽（Free Tier 限制每日 10 次请求）。请在设置中更换 API Key、绑定结算账号升级，或切换至本地 Kokoro 语音引擎后继续。";
+  }
+  return ERROR_DESCRIPTIONS[error] ? `${ERROR_DESCRIPTIONS[error]} (${error})` : error;
+}
 
 function stageLabel(stage: string) {
   const prefix = stage.split(/[:/]/)[0];
@@ -165,9 +187,74 @@ export default function Home() {
   const [providerBusy, setProviderBusy] = useState(false);
   const [historyErrors, setHistoryErrors] = useState<string[]>([]);
   const [libraryError, setLibraryError] = useState("");
+  const [autoResumeSeconds, setAutoResumeSeconds] = useState<number | null>(null);
+  const [autoResumeCount, setAutoResumeCount] = useState<number>(0);
   const submission = useRef<{ payload: string; key: string } | null>(null);
   const current = selected ? jobs.find((job) => job.id === selected) : jobs[0];
   const selectedUnavailable = selected !== null && !current;
+
+  useEffect(() => {
+    setAutoResumeSeconds(null);
+    setAutoResumeCount(0);
+  }, [current?.id]);
+
+  useEffect(() => {
+    if (!current || !current.can_resume || current.state !== "FAILED_RETRYABLE" || !!busy) {
+      if (autoResumeSeconds !== null) {
+        setAutoResumeSeconds(null);
+      }
+      return;
+    }
+
+    if (current.quota_reason === "DAILY_LIMIT") {
+      if (autoResumeSeconds !== null) {
+        setAutoResumeSeconds(null);
+      }
+      return;
+    }
+
+    if (autoResumeCount >= 5) {
+      return;
+    }
+
+    if (autoResumeSeconds === null) {
+      let wait: number;
+      if (current.retry_after && current.retry_after > 0) {
+        // 严格遵循官网实际要求时间，增加 1 秒缓冲裕量
+        wait = Math.ceil(current.retry_after) + 1;
+      } else if (current.error === "rate_limit" || current.active_error === "rate_limit") {
+        wait = 60; // 兜底 60 秒
+      } else {
+        wait = 15;
+      }
+      setAutoResumeSeconds(wait);
+      return;
+    }
+
+    if (autoResumeSeconds <= 0) {
+      setAutoResumeSeconds(null);
+      setAutoResumeCount((c) => c + 1);
+      void recover(current, "resume");
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setAutoResumeSeconds((s) => (s !== null ? s - 1 : null));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [
+    current?.id,
+    current?.state,
+    current?.can_resume,
+    current?.error,
+    current?.active_error,
+    current?.retry_after,
+    current?.quota_reason,
+    busy,
+    autoResumeSeconds,
+    autoResumeCount,
+  ]);
 
   async function refresh() {
     const data = await api<{ jobs: Job[]; errors: string[] }>("/api/jobs");
@@ -655,15 +742,30 @@ export default function Home() {
                     </p>
                   )}
                   {(current.active_error || (current.state !== "SUCCEEDED" && current.error)) && (
-                    <p className="notice error">{current.active_error || current.error}</p>
+                    <p className="notice error">{formatError(current.active_error || current.error, current.quota_reason)}</p>
+                  )}
+                  {current.can_resume && autoResumeSeconds !== null && autoResumeSeconds > 0 && (
+                    <p className="notice" style={{ background: "rgba(22, 101, 52, 0.08)", color: "#166534", border: "1px solid rgba(22, 101, 52, 0.2)" }}>
+                      检测到服务商速率限制，已按官网实际要求时间（等待 {current.retry_after ? `${Math.ceil(current.retry_after)}s` : "冷却"}），将在 <strong>{autoResumeSeconds}s</strong> 后自动从断点恢复（已重试 {autoResumeCount}/5 次）...
+                    </p>
+                  )}
+                  {current.can_resume && autoResumeCount >= 5 && (
+                    <p className="notice error">
+                      已连续自动尝试 5 次恢复，服务商频次限制可能仍在持续，请稍后手动点击恢复或检查配额。
+                    </p>
                   )}
                   {current.can_resume && (
                     <button
                       className="primary"
                       disabled={!!busy}
-                      onClick={() => recover(current, "resume")}
+                      onClick={() => {
+                        setAutoResumeSeconds(null);
+                        void recover(current, "resume");
+                      }}
                     >
-                      从断点恢复
+                      {autoResumeSeconds !== null && autoResumeSeconds > 0
+                        ? `从断点恢复（官网要求冷却 ${autoResumeSeconds}s）`
+                        : "从断点恢复"}
                     </button>
                   )}
                   {current.can_retry && (

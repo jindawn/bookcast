@@ -242,26 +242,62 @@ class CompatibleLLMProvider(CompatibleBase):
             return text
 
     def _strip_markdown_fence(self, text: str) -> str:
-        """Strip markdown code fence wrapper (```json ... ```) safely for deepseek."""
+        """Strip markdown code fence wrapper (```json ... ```) and conversational banter safely."""
         cleaned = text.strip()
+        # 1. If text is already valid JSON, return immediately
+        try:
+            val = json.loads(cleaned, strict=False)
+            if isinstance(val, (dict, list)):
+                return cleaned
+        except (ValueError, TypeError):
+            pass
+
+        # 2. Extract from markdown code fences ```json ... ```
         if '```' in cleaned:
-            start_marker = cleaned.find('```')
-            first_newline = cleaned.find('\n', start_marker)
-            last_marker = cleaned.rfind('```')
-            if first_newline != -1 and last_marker > first_newline:
-                candidate = cleaned[first_newline + 1:last_marker].strip()
-                if (candidate.startswith('{') and candidate.endswith('}')) or (candidate.startswith('[') and candidate.endswith(']')):
-                    return candidate
-        if not (cleaned.startswith('{') and cleaned.endswith('}')):
-            first_brace = cleaned.find('{')
-            last_brace = cleaned.rfind('}')
-            if first_brace != -1 and last_brace > first_brace:
-                candidate = cleaned[first_brace:last_brace + 1].strip()
+            import re
+            for match in re.finditer(r'```(?:json)?\s*([\s\S]*?)\s*```', cleaned, re.IGNORECASE):
+                candidate = match.group(1).strip()
                 try:
-                    json.loads(candidate, strict=False)
-                    return candidate
+                    val = json.loads(candidate, strict=False)
+                    if isinstance(val, (dict, list)):
+                        return candidate
                 except (ValueError, TypeError):
                     pass
+
+        # 3. Robust bracket-matching to locate top-level JSON object or array
+        for i, ch in enumerate(cleaned):
+            if ch in ('{', '['):
+                closing = '}' if ch == '{' else ']'
+                depth = 0
+                in_str = False
+                escape = False
+                for j in range(i, len(cleaned)):
+                    c = cleaned[j]
+                    if escape:
+                        escape = False
+                        continue
+                    if c == '\\':
+                        escape = True
+                        continue
+                    if c == '"':
+                        in_str = not in_str
+                        continue
+                    if not in_str:
+                        if c == ch:
+                            depth += 1
+                        elif c == closing:
+                            depth -= 1
+                            if depth == 0:
+                                candidate = cleaned[i:j + 1].strip()
+                                try:
+                                    val = json.loads(candidate, strict=False)
+                                    if isinstance(val, (dict, list)):
+                                        return candidate
+                                except (ValueError, TypeError):
+                                    pass
+                                break
+
+        # 4. Fallback: simple fence strip if fence was not closed
         if cleaned.startswith('```'):
             first_newline = cleaned.find('\n')
             if first_newline != -1:
@@ -337,9 +373,4 @@ class CompatibleLLMProvider(CompatibleBase):
             return False
 
         self._schema_retry_field = primary_prop
-
-        if getattr(self, '_last_raw_response', None) and isinstance(self._last_raw_response, str):
-            snippet = self._last_raw_response.strip()
-            if snippet:
-                self._schema_retry_guidance += f' Fix structure while preserving content semantics: {snippet[:2000]}'
         return True

@@ -555,3 +555,32 @@ def test_speaker_mapping_and_metadata(monkeypatch, tmp_path):
     assert [item['voice'] for item in payload['generation_config']['speech_config']['speakers']] == ['HostA', 'GuestB']
     assert dest.read_bytes() == wav_bytes()
     assert info.voices == {'主持人': 'HostA', '嘉宾': 'GuestB'}
+
+
+def test_classify_http_extracts_official_retry_delays_and_identifies_daily_quota():
+    from bookcast.adapters.gemini import classify_http
+    
+    # 1. Official header Retry-After
+    err1 = classify_http(429, b'{}', {'Retry-After': '36'})
+    assert err1.kind == ErrorKind.RATE_LIMIT
+    assert err1.retry_after == 36.0
+    assert err1.quota_reason is None
+
+    # 2. Official message with retry in Xs
+    msg_body = json.dumps({'error': {'message': 'Please retry in 42s or upgrade at https://example.com'}}).encode()
+    err2 = classify_http(429, msg_body, {})
+    assert err2.kind == ErrorKind.RATE_LIMIT
+    assert err2.retry_after == 42.0
+
+    # 3. Official details with RetryInfo retryDelay
+    details_body = json.dumps({'error': {'details': [{'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '28s'}]}}).encode()
+    err3 = classify_http(429, details_body, {})
+    assert err3.kind == ErrorKind.RATE_LIMIT
+    assert err3.retry_after == 28.0
+
+    # 4. Daily limit in message
+    daily_msg_body = json.dumps({'error': {'message': 'Rate limit exceeded for model gemini-3.8-flash-tts (limit: 10 requests per day on Free Tier). Please retry in 58s.'}}).encode()
+    err4 = classify_http(429, daily_msg_body, {'Retry-After': '58'})
+    assert err4.kind == ErrorKind.QUOTA
+    assert err4.quota_reason == 'DAILY_LIMIT'
+    assert err4.retry_after == 58.0

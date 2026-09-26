@@ -53,6 +53,8 @@ def run_worker(data_dir: Path, identifier: str):
             error = classify_error(exc)
             record.status = 'FAILED_RETRYABLE' if error.retryable else 'FAILED_PERMANENT'
             record.error = str(exc) if isinstance(exc, BookCastError) else '本地任务失败；请检查输入、Provider 配置与 FFmpeg 后重试。'
+            record.retry_after = getattr(error, 'retry_after', None)
+            record.quota_reason = getattr(error, 'quota_reason', None)
         finally:
             save()
 

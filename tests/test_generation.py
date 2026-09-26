@@ -626,6 +626,34 @@ def test_deepseek_array_correction_is_bounded_and_openai_does_not_correct(monkey
         assert error.value.kind == ErrorKind.SCHEMA and len(sent) == expected_calls
 
 
+def test_deepseek_conversational_retry_with_complex_text_and_no_truncated_snippet(monkeypatch):
+    """Verify conversational pre/postamble with nested braces and clean retry guidance."""
+    finding = {'text': '简短转述带 {"嵌套"} 与 \\"转义\\"', 'evidence_id': 'e0001'}
+    payload = {'chapter_id': '0011', 'chunk_id': '0005', 'core_ideas': [finding],
+               'arguments': [], 'examples': [], 'people': [], 'concepts': [],
+               'counter_arguments': [], 'connections': [], 'key_passages': [], 'evidence': [], 'is_mock': False}
+    conversational_text = (
+        "Thinking Process:\n1. The user wants evidence analysis.\nHere is an example object: {'foo': 1}\n\n"
+        "Here is the final JSON:\n```json\n"
+        f"{json.dumps(payload, ensure_ascii=False)}\n"
+        "```\n"
+        "Hope this helps! Let me know if you need more."
+    )
+    provider = CompatibleLLMProvider(ProviderSpec(name='deepseek', kind='llm', type='openai-compatible',
+        model='deepseek-flash', base_url='https://api.deepseek.com'))
+    extracted = provider._strip_markdown_fence(conversational_text)
+    assert json.loads(extracted)['chapter_id'] == '0011'
+
+    # Verify prepare_schema_retry guidance is clean without truncated snippet
+    failure = ProviderError(kind=ErrorKind.SCHEMA, error_type='ValidationError',
+        validation_field='evidence', validation_reason='too_long')
+    provider._last_schema = EvidenceAnalysis.model_json_schema()
+    provider._last_raw_response = 'a' * 3000
+    assert provider.prepare_schema_retry(failure) is True
+    assert 'evidence must contain at most 6 items' in provider._schema_retry_guidance
+    assert 'Fix structure while preserving content semantics' not in provider._schema_retry_guidance
+
+
 def test_completed_calls_resume_and_only_effective_changes_invalidate(tmp_path, monkeypatch):
     calls = install_mock_wire(monkeypatch)
     source = Path(__file__).parents[1]/'examples/content-demo.txt'

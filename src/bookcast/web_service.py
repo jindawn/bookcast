@@ -8,7 +8,7 @@ import sys
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from .acquisition import choose_edition
 from .composition import settings_snapshot
@@ -40,6 +40,7 @@ class Submission(Model):
 
 
 class WebJob(Model):
+    model_config = ConfigDict(extra='ignore')
     schema_version: Literal[1] = 1
     id: str = Field(pattern=r'^[a-f0-9]{32}$')
     request: Submission
@@ -48,6 +49,8 @@ class WebJob(Model):
     settings: dict
     status: Literal['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED_RETRYABLE', 'FAILED_PERMANENT'] = 'PENDING'
     error: str | None = None
+    retry_after: float | None = None
+    quota_reason: str | None = None
     retry: bool = False
     removed_at: str | None = None
     created_at: str = Field(default_factory=utc_now)
@@ -123,6 +126,8 @@ class WebService:
                 audio_info = json.loads(export_path.read_text(encoding='utf-8'))
         is_failed = state in {'FAILED_PERMANENT', 'FAILED_RETRYABLE', 'BLOCKED'}
         active_error = ((core.get('active_error') if core else None) or (core.get('error') if core else None) or record.error) if is_failed else None
+        retry_after = ((core.get('retry_after') if core else None) or record.retry_after) if is_failed else None
+        quota_reason = ((core.get('quota_reason') if core else None) or record.quota_reason) if is_failed else None
         return {'id': identifier, 'title': core['progress']['book'] if core else record.title,
                 'mode': record.request.mode, 'minutes': record.request.minutes, 'state': state,
                 'task_providers': {'llm': selected_names('llm'), 'tts': selected_names('tts')},
@@ -131,6 +136,8 @@ class WebService:
                 'directory': str(path.parent) if path else str(id_path(self.root, 'jobs', identifier)),
                 'error': active_error,
                 'active_error': active_error,
+                'retry_after': retry_after,
+                'quota_reason': quota_reason,
                 'warnings': list(dict.fromkeys(warnings)),
                 'audio_kind': audio_info.get('audio_kind', 'unknown'),
                 'audio_seconds': audio_info.get('duration_seconds'),

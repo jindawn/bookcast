@@ -60,6 +60,7 @@ node_modules/
 .next/
 /web/out/
 /web/test-results/
+/test-results/
 /web/playwright-report/
 *.tsbuildinfo
 dist/

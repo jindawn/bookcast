@@ -163,6 +163,8 @@ class Pipeline:
                 manifest.status = "failed"
                 failure = classify_error(exc)
                 manifest.error_kind = failure.kind.value
+                manifest.retry_after = getattr(failure, 'retry_after', None)
+                manifest.quota_reason = getattr(failure, 'quota_reason', None)
                 manifest.error = str(exc) if isinstance(exc, BookCastError) else str(failure)
                 runner.save()
                 runner.event("job_failed", state=manifest.state.value, error=manifest.error_kind)

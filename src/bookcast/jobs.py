@@ -142,6 +142,8 @@ def job_status(job: str, output_dir: Path = Path('output')) -> dict:
             'integrity': 'damaged' if damaged else 'ok', 'damaged_steps': damaged,
             'error': active_error, 'active_error': active_error,
             'error_kind': m.error_kind if is_failed_state else None,
+            'retry_after': m.retry_after if is_failed_state else None,
+            'quota_reason': m.quota_reason if is_failed_state else None,
             'progress': progress}
 
 

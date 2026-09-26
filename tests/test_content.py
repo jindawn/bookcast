@@ -517,3 +517,30 @@ def test_targeted_repair_bounded_limit_halts_on_persistent_contradiction(tmp_pat
 
     manifest = load_manifest(job / 'manifest.json')
     assert manifest.segment_revisions == {'0002': 2}
+
+
+def test_quality_traditional_chinese_hypothetical_check():
+    """Verify that traditional Chinese '假設' is recognized and not flagged as unlabelled_hypothetical."""
+    from bookcast.content_models import EpisodePlan, Segment, SegmentScript, ContentTurn
+    from bookcast.quality import evaluate
+    from bookcast.models import Chapter
+
+    plan = EpisodePlan(
+        mode='deep_read', budget_seconds=60, covered_chapters=['0001'], omitted_chapters=[], deduplicated_themes=0,
+        segments=[Segment(id='0001', title='测试', chapter_ids=['0001'], claim_ids=['c1'], seconds=60,
+                          target_chars=240, previous_topic='prev', next_topic='next')]
+    )
+    script = SegmentScript(
+        segment_id='0001', title='测试', is_mock=True,
+        turns=[
+            ContentTurn(speaker='主持人', intent='transition', text='開始討論。', claim_ids=[], attribution='discussion'),
+            ContentTurn(speaker='主持人', intent='counterexample', text='假設敵軍不戰而退，我們該如何應對？', claim_ids=[], attribution='hypothetical'),
+            ContentTurn(speaker='主持人', intent='explain', text='原文記載明確。', claim_ids=['c1'], attribution='source')
+        ]
+    )
+    claims = {'c1': {'chapter_id': '0001', 'quote': '原文记载明确。', 'text': '原文记载明确。'}}
+    chapters = [Chapter(id='0001', title='第一章', text='原文记载明确。', source_locator='p1')]
+
+    result = evaluate(plan, [script], claims, chapters)
+    assert not any(i.get('issue') == 'unlabelled_hypothetical' for i in result.get('factual_consistency', {}).get('reference_issues', []))
+    assert '来源引用或事实形式检查失败' not in result['blocking_issues']

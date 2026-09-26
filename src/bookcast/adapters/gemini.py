@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import random
+import re
 import sqlite3
 import struct
 import sys
@@ -98,14 +99,19 @@ def classify_http(status, body, headers=None, *, wall_clock=time.time):
         quota_reason = 'BILLING' if reasons & {'BILLING_DISABLED', 'BILLING_NOT_ACTIVE'} else 'QUOTA'
     elif status_code == 429:
         kind = ErrorKind.RATE_LIMIT
+        msg = str(failure.get('message', '')).lower()
+        is_daily = any(kw in msg for kw in ('per day', 'per_day', 'requests per day', 'daily'))
         violations = [v for d in details for v in (d.get('violations') if isinstance(d.get('violations'), list) else [])
                       if isinstance(v, dict)]
         for violation in violations:
             quota_id = str(violation.get('quotaId', '')).lower()
             if ('perday' in quota_id or 'per_day' in quota_id
                     or violation.get('quotaValue') in (0, '0')):
-                kind = ErrorKind.QUOTA
-                quota_reason = 'DAILY_LIMIT' if 'day' in quota_id else 'QUOTA'
+                is_daily = True
+                break
+        if is_daily:
+            kind = ErrorKind.QUOTA
+            quota_reason = 'DAILY_LIMIT'
     elif status_code in {408, 504}:
         kind = ErrorKind.TIMEOUT
     elif status_code >= 500:
@@ -117,7 +123,27 @@ def classify_http(status, body, headers=None, *, wall_clock=time.time):
         err = ProviderError(kind, error_type='INVALID_REQUEST', validation_reason='INVALID_REQUEST')
     else:
         err = safe_failure(ProviderError(kind))
-    err.retry_after = _retry_after_seconds(headers, wall_clock)
+    
+    retry_after = _retry_after_seconds(headers, wall_clock)
+    if retry_after is None:
+        raw_msg = str(failure.get('message', ''))
+        match = re.search(r'retry\s+(?:in|after)\s+([0-9]+(?:\.[0-9]+)?)\s*s', raw_msg, re.IGNORECASE)
+        if match:
+            try:
+                retry_after = float(match.group(1))
+            except ValueError:
+                pass
+        if retry_after is None:
+            for d in details:
+                delay_str = d.get('retryDelay')
+                if isinstance(delay_str, str) and delay_str.endswith('s'):
+                    try:
+                        retry_after = float(delay_str[:-1])
+                        break
+                    except ValueError:
+                        pass
+
+    err.retry_after = retry_after
     err.quota_reason = quota_reason
     return err
 
