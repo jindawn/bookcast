@@ -323,7 +323,8 @@ class GeminiTTSProvider:
             self._record_physical(request_context, self._physical_record(
                 request_context, attempts, started_at, finished_at, http_status,
                 'failed', failure.kind.value, False, 'unknown',
-                getattr(failure, 'quota_reason', None)))
+                getattr(failure, 'quota_reason', None), failure.kind.value,
+                failure.error_type, failure.retryable))
             if failure.kind in {ErrorKind.RATE_LIMIT, ErrorKind.TIMEOUT, ErrorKind.UNAVAILABLE} and attempts < 4:
                 delay = getattr(failure, 'retry_after', None)
                 if delay is None:
@@ -334,11 +335,13 @@ class GeminiTTSProvider:
             raise failure from None
 
     def _physical_record(self, context, attempt, started, finished, status, result,
-                         retry_reason, usage_available, billing_evidence, quota_reason=None):
+                         retry_reason, usage_available, billing_evidence, quota_reason=None,
+                         error_kind=None, safe_reason=None, retryable=None):
         return {
             'job_id': context.job_id if context else None,
             'output_id': context.output_id if context else None,
             'logical_chunk_id': context.logical_chunk_id if context else None,
+            'chunk_id': context.logical_chunk_id if context else None,
             'provider': self.name, 'model': self.model,
             'physical_attempt_index': attempt,
             'started_at': started, 'finished_at': finished,
@@ -347,6 +350,9 @@ class GeminiTTSProvider:
             'usage_available': usage_available,
             'billing_evidence': billing_evidence,
             'quota_reason': quota_reason,
+            'error_kind': error_kind,
+            'safe_reason': safe_reason,
+            'retryable': retryable,
         }
 
     def health_check(self):

@@ -74,8 +74,12 @@ def test_accounting_timeout_then_success(monkeypatch, tmp_path):
     assert first['logical_chunk_id'] == second['logical_chunk_id'] == 'tts_segment:0001:0001'
     assert [first['physical_attempt_index'], second['physical_attempt_index']] == [0, 1]
     assert first['http_status'] is None and first['retry_reason'] == 'timeout'
+    assert first['chunk_id'] == 'tts_segment:0001:0001'
+    assert (first['error_kind'], first['safe_reason'], first['retryable']) == (
+        'timeout', 'TIMEOUT', True)
     assert first['billing_evidence'] == 'unknown' and first['usage_available'] is False
     assert second['http_status'] == 200 and second['result'] == 'success'
+    assert (second['error_kind'], second['safe_reason'], second['retryable']) == (None, None, None)
     assert second['billing_evidence'] == 'confirmed' and second['usage_available'] is True
 
 
@@ -187,6 +191,7 @@ def test_raw_error_absent_from_all_durable_surfaces_and_api(monkeypatch, tmp_pat
         assert secret not in all_surfaces
     assert 'PERMISSION' in all_surfaces
     assert records(root)[0]['billing_evidence'] == 'unknown'
+    assert records(root)[0]['safe_reason'] == 'PERMISSION'
 
 
 def test_malicious_upstream_status_and_reason_are_mapped():
