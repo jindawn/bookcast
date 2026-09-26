@@ -1,3 +1,15 @@
+## 2026-09-26 Web 新建任务默认目标时长 20 分钟
+
+目标：按用户截图将新建页面默认时长从 40 改为 20 分钟，并让 Web API 在省略时长时使用同一默认值。书架中已有任务继续显示各自保存的目标时长。
+
+完成：`web/app/page.tsx` 初始分钟数设为 20；`src/bookcast/web_service.py` 的 `Submission.minutes` 默认设为 20。`web/e2e/app.spec.ts` 验证页面初值和提交结果，`tests/test_web.py` 验证 API 省略分钟数时持久化为 20。`docs/WEB.md` 记载默认值。未修改 CLI/Core 内容预算默认值或已有任务。
+
+验证：功能提交 `f7c39c835e3b81ec7cfc7f11a7b67f17d4a0c31e`；该提交代码工作树上 `tests/test_web.py` **18 passed**，Web typecheck/build 通过，浏览器 E2E 指定场景 **1 passed**；`python3 scripts/validate_project.py` 与提交 diff check 通过。未运行完整 Python suite；未调用真实 Provider。工作区交接状态与本快照单独提交，按 D-006 的 `last_verified_commit` 仍指已验证功能提交。
+
+下一步：原 Phase18 的独立 DeepSeek clean run 仍需用户本机凭证，保留原 `next_actions` 和 blocker。不要重制或修改已完成的书架 Job。
+
+---
+
 ## 2026-09-26 RC Blocker Closure：Gemini 安全错误、物理请求与共享限流
 
 目标：仅关闭最终 RC 交叉审计的三个阻断项；没有调用真实 Gemini/DeepSeek，没有改 prompt、chunk、费用费率、解码器、Kokoro 或 Web UI。

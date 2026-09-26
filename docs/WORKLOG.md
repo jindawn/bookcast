@@ -457,3 +457,5 @@
 - 2026-09-26T00:51:28Z：RC Blocker Closure 功能提交 `5a04985ff3330d88671eeaa55c946506c473bcf8` 上重跑完整默认 suite 511 passed、1 skipped、5 deselected、10 subtests；项目校验、Web typecheck、compileall 和提交差异检查通过。`STATE.last_verified_commit` 仅记录此已验证功能提交；交接快照不自引用。
 - 2026-09-26T00:55:47Z：复核发现 HTTP 400 虽已安全枚举化但误报 DECODE_ERROR，新增显式 `INVALID_REQUEST` 分类并经 Adapter 边界回归。补丁提交 `9f9fd41fa413f0f8902f75e9c07f3aeaeb55cec8` 上重跑默认离线 suite 512 passed、1 skipped、5 deselected、10 subtests；validator、Web typecheck、compileall、提交差异检查均通过。`STATE.last_verified_commit` 更新为此实际验证过的提交；无真实 API 请求。
 - 2026-09-26T00:58:44Z：按 RC 错误日志契约在每条 Gemini 物理请求记录中显式增加 `chunk_id`、内部 `error_kind`、allowlist `safe_reason` 与 `retryable`，不保存上游原始文本。功能提交 `8f94f6553a427203b3db77a8ec6586c7aa92cd7c` 与同一代码工作树完整离线 suite 512 passed、1 skipped、5 deselected、10 subtests；该提交上 Gemini 专项 87 passed、项目校验通过，Web typecheck/compileall/diff check 通过；无真实 API 请求。
+
+- 2026-09-26T01:11:14Z：Web 新建任务页面与 API 默认目标时长统一为 20 分钟；功能提交 `f7c39c835e3b81ec7cfc7f11a7b67f17d4a0c31e`。Web API 18 passed、Web typecheck/build、浏览器 E2E 1 passed、项目校验与提交差异检查通过；未运行完整 Python suite，未调用真实 Provider，既有任务未修改。
