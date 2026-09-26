@@ -462,10 +462,22 @@ class _Runner:
         schema = inputs.get('schema') if isinstance(inputs, dict) else None
         schema_name = schema.get('title') if isinstance(schema, dict) and isinstance(schema.get('title'), str) else None
         self._active_schema_name = schema_name
+        from .provider_api import ProviderRequestContext
+        context = ProviderRequestContext(
+            job_id=self.manifest.job_id,
+            output_id=self.manifest.output_id,
+            logical_chunk_id=name,
+            provider="",
+            model="",
+            telemetry_path=self.path('usage/physical_requests.jsonl'),
+            on_telemetry_degraded=lambda reason: self.event(
+                'telemetry_diagnostic', details={'diagnostic': reason, 'logical_chunk_id': name}
+            ),
+        )
         try:
             artifacts = chain.execute(task=name, kind=kind, prompt_version=version, input_hash=digest,
                                       invoke=invoke, persist=lambda names: {n: sha256_file(self.path(n)) for n in names},
-                                      observe=self.observe)
+                                      observe=self.observe, context=context)
         finally:
             self._active_schema_name = None
         return list(artifacts)

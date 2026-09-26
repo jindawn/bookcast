@@ -118,8 +118,143 @@ manifest v3 的 Attempt 增加可选 generation、reported_model、provider_repo
 
 仅接受非负整数；未返回或非法值为 null。服务完全未返回 usage 时整项为 null。响应后的 schema/业务验证失败仍可能收费，保存已收到的 usage；HTTP/传输失败无 usage 不猜测。每次调用清空响应元数据，避免继承上次用量。不保存 reasoning_content、完整响应或错误正文；不使用本地 tokenizer 冒充计费数据、不硬编码价格。`usage/llm_usage.json` 按 stage 汇总请求、token 和缓存复用；没有价格输入时 estimated_cost 为 null。reasoning_tokens 通常是 output_tokens 的子集，不能重复相加。
 
+## LLM 任务路由（Phase 19 R1）
+
+可选 `[llm_routing]` 配置把业务任务意图映射到不同的 Provider 候选链，无需在业务代码中写死厂商逻辑。不配置时行为与旧版完全相同；旧快照和缓存字节对齐，不插入空字段。
+
+### 配置字段
+
+| 字段 | 含义 |
+| --- | --- |
+| `llm_routing.general` | general 任务的有序候选列表 |
+| `llm_routing.cheap` | cheap 任务的有序候选列表 |
+| `llm_routing.complex` | complex 任务的有序候选列表 |
+| `llm_routing.high_quality` | high_quality 任务的有序候选列表 |
+| `llm_routing.task_profiles` | 可选，覆盖默认任务→profile 映射 |
+
+四个 profile 均必须声明（至少一个实例），且引用的实例必须属于 `llm_priority` 候选池；空列表、重复实例、未知 profile 名称在启动时拒绝。
+
+### 默认任务映射
+
+| 任务类型 | 默认 profile |
+| --- | --- |
+| extraction | cheap |
+| chapter_synthesis | general |
+| book_synthesis | complex |
+| dialogue | high_quality |
+| consistency | high_quality |
+| other（未识别） | general |
+
+可在 `[llm_routing.task_profiles]` 中按任务类型覆盖，业务代码不感知厂商。
+
+### 使用示例
+
+```toml
+llm_priority = ["qwen", "deepseek"]
+
+[llm_routing]
+general   = ["qwen"]
+cheap     = ["qwen"]
+complex   = ["deepseek"]
+high_quality = ["deepseek"]
+# 如需 general 任务在 qwen 失败时自动切换 deepseek，设为 ["qwen", "deepseek"]
+
+[llm_routing.task_profiles]
+# extraction = "cheap"  # 默认，通常无需重写
+book_synthesis = "complex"
+dialogue       = "high_quality"
+consistency    = "high_quality"
+```
+
+离线演示配置见 [examples/model-routing-mock.toml](../examples/model-routing-mock.toml)，使用 Mock Provider 验证全部路由逻辑。
+
+### 兼容与约束
+
+- 明确 `--provider NAME` 优先于路由，使用单实例平坦链；旧 CLI/Web 行为不变。
+- 每个 profile 有独立的 sticky failover 状态；cheap 的切换不影响 complex 的 Provider 选择。
+- Router 不加 retry、不替换 Attempt 中已记录的真实 provider/model，不改变缓存 D-014 语义。
+- 路由配置写入 `cost_snapshot`；旧 Job 无该字段，恢复时使用任务快照而非当前 CWD 配置。
+
 ## Gemini TTS 与能力选择
 
 Registry 新增 `tts/gemini-tts`；详见 [TTS](TTS.md) 与 `examples/gemini-tts.toml`。speech_units 表示单句接口，speech_segments/multi_speaker 表示有界对话接口，cloud 标识第三方文本发送。新字段默认false，旧 Provider/manifest 保持可读。配置中的 model、双音色、style_instruction、cloud_tts 与音频契约版本参与 Provider 摘要；文本进入 Step 输入 hash。Gemini 原生多说话者只在 Adapter 内表达，Pipeline 不 import Google SDK。
 
 配置必须明确允许云发送，云端链禁止 Mock，逐句/逐段能力不能混链；不发生 Kokoro 失败后的自动云上传。新增 permission_denied 永久错误，不允许加入 failover_on。既有 quota/rate_limit/timeout/temporary_unavailable 策略继续生效，真实服务错误与离线注入须在验收记录中区分。
+
+## Qwen 云端 TTS（Phase 19 R3 / 19.1）
+
+Registry 注册为 `tts/qwen-cloud-tts`；示例见 `examples/qwen-cloud-tts.toml`。
+
+### 协议与目标模型架构
+
+1. **默认与推荐模型（Qwen-TTS 系列）**：
+   - 目标模型为 `qwen3-tts-instruct-flash`（指令控制非实时合成）。
+   - 官方 HTTP 接口：`POST {base_url}/services/aigc/multimodal-generation/generation`。
+   - 输入参数结构：`input.text`（纯文本，不插入系统 prompt 标记）、`input.voice`（默认主持人 Cherry、嘉宾 Ethan）、`input.language_type`（默认 `"Chinese"`）。
+   - 风格控制参数：`parameters.instructions`（自然语言指令，如语速、情感与播客主持风格），可选 `parameters.optimize_instructions`。
+   - 响应与音频获取：官方非流式响应在 `output.audio.url` 返回完整音频文件（WAV 格式）的临时下载地址，适配器自动安全下载并验证单声道 16-bit 24000Hz 格式；流式响应支持从 `output.audio.data` 解码 Base64 音频。
+
+2. **CosyVoice 系列兼容（显式协议隔离）**：
+   - 当模型名称为 `cosyvoice-v2` 等 CosyVoice 系列时，自动采用旧版 `POST {base_url}/services/aigc/text2voice/voice-synthesis` 协议。
+   - 携带 `parameters.sample_rate` 与 `format = "pcm"`，响应由 `output.audio` Base64 PCM 解码并包装为 WAV 容器。
+   - 两者严格根据模型前缀隔离，杜绝混用错误线协议。
+
+### 区域与 Endpoint 配置（LLM 与 TTS 协议区分）
+
+阿里云百炼对 LLM（OpenAI 兼容协议）与原生多模态 TTS 采用不同子路径，系统已实现双向自动转换与隔离保护：
+
+1. **Qwen LLM（OpenAI 兼容协议）**：
+   - 请求路径：`{base_url}/chat/completions`，基址必须为 `/compatible-mode/v1`。
+   - 中国北京：`https://dashscope.aliyuncs.com/compatible-mode/v1`
+   - 新加坡（国际）：`https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
+   - 专属端点：`https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`
+   - **保护机制**：`QwenLLMProvider` 会自动把误传的 `/api/v1` 或根域名纠正为 `/compatible-mode/v1`，绝不向 `/api/v1/chat/completions` 发送请求。
+
+2. **Qwen Cloud TTS（百炼原生多模态协议）**：
+   - 请求路径：`{base_url}/services/aigc/multimodal-generation/generation`，基址必须为 `/api/v1`。
+   - 中国北京：`https://dashscope.aliyuncs.com/api/v1`
+   - 新加坡（国际）：`https://dashscope-intl.aliyuncs.com/api/v1`
+   - 专属端点：`https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api/v1`
+   - **保护机制**：`QwenCloudTTSProvider` 会自动剔除误传的 `/compatible-mode/v1` 并对齐到 `/api/v1`，绝不向 `/compatible-mode/v1/services/...` 发送请求。
+
+3. **环境变量优先级**：
+   - LLM 端点：优先 `DASHSCOPE_LLM_BASE_URL` -> 其次 `DASHSCOPE_BASE_URL` -> 默认根据 `DASHSCOPE_REGION`（beijing / singapore）。
+   - TTS 端点：优先 `DASHSCOPE_TTS_BASE_URL` -> 其次 `DASHSCOPE_BASE_URL` -> 默认根据 `DASHSCOPE_REGION`（beijing / singapore）。
+   - 共享通用 `DASHSCOPE_BASE_URL` 时，两端适配器各自自动转至对应协议，互不污染。
+
+### 安全与不变式
+
+- 配置必须显式声明 `send_text_to_cloud = true`。
+- 音频解码强制验证 WAV 容器头部（RIFF/WAVE）与参数，下载仅允许合法 HTTP/HTTPS 目标并禁止本地环回 SSRF。
+- 完整保留 physical request telemetry（`billing_evidence = "dashscope_tts"`）与任务级 usage 审计。
+- 完全不修改独立的本地 `qwen-local` 适配器。
+
+## TTS 质量路由与单集一致性（Phase 19 R4）
+
+可选 `[tts_routing]` 把播客音频合成需求映射为标准（`standard`）或高品质（`high_quality`）Provider。单个 Episode/Job 在开始生成前根据配置解析出唯一 TTS Provider，**严禁在单集生成中途跨 Provider 换声**。
+
+### 配置字段
+
+| 字段 | 含义 |
+| --- | --- |
+| `tts_routing.standard` | 标准品质的 TTS Provider 名称（如 `qwen-tts`） |
+| `tts_routing.high_quality` | 高品质的 TTS Provider 名称（如 `gemini-tts`） |
+| `tts_routing.default_quality` | 默认品质档位（`"standard"` 或 `"high_quality"`，默认 `"standard"`） |
+
+所声明的 Provider 必须属于 `tts_priority` 候选池。当未配置 `[tts_routing]` 时，系统保持旧版行为与快照完全向后兼容。
+
+### 选择与覆盖
+
+- `--tts-provider auto`：使用 `default_quality` 所指派的单一 Provider。
+- `--tts-provider standard`：解析为 `tts_routing.standard` 单一 Provider。
+- `--tts-provider high` 或 `--tts-provider high_quality`：解析为 `tts_routing.high_quality` 单一 Provider。
+- `--tts-provider NAME`（如 `--tts-provider kokoro` 或 `--tts-provider gemini-tts`）：明确 override 优先，使用单实例平坦链。
+
+离线演示配置见 `examples/tts-routing-mock.toml`；完整云端组合配置见 `examples/model-routing-cloud.toml`。
+
+## 统一入口与迁移（Phase 19 R6）
+
+- **Web Worker 传递与一致性修复**：修复 `WebService` 提交任务时保存的 `tts_selection` 未完整传给 `web_worker.py` 内部 `configured_pipeline` 的既有缺陷。现在用户在前端选择的语音引擎（`gemini` / `kokoro` / `auto`）在流水线启动时完整透传，并持久化到 `manifest.provider_settings['tts_selection']`。
+- **引擎命名兼容解析**：Web 请求中的 `tts_engine` 选项（`gemini` 或 `kokoro`）在提交时会优先匹配配置中同名 Provider，若不存在则智能映射至规范适配器名称（`gemini-tts` 或 `kokoro-local`），保证旧配置与新路由无缝协同。
+- **Onboarding 与 Doctor 语义**：`doctor --human` 明确展示 LLM 任务路由（`general` / `complex`）与 TTS 品质路由（`standard` / `high`）的启用状态；`provider_summary` 识别云端 DashScope 服务（`qwen-llm` 与 `qwen-cloud-tts`）。`ready` 状态指标保持向后兼容语义，代表各类型候选池中至少存在一个当前立即可用的 Provider。
+- **旧任务原样恢复**：旧 Job 在恢复时继续遵循任务创建时保存的 `manifest.provider_settings` 快照，严格不破坏历史 Provider 归属与审计记录。

@@ -79,7 +79,7 @@ def provider_summary(settings, reports: list[dict]) -> dict:
                      if by_name.get(candidate, {}).get('availability') == 'available'), priority[0])
         spec = specs[name]
         report = by_name.get(name, {})
-        cloud = spec.type in {'openai-compatible', 'gemini-tts'}
+        cloud = spec.type in {'openai-compatible', 'gemini-tts', 'qwen-llm', 'qwen-cloud-tts'}
         mode = '测试' if spec.type == 'mock' else '云端' if cloud else '本地'
         available = report.get('availability') == 'available'
         selected[kind] = {'name': name, 'model': spec.model, 'mode': mode,
@@ -93,8 +93,9 @@ def provider_summary(settings, reports: list[dict]) -> dict:
             steps.append('安装语音依赖和 Kokoro 模型：uv sync --extra tts；bookcast setup --profile deepseek-kokoro --install-model。')
         if spec.type == 'qwen-local' and not available:
             steps.append('实验性 Qwen 需要独立安装依赖、官方模型和可用 MPS；参阅 docs/TTS.md。')
-        if spec.type == 'gemini-tts' and not available and os.environ.get(spec.api_key_env or ''):
-            steps.append('检查 Gemini Developer API 凭证、访问权限和额度；该方案会向云端发送脚本文本。')
+        if spec.type in ('gemini-tts', 'qwen-cloud-tts') and not available and os.environ.get(spec.api_key_env or ''):
+            service_title = 'Gemini Developer API' if spec.type == 'gemini-tts' else 'DashScope API'
+            steps.append(f'检查 {service_title} 凭证、访问权限和额度；该方案会向云端发送脚本文本。')
     return {'selected': selected, 'real_voice': selected['tts']['real'],
             'ready': all(value['available'] for value in selected.values()), 'missing_steps': steps,
-            'privacy': '云端 Provider 会向第三方发送文本；Gemini TTS 仅在显式选择云端方案后启用。'}
+            'privacy': '云端 Provider 会向第三方发送文本；云端 TTS 仅在显式选择云端方案后启用。'}

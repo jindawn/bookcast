@@ -1,0 +1,36 @@
+# Offline routing demonstration: all models below are Mock, not real vendor APIs.
+schema_version = 1
+llm_priority = ["general-mock", "complex-mock"]
+tts_priority = ["mock-tts"]
+
+[llm_routing]
+general = ["general-mock"]
+cheap = ["general-mock"]
+complex = ["complex-mock"]
+high_quality = ["complex-mock"]
+
+[llm_routing.task_profiles]
+extraction = "cheap"
+chapter_synthesis = "general"
+book_synthesis = "complex"
+dialogue = "high_quality"
+consistency = "high_quality"
+other = "general"
+
+[[providers]]
+name = "general-mock"
+kind = "llm"
+type = "mock"
+model = "mock-llm-v1"
+
+[[providers]]
+name = "complex-mock"
+kind = "llm"
+type = "mock"
+model = "mock-llm-v1"
+
+[[providers]]
+name = "mock-tts"
+kind = "tts"
+type = "mock"
+model = "mock-tones-v1"

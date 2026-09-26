@@ -187,13 +187,21 @@ class WebService:
 
             settings = load_config(self.config)
             
+            resolved_tts = request.tts_engine
             if request.tts_engine == 'gemini':
-                gemini_spec = next((p for p in settings.providers if p.name == request.tts_engine), None)
+                gemini_spec = next((p for p in settings.providers if p.name in (request.tts_engine, 'gemini-tts') or p.type == 'gemini-tts'), None)
                 if not gemini_spec or not __import__('os').environ.get(gemini_spec.api_key_env or 'GEMINI_API_KEY'):
                     raise BookCastError("authentication_error: 未配置 GEMINI_API_KEY")
+                resolved_tts = gemini_spec.name
+            elif request.tts_engine == 'kokoro':
+                by_name = {p.name: p for p in settings.providers}
+                if 'kokoro' not in by_name:
+                    kokoro_spec = next((p for p in settings.providers if p.type == 'kokoro-local'), None)
+                    if kokoro_spec:
+                        resolved_tts = kokoro_spec.name
 
             record = WebJob(id=identifier, request=request, title=title, candidate=candidate,
-                            settings=settings_snapshot(settings, 'auto', request.tts_engine))
+                            settings=settings_snapshot(settings, 'auto', resolved_tts))
             write_json(root / 'submission.json', record.model_dump(mode='json'))
             self.launch(identifier)
         return self.status(identifier)

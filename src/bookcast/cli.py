@@ -154,7 +154,7 @@ def acquire(
     generate_audio: Annotated[bool, typer.Option("--generate", help="解析后接入原有 AI/音频流水线")] = False,
     pipeline_output_dir: Annotated[Path, typer.Option(help="音频流水线产物根目录")] = Path("output"),
     provider: Annotated[str, typer.Option(help="生成阶段 LLM 配置名或 auto")] = "auto",
-    tts_provider: Annotated[str, typer.Option(help="生成阶段 TTS 配置名或 auto")] = "auto",
+    tts_provider: Annotated[str, typer.Option(help="生成阶段 TTS 配置名、品质路由 (standard/high) 或 auto")] = "auto",
     config: Annotated[Path | None, typer.Option(help="生成阶段 Provider 配置")] = None,
     resume: Annotated[bool, typer.Option(help="继续未完成的音频生成任务；获取步骤自动复用检查点")] = False,
     mode: Annotated[str | None, typer.Option(help="生成模式：summary / deep_read / two_host")] = None,
@@ -226,7 +226,7 @@ def generate(
     resume: Annotated[bool, typer.Option(help="复用有效检查点，继续未完成的任务")] = False,
     output_dir: Annotated[Path, typer.Option(help="产物根目录")] = Path("output"),
     provider: Annotated[str, typer.Option(help="LLM 配置名称；auto 按优先级切换")] = "auto",
-    tts_provider: Annotated[str, typer.Option(help="TTS 配置名称或 auto")] = "auto",
+    tts_provider: Annotated[str, typer.Option(help="TTS 配置名称、品质路由 (standard/high) 或 auto")] = "auto",
     config: Annotated[Path | None, typer.Option(help="Provider TOML 文件，默认 bookcast.toml")] = None,
     mode: Annotated[str | None, typer.Option(help="summary / deep_read / two_host；新任务默认 two_host")] = None,
     minutes: Annotated[int | None, typer.Option(min=1, max=120, help="脚本目标分钟数；新任务默认10")] = None,
@@ -317,6 +317,8 @@ def doctor(
                                if spec.type == "kokoro-local" and report.availability != "available" else {}),
                             **({"action": "Qwen为实验MPS Provider；按docs/TTS.md在独立环境安装qwen extra、固定官方模型并检查MPS。"}
                                if spec.type == "qwen-local" and report.availability != "available" else {}),
+                            **({"action": "检查 DashScope 凭证 DASHSCOPE_API_KEY 与区域端点。"}
+                               if spec.type in ("qwen-llm", "qwen-cloud-tts") and report.availability != "available" else {}),
                             "capabilities": instance.capabilities().model_dump()})
         ready = {kind: any(r["provider"] in priority and r["availability"] == "available"
                           and r["capabilities"][capability] for r in reports)
@@ -353,6 +355,10 @@ def doctor(
                 typer.echo(f"✗ 待完成：{action}")
             if not summary['real_voice']:
                 typer.echo('△ 当前 TTS 只生成测试音调。真实语音可选 deepseek-kokoro 方案。')
+            if settings.llm_routing is not None:
+                typer.echo(f"✓ LLM 任务路由已启用（general: {settings.llm_routing.general.primary} / complex: {settings.llm_routing.complex.primary}）")
+            if settings.tts_routing is not None:
+                typer.echo(f"✓ TTS 品质路由已启用（standard: {settings.tts_routing.standard.primary} / high: {settings.tts_routing.high_quality.primary}）")
             typer.echo(f"{'✓' if healthy else '✗'} {'可以生成' if healthy else '配置尚未就绪'}")
         else:
             typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
@@ -411,7 +417,12 @@ def cost(
         print(f"\n{p_dict['provider']} / {p_dict['model']} {'— Current' if is_current else '— Historical'}")
         print(f"Requests: {p_dict['request_count']}")
         print(f"Duration: {int(p_dict['audio_duration_seconds'])}s")
-        print("Cost: unavailable")
+        if p_dict.get('characters'):
+            print(f"Characters: {p_dict['characters']}")
+        if p_dict['cost']['status'] == 'unavailable':
+            print("Cost: unavailable")
+        else:
+            print(f"Known cost: ¥{p_dict['cost']['amount']:.4f} ({p_dict['cost']['status']})")
 
     print(f"\nKnown total: ¥{summary['total']['known_amount']:.2f} ({summary['total']['status']})")
 
@@ -507,7 +518,7 @@ def resume_command(
     output_dir: Annotated[Path, typer.Option(help='任务存储根目录')] = Path('output'),
     config: Annotated[Path | None, typer.Option(help='显式替换保存的 Provider 配置')] = None,
     provider: Annotated[str | None, typer.Option(help='LLM 配置名或 auto')] = None,
-    tts_provider: Annotated[str | None, typer.Option(help='TTS 配置名或 auto')] = None,
+    tts_provider: Annotated[str | None, typer.Option(help='TTS 配置名、品质路由 (standard/high) 或 auto')] = None,
 ) -> None:
     """从导入副本恢复 pending、stale 或临时失败任务；保留已完成产物。"""
     continue_job(job,output_dir,config,provider,tts_provider,retry=False)
@@ -519,7 +530,7 @@ def retry_command(
     output_dir: Annotated[Path, typer.Option(help='任务存储根目录')] = Path('output'),
     config: Annotated[Path | None, typer.Option(help='修复或替换 Provider 配置')] = None,
     provider: Annotated[str | None, typer.Option(help='LLM 配置名或 auto')] = None,
-    tts_provider: Annotated[str | None, typer.Option(help='TTS 配置名或 auto')] = None,
+    tts_provider: Annotated[str | None, typer.Option(help='TTS 配置名、品质路由 (standard/high) 或 auto')] = None,
     revise_segment: Annotated[str | None, typer.Option(help='显式改写质量失败的片段')] = None,
 ) -> None:
     """原因修复后显式重试永久失败；不从头生成已完成章节。"""

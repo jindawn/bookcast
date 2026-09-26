@@ -30,7 +30,17 @@ def run_worker(data_dir: Path, identifier: str):
         try:
             existing = service.core_path(identifier)
             if existing:
-                pipeline = resume_pipeline(load_manifest(existing), existing.parent, None, None, None)
+                manifest = load_manifest(existing)
+                llm_selection = None
+                tts_selection = None
+                if record.settings:
+                    llm_sel = record.settings.get('llm_selection')
+                    tts_sel = record.settings.get('tts_selection')
+                    if llm_sel and llm_sel != 'auto':
+                        llm_selection = llm_sel
+                    if tts_sel and tts_sel != 'auto':
+                        tts_selection = tts_sel
+                pipeline = resume_pipeline(manifest, existing.parent, None, llm_selection, tts_selection)
                 pipeline.resume_job(existing.parent, retry=record.retry)
             else:
                 metadata = None
@@ -46,7 +56,9 @@ def run_worker(data_dir: Path, identifier: str):
                     metadata = BookMetadata.model_validate_json((acquired / 'metadata.json').read_text())
                     source = acquired / 'source' / f'input.{offers[0].format}'
                 settings = ProvidersConfig.model_validate(record.settings['config'])
-                pipeline = configured_pipeline(settings, root / 'output')
+                llm_selection = record.settings.get('llm_selection', 'auto') if record.settings else 'auto'
+                tts_selection = record.settings.get('tts_selection', 'auto') if record.settings else 'auto'
+                pipeline = configured_pipeline(settings, root / 'output', provider=llm_selection, tts_provider=tts_selection)
                 pipeline.generate(source, metadata_seed=metadata, mode=record.request.mode, minutes=record.request.minutes)
             record.status = 'SUCCEEDED'
         except (Exception, KeyboardInterrupt) as exc:

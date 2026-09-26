@@ -3,12 +3,14 @@
 import json
 import os
 import re
+import time
 from urllib import error, request
 from urllib.parse import urlsplit
 
 from pydantic import ValidationError
 
-from ..provider_api import ErrorKind, ProviderError, ProviderStatus, ProviderCapabilities, T
+from ..models import utc_now
+from ..provider_api import ErrorKind, ProviderError, ProviderStatus, ProviderCapabilities, ProviderRequestContext, T
 from ..provider_config import ProviderSpec, is_loopback
 from ..storage import fingerprint
 from ..generation import GenerationAudit, ProviderUsage, resolve_generation
@@ -58,12 +60,66 @@ class CompatibleBase:
     def __init__(self, spec: ProviderSpec):
         self.spec, self.name, self.model = spec, spec.name, spec.model
         self.last_status = ProviderStatus(provider=self.name, model=self.model)
+        self.context: ProviderRequestContext | None = None
+
+    def set_context(self, context: ProviderRequestContext | None) -> None:
+        self.context = context
 
     @property
     def cache_key(self) -> str:
         return fingerprint({"type": self.spec.type, "model": self.model, "endpoint": self.spec.base_url})
 
+    def _record_physical(self, context: ProviderRequestContext | None, record: dict) -> None:
+        if context is None or not getattr(context, 'telemetry_path', None):
+            return
+        try:
+            context.telemetry_path.parent.mkdir(parents=True, exist_ok=True)
+            encoded = (json.dumps(record, ensure_ascii=False, separators=(',', ':')) + '\n').encode()
+            fd = os.open(context.telemetry_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+            try:
+                if os.write(fd, encoded) != len(encoded):
+                    raise OSError('short telemetry write')
+            finally:
+                os.close(fd)
+        except OSError:
+            if context.on_telemetry_degraded:
+                try:
+                    context.on_telemetry_degraded('PHYSICAL_REQUEST_LOG_UNAVAILABLE')
+                except Exception:
+                    pass
+
     def _request(self, route: str, payload: dict | None = None) -> bytes:
+        started = utc_now()
+        t0 = time.perf_counter()
+        url = self.spec.base_url.rstrip("/") + "/" + route
+        parsed_url = urlsplit(url)
+        host = parsed_url.hostname or ""
+        port_part = f":{parsed_url.port}" if parsed_url.port else ""
+        clean_netloc = f"{host}{port_part}" if host else parsed_url.netloc
+        clean_endpoint = parsed_url._replace(netloc=clean_netloc, query="", fragment="").geturl()
+
+        def _log_physical(http_status: int | None, result: str, *, failure: ProviderError | None = None, usage_avail: bool = False):
+            self._record_physical(self.context, {
+                'job_id': self.context.job_id if self.context else None,
+                'output_id': self.context.output_id if self.context else None,
+                'logical_chunk_id': self.context.logical_chunk_id if self.context else None,
+                'chunk_id': self.context.logical_chunk_id if self.context else None,
+                'provider': self.name,
+                'model': self.model,
+                'endpoint': clean_endpoint,
+                'physical_attempt_index': getattr(self.context, 'physical_attempt_index', 0) if self.context else 0,
+                'started_at': started,
+                'finished_at': utc_now(),
+                'latency': round(time.perf_counter() - t0, 3),
+                'http_status': http_status,
+                'result': result,
+                'retry_reason': failure.kind.value if failure and failure.retryable else None,
+                'retryable': failure.retryable if failure else False,
+                'usage_available': usage_avail,
+                'billing_evidence': f"{self.spec.type}_http",
+                'error_kind': failure.kind.value if failure else None,
+            })
+
         try:
             headers = {"Content-Type": "application/json"}
             if self.spec.api_key_env:
@@ -71,7 +127,6 @@ class CompatibleBase:
                 if not key:
                     raise ProviderError(ErrorKind.AUTH)
                 headers["Authorization"] = f"Bearer {key}"
-            url = self.spec.base_url.rstrip("/") + "/" + route
             data = json.dumps(payload, ensure_ascii=False).encode() if payload is not None else None
             req = request.Request(url, data=data, headers=headers)
             with request.build_opener(NoRedirect()).open(req, timeout=self.spec.timeout_seconds) as response:
@@ -79,19 +134,40 @@ class CompatibleBase:
                 if len(result) > 32 * 1024 * 1024:
                     raise ProviderError(ErrorKind.SCHEMA)
             self.last_status = ProviderStatus(provider=self.name, model=self.model, availability="available")
+            usage_avail = False
+            if result and result[:1] in (b'{', b'['):
+                try:
+                    parsed = json.loads(result.decode('utf-8'))
+                    usage_avail = bool(parsed.get('usage'))
+                except Exception:
+                    pass
+            _log_physical(200, "succeeded", usage_avail=usage_avail)
             return result
         except error.HTTPError as exc:
             failure = classify_http(exc.code, exc.read(64 * 1024))
+            _log_physical(exc.code, "failed", failure=failure)
+            self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
+            raise failure from None
         except error.URLError as exc:
             failure = ProviderError(ErrorKind.TIMEOUT if isinstance(exc.reason, TimeoutError) else ErrorKind.UNAVAILABLE)
+            _log_physical(None, "failed", failure=failure)
+            self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
+            raise failure from None
         except TimeoutError:
             failure = ProviderError(ErrorKind.TIMEOUT)
+            _log_physical(None, "failed", failure=failure)
+            self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
+            raise failure from None
         except ProviderError as exc:
             failure = ProviderError(exc.kind)
+            _log_physical(None, "failed", failure=failure)
+            self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
+            raise failure from None
         except (OSError, ValueError):
             failure = ProviderError(ErrorKind.INPUT)
-        self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
-        raise failure from None
+            _log_physical(None, "failed", failure=failure)
+            self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
+            raise failure from None
 
     def health_check(self) -> ProviderStatus:
         try:
@@ -122,6 +198,7 @@ class CompatibleLLMProvider(CompatibleBase):
         bound = type(self)(self.spec)
         if self.spec.generation is not None or self.spec.reasoning_policy is not None:
             bound.generation_audit = resolve_generation(task, self.spec.reasoning_policy, self.spec.generation)
+        bound.set_context(self.context)
         return bound
 
     @property

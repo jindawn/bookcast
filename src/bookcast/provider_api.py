@@ -189,3 +189,4 @@ class ProviderRequestContext:
     model: str
     telemetry_path: Path
     on_telemetry_degraded: Callable[[str], None] | None = None
+    physical_attempt_index: int = 0

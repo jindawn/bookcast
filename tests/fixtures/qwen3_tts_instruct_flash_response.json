@@ -1,0 +1,20 @@
+{
+  "status_code": 200,
+  "request_id": "5c63c65c-cad8-4bf4-959d-6471e467d382",
+  "code": "",
+  "message": "",
+  "output": {
+    "text": null,
+    "finish_reason": "stop",
+    "choices": null,
+    "audio": {
+      "data": "",
+      "url": "http://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/1d/ab/20260926/d2033070/39b6d8f2-c0db-4daa-9073-5d27bfb66b78.wav?Expires=1766113409&OSSAccessKeyId=YOUR_ACCESS_KEY_ID&Signature=YOUR_SIGNATURE",
+      "id": "audio_5c63c65c-cad8-4bf4-959d-6471e467d382",
+      "expires_at": 1766113409
+    }
+  },
+  "usage": {
+    "characters": 18
+  }
+}

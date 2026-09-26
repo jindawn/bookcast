@@ -171,3 +171,9 @@ Source Resolver 是 AI Pipeline 之前的独立边界：CLI → SourceRegistry /
 Phase 8 复用 manifest v3，不增加第二套语音任务库。UnitTTSProvider 通过 capabilities.speech_units 协商；一次调用至多80字符，由 Core 记录最小任务和实际音色归属。已完成旧整段音频保留，新语音以 input hash/契约版本/模型资产与配置摘要验证缓存，汇总片段由单句文件哈希决定。详见 D-016。
 
 没有开机自动执行、账户、支付、云同步或桌面发行。Tauri 的后续复用与取舍见 WEB/D-015；真实中文写作已完成Phase 9技术验收并保留来源归属警告，人声自然度仍需在实际生成样例上人工试听。
+
+## Phase19 模型路由边界
+
+现有 Registry/ProviderChain/Protocol 足够复用；新增任务意图到候选链的显式 opt-in Router，设计及实测现状见 [model-routing-refactor.md](model-routing-refactor.md)。未配置路由的调用、缓存和序列化保持兼容。TTS质量路由尚未实现，不宣称旧fallback链满足episode单供应商。
+
+前文“没有数据库”指Job仍使用manifest；D-024限流器已有SQLite。实际SpeechUnit上限仍为80字符，Gemini传输已使用Interactions（D-024取代D-019旧传输描述）。

@@ -145,12 +145,26 @@ def render_speech(r, script, inputs, version, legacy_inputs=None):
             if not provider.capabilities().speech_units:
                 raise ProviderError(ErrorKind.INPUT)
             with atomic_target(r.path(name)) as temporary:
-                info = SpeechInfo.model_validate(provider.synthesize_unit(unit, temporary))
+                contextual = getattr(provider, 'synthesize_unit_with_context', None)
+                if callable(contextual):
+                    from .provider_api import ProviderRequestContext
+                    context = ProviderRequestContext(
+                        job_id=r.manifest.job_id, output_id=r.manifest.output_id,
+                        logical_chunk_id=task, provider=provider.name, model=provider.model,
+                        telemetry_path=r.path('usage/physical_requests.jsonl'),
+                        on_telemetry_degraded=lambda reason: r.event(
+                            'telemetry_diagnostic', details={'diagnostic': reason,
+                                                            'logical_chunk_id': task}),
+                    )
+                    info = SpeechInfo.model_validate(contextual(unit, temporary, context=context))
+                else:
+                    info = SpeechInfo.model_validate(provider.synthesize_unit(unit, temporary))
                 if (info.audio_kind == "mock") != provider.capabilities().mock:
                     raise ProviderError(ErrorKind.SCHEMA)
                 check_audio(temporary)
             write_json(r.path(info_name), {**info.model_dump(), "provider": provider.name, "model": provider.model,
-                "speaker": unit.speaker, "duration_seconds": wav_seconds(r.path(name))})
+                "speaker": unit.speaker, "duration_seconds": wav_seconds(r.path(name)),
+                "character_count": len(unit.text)})
             return [name, info_name]
         r.step(task, unit_inputs, lambda: r.ai_operation(task, "tts", UNIT_VERSION, unit_inputs, invoke))
         audio.append(name)

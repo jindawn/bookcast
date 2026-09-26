@@ -1,10 +1,11 @@
 """Bounded failover over configured providers, with a durable attempt observer."""
 
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from uuid import uuid4
 
 from .models import AIAttempt, utc_now
-from .provider_api import Provider, ProviderError, ProviderStatus, ErrorKind, FAILOVER_ERRORS, classify_error
+from .provider_api import Provider, ProviderError, ProviderStatus, ErrorKind, FAILOVER_ERRORS, classify_error, ProviderRequestContext
 from .storage import fingerprint
 
 
@@ -52,7 +53,8 @@ class ProviderChain:
                     return
 
     def execute(self, *, task: str, kind: str, prompt_version: str, input_hash: str,
-                invoke: Callable, persist: Callable, observe: Callable[[AIAttempt], None]) -> dict[str, str]:
+                invoke: Callable, persist: Callable, observe: Callable[[AIAttempt], None],
+                context: ProviderRequestContext | None = None) -> dict[str, str]:
         order = list(range(self.index, len(self.providers))) + list(range(self.index))
         last_error = ProviderError(ErrorKind.UNAVAILABLE)
         for index in order:
@@ -67,6 +69,14 @@ class ProviderChain:
                 observe(attempt)
                 attempt.status, attempt.timestamp = "running", utc_now()
                 observe(attempt)
+                if context is not None and hasattr(provider, 'set_context'):
+                    attempt_context = replace(
+                        context,
+                        provider=provider.name,
+                        model=provider.model,
+                        physical_attempt_index=correction,
+                    )
+                    provider.set_context(attempt_context)
                 invoked = False
                 try:
                     result = invoke(provider)

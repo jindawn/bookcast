@@ -51,12 +51,16 @@ def _off_peak(timestamp: str | None, policy: dict) -> bool | None:
 def _row(provider: str, model: str, *, tts: bool = False) -> dict:
     row = {'provider': provider, 'model': model}
     if tts:
-        row.update(request_count=0, retry_count=0, audio_duration_seconds=0.0,
-                   usage_available=False, cost={'amount': 0.0, 'status': 'unavailable'})
+        row.update(request_count=0, retry_count=0, characters=0, audio_duration_seconds=0.0,
+                   usage_available=False, cost={'amount': 0.0, 'status': 'actual'},
+                   estimated_cost=None, actual_cost=None, billing_evidence=None,
+                   original_cost=0.0, original_currency='CNY', exchange_rate=1.0,
+                   converted_cost=0.0, converted_currency='CNY')
     else:
         row.update(requests=0, usage={'cached_input_tokens': 0, 'uncached_input_tokens': 0,
                                       'output_tokens': 0, 'reasoning_tokens': 0},
-                   cost={'amount': 0.0, 'status': 'actual'}, by_stage={})
+                   cost={'amount': 0.0, 'status': 'actual'}, by_stage={},
+                   estimated_cost=None, actual_cost=None, billing_evidence=None)
     return row
 
 
@@ -79,8 +83,11 @@ def _selected(settings: dict | None, config: ProvidersConfig | None, kind: str) 
         return None, None
     settings = settings if isinstance(settings, dict) else {}
     selection = settings.get(f'{kind}_selection', 'auto')
-    names = config.llm_priority if kind == 'llm' else config.tts_priority
-    name = names[0] if selection == 'auto' and names else selection if isinstance(selection, str) else None
+    if kind == 'tts' and config.tts_routing is not None:
+        name = config.tts_routing.resolve(selection)
+    else:
+        names = config.llm_priority if kind == 'llm' else config.tts_priority
+        name = names[0] if selection == 'auto' and names else selection if isinstance(selection, str) else None
     spec = next((item for item in config.providers if item.name == name), None)
     return name, spec.model if spec else None
 
@@ -184,15 +191,120 @@ def calculate_cost_summary(calls: list, config: ProvidersConfig | None,
         usage = call.provider_reported_usage
         if usage is not None and (usage.input_tokens is not None or usage.output_tokens is not None):
             row['usage_available'] = True
+
+        call_duration = 0.0
+        call_chars = 0
         if call.status == 'completed' and call.artifacts and root_dir:
             for artifact in call.artifacts:
                 if artifact.endswith('.json') and artifact not in tts_audio:
                     tts_audio.add(artifact)
                     try:
                         data = json.loads(artifact_path(root_dir, artifact).read_text(encoding='utf-8'))
-                        row['audio_duration_seconds'] += data.get('duration_seconds', 0.0)
+                        d = data.get('duration_seconds', 0.0)
+                        call_duration += d
+                        row['audio_duration_seconds'] += d
+                        c = data.get('character_count', 0)
+                        call_chars += c
+                        row['characters'] += c
                     except (OSError, ValueError, TypeError, BookCastError):
                         pass
+
+        if call_chars == 0 and usage is not None and usage.input_tokens:
+            call_chars = usage.input_tokens
+            row['characters'] += call_chars
+
+        tts_status = 'estimated'
+        tts_price = None
+        if not snapshot_complete or config is None:
+            tts_status = 'unavailable'
+        else:
+            tier = config.pricing.get(call.model)
+            if tier is None:
+                tts_status = 'unavailable'
+            else:
+                off_peak = _off_peak(call.timestamp, policy)
+                tts_price = tier.off_peak if off_peak else tier.peak
+                tts_price = tts_price or tier.default
+                if tts_price is None:
+                    tts_status = 'unavailable'
+
+        call_amount = 0.0
+        converted_amount = 0.0
+        if tts_price is not None:
+            price_currency = getattr(tts_price, 'currency', 'CNY') or 'CNY'
+            billing_unit = getattr(tts_price, 'billing_unit', 'auto') or 'auto'
+            char_rate = getattr(tts_price, 'characters_per_million', 0.0)
+            sec_rate = getattr(tts_price, 'audio_seconds_per_million', 0.0)
+            audio_token_rate = getattr(tts_price, 'audio_tokens_per_million', 0.0)
+            uncached_rate = getattr(tts_price, 'uncached_input_per_million', 0.0)
+            cached_rate = getattr(tts_price, 'cached_input_per_million', 0.0)
+            out_rate = getattr(tts_price, 'output_per_million', 0.0)
+
+            row['original_currency'] = price_currency
+
+            if billing_unit == 'characters':
+                if char_rate > 0 and call_chars > 0:
+                    call_amount = (call_chars * char_rate) / 1_000_000
+            elif billing_unit == 'audio_duration':
+                if sec_rate > 0 and call_duration > 0:
+                    call_amount = (call_duration * sec_rate) / 1_000_000
+                if uncached_rate > 0:
+                    in_t = getattr(usage, 'input_tokens', None) if usage else None
+                    if in_t is None and call_chars > 0:
+                        in_t = call_chars
+                    if in_t:
+                        call_amount += (in_t * uncached_rate) / 1_000_000
+            elif billing_unit == 'audio_tokens':
+                if audio_token_rate > 0 and usage and getattr(usage, 'output_tokens', None):
+                    call_amount = (usage.output_tokens * audio_token_rate) / 1_000_000
+                elif sec_rate > 0 and call_duration > 0:
+                    call_amount = (call_duration * sec_rate) / 1_000_000
+                if uncached_rate > 0 and usage and getattr(usage, 'input_tokens', None):
+                    call_amount += (usage.input_tokens * uncached_rate) / 1_000_000
+            else:  # 'auto'
+                if char_rate > 0 and call_chars > 0 and price_currency == 'CNY':
+                    call_amount = (call_chars * char_rate) / 1_000_000
+                elif sec_rate > 0 and call_duration > 0:
+                    call_amount = (call_duration * sec_rate) / 1_000_000
+                    if uncached_rate > 0 and usage and getattr(usage, 'input_tokens', None):
+                        call_amount += (usage.input_tokens * uncached_rate) / 1_000_000
+                elif char_rate > 0 and call_chars > 0:
+                    call_amount = (call_chars * char_rate) / 1_000_000
+                elif uncached_rate > 0 or out_rate > 0:
+                    if usage and (usage.input_tokens is not None or usage.output_tokens is not None):
+                        cached_t = getattr(usage, 'cache_hit_tokens', 0) or 0
+                        uncached_t = max(0, (usage.input_tokens or 0) - cached_t)
+                        output_t = usage.output_tokens or 0
+                        call_amount = (
+                            (cached_t * cached_rate)
+                            + (uncached_t * uncached_rate)
+                            + (output_t * out_rate)
+                        ) / 1_000_000
+                    elif call_chars > 0 and uncached_rate > 0:
+                        call_amount = (call_chars * uncached_rate) / 1_000_000
+
+            row['original_cost'] += call_amount
+
+            summary_currency = summary.get('currency', 'CNY')
+            if price_currency != summary_currency:
+                rates = getattr(config, 'exchange_rates', {}) or {}
+                exchange_rate = rates.get(price_currency, 7.20 if price_currency == 'USD' else 1.0)
+                converted_amount = call_amount * exchange_rate
+                row['exchange_rate'] = exchange_rate
+                row['converted_currency'] = summary_currency
+            else:
+                converted_amount = call_amount
+                row['exchange_rate'] = 1.0
+                row['converted_currency'] = price_currency
+
+            known += converted_amount
+        else:
+            any_unknown = True
+            converted_amount = 0.0
+
+        row['cost']['amount'] += converted_amount
+        row['cost']['status'] = _worse(row['cost']['status'], tts_status)
+
     if llm_name and llm_model:
         current_key = _group(llm_name, llm_model)
         if current_key not in summary['llm']['providers']:
@@ -200,16 +312,42 @@ def calculate_cost_summary(calls: list, config: ProvidersConfig | None,
             row['cost']['status'] = 'unavailable'
             summary['llm']['providers'][current_key] = row
     if tts_name and tts_model:
-        summary['tts']['providers'].setdefault(_group(tts_name, tts_model), _row(tts_name, tts_model, tts=True))
+        current_key = _group(tts_name, tts_model)
+        if current_key not in summary['tts']['providers']:
+            row = _row(tts_name, tts_model, tts=True)
+            row['cost']['status'] = 'unavailable'
+            summary['tts']['providers'][current_key] = row
+
     for row in summary['llm']['providers'].values():
         row['cost']['amount'] = round(row['cost']['amount'], 4)
+        row['estimated_cost'] = row['cost']['amount'] if row['cost']['status'] != 'unavailable' else None
+        row['actual_cost'] = None
         for part in row['by_stage'].values():
             part['cost']['amount'] = round(part['cost']['amount'], 4)
+            part['estimated_cost'] = part['cost']['amount'] if part['cost']['status'] != 'unavailable' else None
+            part['actual_cost'] = None
+
+    for row in summary['tts']['providers'].values():
+        row['cost']['amount'] = round(row['cost']['amount'], 4)
+        row['estimated_cost'] = row['cost']['amount'] if row['cost']['status'] != 'unavailable' else None
+        row['actual_cost'] = None
+        if 'original_cost' in row:
+            row['original_cost'] = round(row['original_cost'], 5)
+            row['converted_cost'] = row['cost']['amount']
+
     summary['total']['known_amount'] = round(known, 4)
-    summary['total']['status'] = ('unavailable' if llm_calls and not known and any_unknown and
-                                  all(row['cost']['status'] == 'unavailable'
-                                      for row in summary['llm']['providers'].values()) else
-                                  'partial' if any_unknown or summary['tts']['providers'] else 'actual')
+    summary['total']['estimated_cost'] = round(known, 4) if (known > 0 or not any_unknown) else None
+    summary['total']['actual_cost'] = None
+
+    has_unpriced = any_unknown or any(
+        r['cost']['status'] == 'unavailable'
+        for r in list(summary['llm']['providers'].values()) + list(summary['tts']['providers'].values())
+    )
+    summary['total']['status'] = (
+        'unavailable' if not known and has_unpriced and (llm_calls or summary['tts']['providers']) else
+        'partial' if has_unpriced else
+        'actual'
+    )
     for stage, retries in stage_retries.items():
         if retries > 3 and retries / max(1, stage_requests[stage]) > 0.2:
             summary['diagnostics'].append(f'成本异常提示：本次 {stage} 阶段重试 {retries} 次，可能增加额外费用。')

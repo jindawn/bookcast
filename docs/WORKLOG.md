@@ -2,6 +2,250 @@
 
 本文件只追加重要、可验证的开发事实。已写入的历史条目不重写；纠错另加条目。时间使用 UTC，后续条目包含任务、结果、测试与关联提交（若当时已存在）。
 
+## 2026-09-26T14:15:00Z — Phase 19.3A TTS 成本模型纠偏与 A/B 对比数据校准
+
+- 背景与原因：
+  * Phase 19.3A 初始汇报中将 Gemini 3.8 Flash-Lite TTS 误按字符计费（套用 Qwen 计费模型：15 元/百万字），得出“Gemini 便宜 81.24%”、“25分钟仅需 0.10 元”的错误结论。
+  * 依据 Google 官方公开定价，Gemini 3.8 Flash-Lite TTS 计费单位为：
+    - 音频输出：$6 / 1,000,000 audio tokens（官方等价：$0.0015 / 10 秒 = $150.00 USD / 1,000,000 秒）
+    - 文本输入：$0.50 USD / 1,000,000 text tokens
+- 修正内容与架构完善：
+  1. 计价模型与配置架构升级：
+     - `src/bookcast/provider_config.py`：`ModelPricing` 扩展 `currency`（支持 CNY、USD）、`billing_unit`（支持 'auto'、'characters'、'audio_duration'、'audio_tokens'、'tokens'）以及 `audio_tokens_per_million`；`ProvidersConfig` 增加独立汇率配置层 `exchange_rates`（默认 `{'USD': 7.20}`）。
+     - `src/bookcast/cost.py`：TTS 计费按 `billing_unit` 精准分发：
+       * `characters`：按每百万字单价计算。
+       * `audio_duration`：按每百万秒单价计算真实音频时长费用，叠加未缓存输入 token 费用。
+       * `audio_tokens`：优先使用服务端返回的真实音频 token，若无则回退至官方时长等价值。
+       * 汇率换算与双币种跟踪：在细项中完整记录 `original_cost`、`original_currency`、`exchange_rate`、`converted_cost`、`converted_currency`，不在 Provider 逻辑中硬编码汇率。
+     - `bookcast.toml` 与 `examples/model-routing-cloud.toml`：
+       * `qwen3-tts-instruct-flash`：`currency = "CNY"`, `billing_unit = "characters"`, `characters_per_million = 80.00`。
+       * `gemini-3.8-flash-lite-tts`：`currency = "USD"`, `billing_unit = "audio_duration"`, `audio_seconds_per_million = 150.00` ($0.0015/10s), `audio_tokens_per_million = 6.00`, `uncached_input_per_million = 0.50`。
+  2. 离线测试覆盖：
+     - 新增 `tests/test_gemini_tts_pricing.py`，完整覆盖配置解析、时长计费、token 计费及 USD->CNY 汇率换算；离线集成测试注册至 `tests/conftest.py`。
+  3. 已有 A/B 数据重算（0 真实 API 调用）：
+     - Candidate A（Qwen3-TTS-Instruct-Flash，157.62s，765字）：
+       * 成本：765 * 80 / 1,000,000 = 0.06120 CNY
+       * 成品分钟成本：0.02330 CNY / min
+       * 25 分钟投影：0.5824 CNY
+     - Candidate B（Gemini 3.8 Flash-Lite TTS，170.30s，765字/约765 tokens）：
+       * 原始成本：音频 170.30 * $0.00015 = $0.02555 USD + 文本 765 * $0.0000005 = $0.00038 USD = $0.02593 USD
+       * 汇率换算（7.20）：0.1867 CNY
+       * 成品分钟成本：$0.00913 USD / min（约 0.0658 CNY / min）
+       * 25 分钟投影：$0.2283 USD（约 1.644 CNY）
+  4. 结论纠偏与正式撤回声明：
+     - 正式撤回上一轮关于“Gemini 便宜 81.24%”、“Gemini 约 0.10 元 / 25 分钟”的错误表述。
+     - 校准后的真实结论：在人民币计费视角下，Qwen3-TTS-Instruct-Flash 实际上比 Gemini 3.8 Flash-Lite TTS 便宜 67.2%（Gemini 约为 Qwen 成本的 2.82~3.05 倍）。
+     - 暂停对默认 TTS 路由的任何调整，维持当前策略：`standard: qwen3-tts-instruct-flash`，`high: gemini-3.8-flash-lite-tts`。
+
+## 2026-09-26T13:55:00Z — Phase 19.3A TTS 真实 A/B 评测完成
+
+- 目标：在严格控制变量（不修改 LLM routing、Prompt、reasoning 策略或集中计价）的前提下，针对 3 分钟标准时长中文双人播客，对 Qwen3-TTS-Instruct-Flash（标准质量）与 Gemini 3.8 Flash-Lite TTS（高音质）开展首轮真实 A/B 评测与盲测资产构建。
+- STEP 1 冻结测试稿：
+  * 构建并锁定 `output/ab/tts_ab_script.json`：固定 22 轮对话、765 个中文字符，包含普通陈述、疑问句、长句、短句、强调、数字（2026年、80%、3倍）、英文词（AI、API、stress test、feedback）、书名与人名（《思考，快与慢》、丹尼尔·卡尼曼、查理·芒格）、自然停顿与轻微情绪变化。
+  * 两候选模型输入完全相同，禁止分别改写。
+- STEP 2 & STEP 3 真实模型生成：
+  * Candidate A（Qwen3-TTS-Instruct-Flash）：Cherry（Host）+ Ethan（Guest），自然沉稳与好奇互动正式 instruction，单句单元合成（22 请求，每请求 0.78s~3.80s，平均 2.41s，P95 3.63s），生成音频时长 157.62s，墙上耗时 53.03s，RTF 0.336，估算成本 0.0612 元。0 重试，0 失败。
+  * Candidate B（Gemini 3.8 Flash-Lite TTS）：Kore（Host）+ Puck（Guest），语义对齐之正式风格 prompt，多轮片段合成（2 请求，590字 + 175字，耗时 22.41s + 18.81s，平均 20.61s，P95 22.23s），生成音频时长 170.30s，墙上耗时 41.23s，RTF 0.242，估算成本 0.01148 元。0 重试，0 失败。
+- STEP 4 统一后处理：
+  * 两份音频经过完全一致的 FFmpeg 后处理链：EBU R128 (-16 LUFS) 响度归一化至 24kHz/16-bit PCM 单声道 WAV，并转码 128kbps MP3。
+  * 生成 `output/ab/A.wav`、`output/ab/B.wav` 与 `output/ab/A.mp3`、`output/ab/B.mp3`。
+- STEP 5 指标与分析：
+  * 自动采集 23 项指标落盘至 `output/ab/metrics.json`。
+  * 成本比较：Qwen 0.02330 元/成品分（25分钟投影 0.5824 元），Gemini Lite 0.00404 元/成品分（25分钟投影 0.1011 元），Gemini Lite 比 Qwen 节省 81.24% 成本。
+- STEP 6 盲听评分资产：
+  * 生成 `evaluation/tts_ab_blind_score.json`，含 12 项 1–5 分主观维度及质性反馈栏，评分留空待人工盲听填写。
+- 盲测映射：
+  * 隔离保存在 `output/ab/ab_mapping.json`，测试前不对盲听用户展示对应关系。
+
+## 2026-09-26T13:36:00Z — Phase 19.2 Telemetry 与成本精度修正及 Reasoning Token 审计完成并验证
+
+- 处理 Phase 19.2 Live E2E 验收后的两项关键遥测/成本精度问题并完成 Reasoning Token 深度审计，杜绝重复调用真实 API：
+  - 问题 1：Qwen3-TTS-Instruct-Flash 集中计价单价纠偏：
+    * 依据阿里云百炼官方公开原价，`qwen3-tts-instruct-flash` 标准单价为 0.8 元/万字 = 80.00 元/百万字（北京与新加坡统一原价），原配置 20.00 元/百万字为过低误配。
+    * 修正 `bookcast.toml` 与 `examples/model-routing-cloud.toml`：`characters_per_million = 80.00`。
+    * 依据真实已有用量重新核算 56 秒 E2E 成本：250 汉字 * (80.00 / 1,000,000) = 0.0200 元（原 0.0050 元）。
+    * 重算已有 56 秒 E2E 总成本：LLM estimated cost 0.0666 元 + TTS estimated cost 0.0200 元 = 总 estimated cost 0.0866 元（原 0.0716 元）。
+    * 已同步回写 `output/e2e/a834c024a7d11624be66f19b/usage/cost_summary.json`、`manifest.json` 与 `e2e_acceptance_report.json`，无任何未定价（unpriced）遗留。
+  - 问题 2：physical_requests 遥测全面覆盖 LLM 与 TTS 真实网络请求：
+    * 根因定位：原 `usage/physical_requests.jsonl` 仅在 `synthesize_unit_with_context` 处埋点，LLM 适配器基类 `CompatibleBase` 尚未接入 `ProviderRequestContext`。
+    * 最小无侵入修复架构：
+      1) `src/bookcast/provider_api.py`：`ProviderRequestContext` 扩展 `physical_attempt_index: int = 0`。
+      2) `src/bookcast/adapters/compatible.py`：`CompatibleBase` 接入 `self.context`、`set_context` 与原子 append 写入的 `_record_physical`；在 `_request` 中完整记录 15 项指标（provider, model, clean endpoint, logical chunk id, physical_attempt_index, started_at, finished_at, latency, http_status, result, retry_reason, retryable, usage_available, billing_evidence, error_kind）；`urlsplit` 严格剥离 query 和敏感凭据；`for_task` 保留 context。
+      3) `src/bookcast/adapters/qwen_llm.py`：`for_task` 传递 context。
+      4) `src/bookcast/pipeline.py`：`_Runner.ai_operation` 统一构造带 `job_id`、`output_id`、`logical_chunk_id` 与 `telemetry_path` 的 `ProviderRequestContext` 并传给 `chain.execute`。
+      5) `src/bookcast/model_routing.py`：`RoutedLLMChain.execute` 与 `RoutedTTSChain.execute` 转发 `context`。
+      6) `src/bookcast/provider_chain.py`：`ProviderChain.execute` 接收 `context`，在 `correction` 重试循环中将 `physical_attempt_index=correction` 注入 provider，确保逻辑任务与单次物理尝试一一对应。
+      7) `src/bookcast/adapters/qwen_cloud.py`：同步扩充 `endpoint`（去除敏感 query）、`latency`、`physical_attempt_index` 与错误分类，保持全 Provider 格式一致。
+    * 严格隔离逻辑调用与物理请求，杜绝双重计费：
+      `manifest.ai_calls` 权威记录业务 Attempts 及模型报告的 token/字符用量；
+      `physical_requests.jsonl` 记录真实物理网络往返；
+      成本计算模块 `cost.py` 严格以 `manifest.ai_calls` 为唯一数据源，物理日志纯粹用于网络审计，从架构上保证绝对 0 重复计费。
+    * 理论物理请求数审计：本轮 56 秒 E2E 实际包含 9 次逻辑 LLM 调用（Qwen 4 + DeepSeek 5）和 10 次逻辑 TTS 单元合成（Qwen TTS 10）。由于各阶段均 0 失败 0 重试，理论物理请求数完全等于 19 次（9 LLM + 10 TTS）。
+  - 额外审计：Reasoning Token 深度分析与后续 A/B 假设：
+    * 各阶段用量与成本分解：
+      1) `extraction`（Qwen3.7-Flash，2次）：in 2,163 tokens，out 1,174 tokens，reasoning 0（0%），耗资 0.0038 元，耗时 12.79s。
+      2) `chapter_synthesis`（Qwen3.7-Flash，2次）：in 1,457 tokens，out 465 tokens，reasoning 0（0%），耗资 0.0024 元，耗时 5.55s。
+      3) `book_synthesis`（DeepSeek-Flash，1次）：in 775 tokens，out 1,297 tokens，reasoning 1,009（77.8%），耗资 0.0056 元，耗时 5.44s。
+      4) `dialogue`（DeepSeek-Flash，2次）：in 3,353 tokens，out 6,777 tokens，reasoning 6,099（90.0%），耗资 0.0302 元，耗时 25.66s。
+      5) `consistency`（DeepSeek-Flash，2次）：in 3,147 tokens，out 5,388 tokens，reasoning 5,066（94.0%），耗资 0.0246 元，耗时 24.98s。
+    * 归因分析：
+      - `dialogue`：DeepSeek 默认 thinking 机制对双人观点交锋、语气角色分配、论据锚定与字数约束展开了全局推演，第 2 章单一生成消耗了 4,818 个推理 tokens（正文仅 345 tokens）。
+      - `consistency`：模型对每一句台词与原文主张进行严密的反事实逻辑校验，耗费 94% 的推理 tokens 仅输出几个布尔与分数项。
+    * Phase 19.3 A/B 优化假设（保持当前 Prompt/策略，作为后续对比方向）：
+      - 假设 A（推理预算分级）：对 dialogue / consistency 分配 `reasoning_effort="low"` 或设定 max thinking tokens，预期削减 50-70% 推理用量并缩短延迟，同时维持剧本质量与一致性通过率。
+      - 假设 B（核验思考引导）：在 consistency 提示词中加入“聚焦矛盾检测与未引用论断”规则，减少显见事实的过度自洽推理。
+      - 假设 C（两级阶梯核验）：先用 cheap LLM（Qwen3.7-Flash）无思考初筛，仅在低置信或疑义时升级至 DeepSeek 深度推理核验。
+  - 测试验证：
+    * `tests/test_cost_telemetry.py`：新增 3 项测试（15项必要遥测字段、HTTP 429 错误记录、重试 index 递增及零重复计费验证），全量 14 passed。
+    * 专项套件：`tests/test_cost_*.py tests/test_gemini_*.py tests/test_qwen_*.py` 233 passed。
+    * 完整全量 pytest：701 passed、1 skipped、7 deselected、8 warnings、10 subtests passed（72.65s）。
+    * `validate_project.py` 与 `git diff --check` 通过。
+
+## 2026-09-26T13:13:45Z — Phase 19.2 Step 2：1分钟真实 BookCast Live E2E 验收全链路完成并验证
+
+- 授权执行 1 分钟真实 BookCast 端到端全业务流水线验收，输入短篇中文文本 `data/e2e_source.txt`（2 章，280 字符），执行完整解析、LLM 任务路由、全书综合、剧本生成、事实一致性审核、TTS 品质路由、音频切句、云端语音合成与 WAV/MP3 封装：
+  - 任务路由策略与执行：
+    * LLM cheap/general：`qwen`（`qwen3.7-flash`）执行 2 次分块证据分析（`analysis:0001:0001`、`analysis:0002:0001`）与 2 次章节综合（`synthesis/chapters/0001`、`synthesis/chapters/0002`），共 4 次请求，耗时约 20s，无超时无重试。
+    * LLM complex/high_quality：`deepseek`（`deepseek-flash`）执行 1 次全书核心论证综合（`synthesis/book/00-0000`）、2 次双人对话剧本编写（`script:0001`、`script:0002`）与 2 次事实一致性审核（`consistency:0001`、`consistency:0002`），共 5 次请求，无重试无报错。
+    * TTS standard：`qwen-tts`（`qwen3-tts-instruct-flash`）执行 10 个语音单元（双段各 5 轮对白）渲染，主持人采用 Cherry 音色，嘉宾采用 Ethan 音色，0 失败 0 重试，物理日志与单集音色严格保持单 Provider 一致。
+    * 路由与回退：0 次 failover，0 次 fallback，模型完全按既定 Router 策略各司其职。
+  - 音频质量与物理特性：
+    * 最终音频产物：`output/e2e/a834c024a7d11624be66f19b/podcast.wav` 与 `podcast.mp3`。
+    * 时长：56.46 秒（完全落在 45–60 秒目标区间）。
+    * 格式规范：标准 RIFF/WAV，24000Hz 采样率，单声道（Mono），16-bit PCM，总帧数 1,355,040。
+    * 音频信号：RMS 能量 2051.62（远高于 50.0 阈值），非零采样占比高，自然停顿正常，绝无截断或静音。
+  - 内容质量与复核：
+    * 对话剧本严格基于原文核心观点（阅读拓展认知、芒格名言、思维模型重构、主动反思检验、假设边界与认知闭环），无任何编造、外部无关事实或广告。
+    * 5 轮对白自然交替，主持人推进阐释，嘉宾追问“幸存者偏差”与“实践检验路径”，事实一致性审核全部通过。
+  - 用量与集中计价遥测：
+    * LLM 用量：总请求 9 次，输入 10,895 tokens（缓存命中 1,664），输出 15,101 tokens（推理 tokens 12,174），估算成本 0.0666 元（Qwen 0.0062 元 + DeepSeek 0.0604 元）。
+    * TTS 用量：总请求 10 次，合成 250 汉字，原始音频时长 52.16s，估算成本 0.0050 元。
+    * 总估算成本：0.0716 元人民币（不再全部显示 unpriced）；Provider 未返回权威发票凭单故 actual_cost 规范留空为 `None`。
+    * 遥测持久化一致性：`manifest.json`、`usage/physical_requests.jsonl`（10 次物理 HTTP 记录）、`cost_summary.json` 与 `evaluation/quality.json` 完全对应。
+- 验收脚本验证：`scratch/evaluate_e2e_live.py` 成功输出全量 17 项指标报告至 `e2e_acceptance_report.json`。
+- 本轮 Live 结束后立即安全停止，绝无长音频或全书批量调用；未 push，未改动仓库跟踪代码。
+
+## 2026-09-26T12:58:00Z — Phase 19.2 Step 1：云端模型集中计价配置与成本估算补齐完成并验证
+
+- 检查现有用量遥测、物理日志与计价体系，在不改动 wire protocol 和现有架构的前提下完成集中计价补齐：
+  - `src/bookcast/provider_config.py`：扩展 `ModelPricing`，新增 `characters_per_million` 与 `audio_seconds_per_million`，所有计价费率字段默认 `0.0`，100% 保持向后兼容。
+  - `examples/model-routing-cloud.toml` 与 `bookcast.toml`：集中配置 `qwen3.7-flash`（0.20 cached, 1.00 uncached, 2.00 output）、`deepseek-chat` / `deepseek-flash`（峰时 0.04/2.0/8.0，谷时 0.02/1.0/4.0）、`qwen3-tts-instruct-flash`（20.00 / 百万字）与 `gemini-3.8-flash-lite-tts`（0.18 cached, 0.72 uncached, 2.88 output, 15.00 / 百万字, 250.00 / 百万秒音频）。针对含点模型名称严格使用 TOML 带引号语法（`[pricing."qwen3.7-flash".default]`）。
+  - `src/bookcast/cost.py`：
+    * `_row` 补齐 `characters`、`estimated_cost`、`actual_cost` 与 `billing_evidence` 字段。
+    * TTS 计算逻辑补齐：支持字符数、音频时长及 Token 综合计费，状态标记为 `estimated` 并计入总计；无计价模型仍严格保持 `unavailable` 与 `partial`。
+    * 明确区分 `actual_cost` 与 `estimated_cost`：模型 API 响应未返回权威真实计费单时，一律记为 `estimated_cost`，`actual_cost` 保持 `None`。
+  - `src/bookcast/speech.py` 与 `speech_segments.py`：落盘语音单元与片段 sidecar json 时补充 `character_count`，供成本模块精确提取。
+  - `src/bookcast/adapters/qwen_cloud.py`：在 `_send` 物理请求遥测及 `synthesize_unit_with_context` 中解析提取服务端/单元字符数，写入 `ProviderUsage(input_tokens=chars)` 与物理日志。
+  - `src/bookcast/cli.py`：更新 `cost` 命令输出，对已计价 TTS 模型输出估算费用及字数，不再硬编码 `Cost: unavailable`。
+  - `src/bookcast/llm_usage.py`：`tts_usage_snapshot` 扩充支持字符统计与可选传入 `prices` 估算单段 TTS 成本。
+- 测试验证：
+  - `tests/test_cost_telemetry.py`：新增 4 项测试覆盖 Qwen LLM、Qwen TTS 字符计价、Gemini TTS 时长/字符计价及 DeepSeek 峰谷时段估算，验证 estimated_cost 正确且 actual_cost 为 None。
+  - 测试套件全量通过：`test_cost_*.py` 22 passed，全量默认 698 passed / 1 skipped / 7 deselected / 10 subtests passed（73.21s）。
+  - `validate_project.py` 与 `git diff --check` 通过。
+
+## 2026-09-26T09:12:00Z — Phase 19.1 Live Preflight：Qwen LLM 与 TTS 协议路径彻底隔离与自动纠偏完成并验证
+
+- 针对 Qwen LLM（OpenAI 兼容协议 `/compatible-mode/v1`）与 Qwen TTS（原生多模态协议 `/api/v1`）执行 Live Preflight 审查与防护强化：
+  - `src/bookcast/adapters/qwen_llm.py`：新增 `_resolve_llm_base_url`，在初始化时自动规范化 `base_url`。若输入包含 `/api/v1` 则自动剥离并修正为 `/compatible-mode/v1`；若输入为 DashScope 或阿里云 Maas 根域名，自动补齐 `/compatible-mode/v1`，杜绝请求误投至 `/api/v1/chat/completions`。
+  - `src/bookcast/adapters/qwen_cloud.py`：强化 `_resolve_endpoint`，若输入包含 `/compatible-mode/v1` 则自动剥离并保证对齐到 `/api/v1`，杜绝请求误投至 `/compatible-mode/v1/services/...`。
+  - `tests/test_live_dashscope.py`：实现 `_resolve_live_endpoints()`，严格按优先级解析环境变量：
+    * LLM：优先 `DASHSCOPE_LLM_BASE_URL` -> 其次 `DASHSCOPE_BASE_URL` -> 默认按 `DASHSCOPE_REGION`。
+    * TTS：优先 `DASHSCOPE_TTS_BASE_URL` -> 其次 `DASHSCOPE_BASE_URL` -> 默认按 `DASHSCOPE_REGION`。
+    * 北京与新加坡国际区双向正确映射。
+  - `docs/PROVIDERS.md`：详细记录两端协议子路径差异、适配器自动纠正保护机制与环境变量优先级。
+- 测试扩展：
+  - `tests/test_qwen_llm.py`：新增 8 项测试（`TestLLMEndpoints`），验证北京/新加坡/专属端点保留与自动修正。
+  - `tests/test_qwen_cloud.py`：新增 7 项测试，验证 `/compatible-mode/v1` 剥离修正及 `_resolve_live_endpoints` 在各种环境变量组合下的确定性行为。
+- 验证：106 passed（Qwen 专项），全量默认离线测试 694 passed / 1 skipped / 7 deselected / 10 subtests passed（73.19s），validate_project 验证通过，保持 100% 离线与 0 网络调用。
+
+## 2026-09-26T08:52:00Z — Phase 19.1 Qwen Cloud TTS 协议修正与 Live-readiness 优化完成并验证
+
+- 修正 `src/bookcast/adapters/qwen_cloud.py`：
+  - 目标协议对齐：全面支持 `qwen3-tts-instruct-flash` 所属的 Qwen-TTS 官方接口协议（`POST {base_url}/services/aigc/multimodal-generation/generation`），采用 `input.text`（纯文本）、`input.voice`、`input.language_type` 与 `parameters.instructions`（指令控制），杜绝向文本注入 `<|system|>` 标记。
+  - 协议隔离与兼容：识别 `cosyvoice` 系列模型（如 `cosyvoice-v2`），自动保持旧版 `text2voice/voice-synthesis` 协议与 Base64 PCM 行为，两者严格物理隔离。
+  - Endpoint 区域化配置：消除硬编码北京区，默认北京（`https://dashscope.aliyuncs.com/api/v1`），支持配置化自定义 `base_url`（如新加坡 `https://dashscope-intl.aliyuncs.com/api/v1` 或阿里云百炼专属 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api/v1`）及 `region` 参数。
+  - 响应解析升级：实现官方非流式响应 `output.audio.url` 完整音频文件（WAV）的安全下载与校验（SSRF 安全重定向与环回隔离），兼容流式/内联 Base64 `output.audio.data` 与旧版 `output.audio` 字符串。
+- 修正 `src/bookcast/provider_config.py`：
+  - `QwenCloudTTSConfig` 默认音色更新为标准预设 Cherry（主持人）与 Ethan（嘉宾），新增 `instructions`、`optimize_instructions`、`language_type`（默认 `"Chinese"`）与 `region` 字段。
+  - `ProviderSpec.validate_endpoint` 移除 `self.base_url is not None` 限制，允许配置自定义区域端点并执行 HTTPS/安全主机校验。
+- 新增 `tests/fixtures/qwen3_tts_instruct_flash_response.json`：落盘官方 Qwen3-TTS-Instruct-Flash 非流式响应标准 HTTP fixture。
+- 更新 `examples/qwen-cloud-tts.toml` 与 `examples/model-routing-cloud.toml`：默认 TTS 目标统一为 `qwen3-tts-instruct-flash`，音色设为 Cherry 与 Ethan，Qwen LLM 明确为 `qwen3.7-flash`。
+- 新增 `tests/test_live_dashscope.py` 并注册至 `conftest.py` 的 `LIVE_MODULES`：提供单独显式 opt-in 测试（`BOOKCAST_RUN_DASHSCOPE_LIVE=1`），默认测试套件保持 100% 离线与 0 网络请求。
+- 更新 `tests/test_qwen_cloud.py`：扩充至 55 项离线专项测试，覆盖 Qwen-TTS 与 CosyVoice 协议隔离、北京/新加坡/专属端点解析、官方 URL 响应下载与校验、环回拦截与超限保护。
+- 验证：55 passed（`test_qwen_cloud.py` 专项），7 passed（`test_cost_telemetry.py`），全量默认离线测试 679 passed / 1 skipped / 7 deselected / 10 subtests passed（84.79s），无真实 API 调用。
+
+## 2026-09-26T08:20:00Z — Phase19 R6 统一入口、Web Worker 传递修复与文档迁移完成并验证
+
+- 修改 `src/bookcast/web_service.py`：修复 Web 提交任务时的 TTS 引擎名称映射，前端传 `gemini` / `kokoro` 时智能匹配已配置的规范适配器（`gemini-tts` / `kokoro-local`），并在 `settings_snapshot` 中保存真实选择。
+- 修改 `src/bookcast/web_worker.py`：修复后台 Worker 启动流水线和恢复流水线时遗漏传递 `tts_selection` 与 `llm_selection` 的既有缺陷，保证用户选择的语音引擎完整透传至 `configured_pipeline` 与 `resume_pipeline`，并落盘至 `manifest.provider_settings`。
+- 修改 `src/bookcast/onboarding.py`：识别云端 DashScope 服务（`qwen-llm` 与 `qwen-cloud-tts`），补齐凭据与配额指引，明确 `ready` 语义（优先级候选池中至少一个可用 Provider 即可就绪）。
+- 修改 `src/bookcast/cli.py`：`doctor --human` 明确展示 LLM 任务路由（`general` / `complex`）与 TTS 品质路由（`standard` / `high`）启用状态与首选项；CLI `--tts-provider` 选项说明支持品质档位。
+- 修改 `docs/PROVIDERS.md`：补充 R6 统一入口、Web Worker 传递修复、引擎命名兼容、ready 语义与旧任务原样恢复说明。
+- 修改 `tests/test_web.py`：新增 2 项测试（`test_web_worker_propagates_selected_tts_engine_to_pipeline` 与 `test_web_worker_resolves_gemini_tts_provider_name`），验证从提交、worker 执行、流水线调用到 manifest 保存的完整透传。
+- 验证：23 passed（`test_web.py` 全量），105 passed（R6 关联测试），671 passed/1 skipped/5 deselected/10 subtests（全量离线），validate_project/compileall/diff --check 均通过，无真实 API 调用。
+- 功能提交：`0504a42e12fa2818617f16ef0627d7e34ef3e64f`
+
+## 2026-09-26T08:06:00Z — Phase19 R5 Usage 与物理成本审计完成并验证
+
+- 修改 `src/bookcast/adapters/qwen_cloud.py`：实现 `synthesize_unit_with_context` 与 `_record_physical`，在向 DashScope 发起请求时记录物理 HTTP 遥测（单句字数、请求耗时、状态码、安全错误原因），写入 `usage/physical_requests.jsonl`，与逻辑 Step/Attempt 明确分离。
+- 修改 `src/bookcast/speech.py`：在 `render_units` 中向支持上下文的 TTS Provider 传入 `ProviderRequestContext`（包含 `job_id`、`output_root`、`logical_chunk`、`provider_name`）。
+- 修改 `src/bookcast/cost.py`：`_selected` 支持通过 `config.tts_routing` 解析真实 Provider 与 Model（避免在 `--tts-provider high` 等情况下误识别 Provider 名称）；对于未配置定价的模型（如 Qwen-TTS / CosyVoice）在 `ActualCostSummary` 中标记 `status="partial"` 或 `unavailable`，严格杜绝未定价模型伪造 0 成本。
+- 新增 `tests/test_cost_telemetry.py`：7 项测试，覆盖 DashScope 物理请求遥测记录（成功与 HTTP 400 失败）、错误分类安全性、ProviderRequestContext 管道透传、TTS 路由真实模型解析与未定价状态标识。
+- 修改 `tests/conftest.py`：注册 `test_cost_telemetry` 至离线 integration tier。
+- 验证：7 passed（专项），18 passed（cost 关联测试），669 passed/1 skipped/5 deselected/10 subtests（全量），validate_project/compileall/diff --check 均通过，无真实 API 调用。
+- 功能提交：`692ac963d2c460a964ab4d8d1c1fb479666df254`
+
+## 2026-09-26T07:58:00Z — Phase19 R4 TTS quality 路由与 episode 级一致性完成并验证
+
+- 新增 `src/bookcast/provider_config.py`：`TTSRouting` 配置模型（包含 `standard`、`high_quality` 与 `default_quality` 字段）与 `ProvidersConfig.tts_routing`；在序列化中 `tts_routing=None` 时自动弹出保持旧快照字节一致；在 `validate_chains` 中要求所配置 Provider 必须在 `tts_priority` 中且为有效 TTS Provider。
+- 新增 `src/bookcast/model_routing.py`：`RoutedTTSChain`（继承 `ProviderChain`），单集解析唯一 TTS Provider；活动链仅包含单一所选 Provider，严格杜绝单集生成中途跨 Provider 换声；隔离了候选池中同时包含 `speech_units` 与 `speech_segments` 导致的互斥验证问题。
+- 修改 `src/bookcast/provider_registry.py`：在配置 `tts_routing` 时，若选择为 `auto`、`standard`、`high` 或 `high_quality`，则实例化 `RoutedTTSChain`；显式 Provider 名称覆盖（override）则绕过路由直接使用单 Provider 链。
+- 新增 `examples/tts-routing-mock.toml`：离线 Mock 双品质 TTS 演示配置。
+- 新增 `examples/model-routing-cloud.toml`：包含 LLM 任务路由与 TTS 品质路由的完整云端配置。
+- 修改 `docs/PROVIDERS.md`：补充 TTS 质量路由与单集一致性说明。
+- 新增 `tests/test_tts_routing.py`：25 项测试，覆盖品质路由解析、旧快照兼容性、单集单 Provider 保证、中途失败不换声、混合候选池能力隔离、Gemini 3.8 Flash-Lite TTS 模型校验与 payload/decode wire 契约、离线 Pipeline 生成与恢复集成。
+- 验证：25 passed（专项），248 passed（关联组件），662 passed/1 skipped/5 deselected/10 subtests（全量），validate_project/compileall/diff --check 均通过，无真实 API 调用。
+- 功能提交：`c9b78b3cca1cd5d97883716b7f69ba140d29bd59`
+
+## 2026-09-26T07:47:00Z — Phase19 R3 Qwen 云端 TTS 适配器完成并验证
+
+- 新增 `src/bookcast/adapters/qwen_cloud.py`：`QwenCloudTTSProvider`，实现阿里云 DashScope TTS API（语音合成）适配器；声明 `speech=True, speech_units=True, cloud=True`，单次请求处理单句（≤ 80 字），不混入 multi_speaker / speech_segments。
+- 新增 `src/bookcast/provider_config.py`：`QwenCloudTTSConfig` 配置模型与 `ProviderSpec.qwen_cloud_tts` 字段；要求显式 `send_text_to_cloud=True`、两个不同音色（`host_voice != guest_voice`）、有效 DashScope 音色命名正则，端点固定官方 DashScope 地址。
+- 修改 `src/bookcast/provider_registry.py`：注册 `tts/qwen-cloud-tts -> QwenCloudTTSProvider`。
+- 音频解码与校验：Base64 PCM 解码后校验长度与字节对齐，封装为标准 PCM16 单声道 WAV 并验证 RIFF/fmt/data 块，采样率默认 24000Hz；空音频或损坏数据抛出 SCHEMA ProviderError。
+- 错误与限频映射：DashScope 专有错误码分类（`Ariel.InsufficientBalance` 等映射为 QUOTA，`Throttling` 映射为 RATE_LIMIT）；通过 `min_request_interval` 实现有界请求间隔控制。
+- 新增 `examples/qwen-cloud-tts.toml`：离线演示与配置模板。
+- 修改 `docs/PROVIDERS.md`：补充 Qwen 云端 TTS 配置与使用约束。
+- 新增 `tests/test_qwen_cloud.py`：47 项测试（wire format、音色与 style 注入、PCM 解码转 WAV 校验、HTTP/DashScope 错误分类、80 字符边界输入校验、capabilities、健康检查、缓存键、限频）。
+- 验证：47 passed（专项），166 passed（关联组件），637 passed/1 skipped/5 deselected/10 subtests（全量），validate_project/compileall/diff --check 均通过，无真实 API 调用。
+- 功能提交：`e144065644efa56a5cbe817e2f7c74d7cd517e0f`
+
+## 2026-09-26T07:29:00Z — Phase19 R2 Qwen LLM 适配器完成并验证
+
+- 新增 `src/bookcast/adapters/qwen_llm.py`：`QwenLLMProvider`，继承 `CompatibleBase`（复用 HTTP transport、auth、health_check、classify_http），独立实现 Qwen3 wire 方言。
+- thinking 参数映射：`enable_thinking: bool`（Qwen3 wire），不发 DeepSeek 的 `thinking: {type: ...}` dict；`reasoning_effort` 一律不转发。
+- structured output：`response_format: json_object` + schema 系统消息，无 markdown fence 剥离（Qwen3 JSON 行为规范）。
+- `prepare_schema_retry` 永远返回 `False`；DeepSeek adapter 行为完全不变（有独立测试保证）。
+- `for_task()` 返回 call-scoped 视图，防止 `reported_model`/`last_usage` 跨调用泄漏。
+- `provider_config.py`：允许 `qwen-llm` 使用 `generation`/`reasoning_policy`，要求 `base_url`（HTTPS）。
+- `provider_registry.py`：注册 `llm/qwen-llm -> QwenLLMProvider`。
+- 新增 `tests/test_qwen_llm.py`：36 项测试（thinking 映射、structured output、usage、error 分类、schema retry False、DeepSeek 不受影响、config 验证、cache_key、for_task 隔离、R1 路由集成）。
+- 新增 `examples/qwen-llm-routing.toml`：离线演示配置。
+- 验证：36 passed（专项），590 passed/1 skipped/5 deselected/10 subtests（全量），validate_project/compileall/diff --check 均通过，无真实 API 调用。
+- 功能提交：`6bf7a7945379fb0b219099019d1589b521006cc3`
+
+## 2026-09-26T07:17:00Z — Phase19 R1 opt-in LLM 任务路由完成并验证
+
+- 新增 `src/bookcast/model_routing.py`：`RoutedLLMChain`（继承 `ProviderChain`），按任务 profile 维护独立 sticky failover 状态，复用现有 Attempt/journal/cost，不加 retry、不替换 provider 记录。
+- 新增 `src/bookcast/provider_config.py`：`LLMRouting` Pydantic 模型（four profiles + task_profiles），`serialize_legacy_compatible` 在 `llm_routing=None` 时不写入字段，旧快照字节对齐；`validate_chains` 检查路由实例属于 `llm_priority` 候选池。
+- 修改 `src/bookcast/provider_registry.py`：仅在 `kind==llm && selection==auto && config.llm_routing is not None` 时返回 `RoutedLLMChain`，其余路径不变。
+- 新增 `tests/test_model_routing.py`：35 项测试，覆盖路由意图、可配置映射、明确 override、无效配置拒绝、fallback 仅用显式路由、无隐式 fallback、永久错误不换 Provider、profile 独立恢复、旧序列化兼容、DeepSeek bounded schema retry via routing、完整 Pipeline snapshot/resume、CLI example、Web worker 保存路由。
+- 新增 `examples/model-routing-mock.toml`：离线演示，两个 Mock LLM + 一个 Mock TTS，不调用真实网络。
+- 修改 `tests/conftest.py`：注册 `test_model_routing` 至离线 integration tier。
+- 修改 `docs/PROVIDERS.md`：新增"LLM 任务路由"章节。
+- 验证：35 passed（专项），554 passed/1 skipped/5 deselected/10 subtests（全量），validate_project/compileall/diff --check 均通过，无真实 API 调用。
+- 功能提交：`d0464eb087b5558c61ca5479d0d1fb24fdf18cd0`
+
 ## 2026-09-26T04:05:00Z — 遵循服务商官网实际要求时间重试与每日配额精准识别
 
 - 问题复盘：用户反馈系统不要盲目猜测 20s 倒计时重试。实测 Google Gemini Interactions 429 报错，官方通过 `Retry-After` 头及 `Please retry in 58s` 指明了精确等待时间；且对于免费层 key，官方返回了 `(limit: 10 requests per day on Free Tier)` 每日限额信息。此前前端盲目倒计时 20s 重试，既早于官方要求时间导致重试必然撞墙，又未能区分单日配额耗尽与短时限频。
@@ -479,3 +723,28 @@
 - 2026-09-26T02:56:00Z：修复质检门禁 `unlabelled_hypothetical` 繁体中文及同义词支持并升级质量缓存版本。在 `src/bookcast/quality.py` 中将 `attribution="hypothetical"` 检查的合法假设引导词扩充支持繁体字（「假設」、「設想」、「比如說」、「假使」、「假若」）与常用自然引词（「比如」、「譬如」、「如果」），防止模型在古籍/繁体语境下合法发言因字形差异被误判阻断；在 `src/bookcast/content.py` 中将质量检查缓存由 `quality-v2` 升级为 `quality-v3`，确保任务重试时自动以新规则重新评估并清除阻断；前端同步完善 `business_error` 中文文案及构建静态产物。新增 `test_quality_traditional_chinese_hypothetical_check`，离线回归 517 passed、1 skipped、10 subtests 全通，项目校验通过。
 
 - 2026-09-26T03:12:00Z：Web 前端支持可恢复异常（如 rate_limit 限频）自动倒计时断点恢复。在 `web/app/page.tsx` 中新增 `autoResumeSeconds` 倒计时与 `autoResumeCount` 重试计数逻辑，当任务处于 `FAILED_RETRYABLE` 且属于 `rate_limit` / 网络可恢复异常时，界面自动启动 20 秒安全冷却倒计时，实时向用户展示倒计时与重试轮次，并在倒计时归零时自动发起从断点恢复；同时按钮支持用户随时点击立即恢复，最大自动恢复上限设为 5 次以避免死循环。Playwright E2E 5 passed、Web 20 passed、Next.js 重新编译导出，项目校验通过。
+
+## 2026-09-26T07:05:02Z Phase19 R0 模型层审计设计
+
+核对147个跟踪文件的仓库清单与模型调用相关实现/测试，保存20项审计和R0–R6设计；复用HANDOFF作为进度入口。原工作树干净，基线7f43ad733f1d9261bf458046261b274437158615默认离线519 passed、1 skipped、5 deselected、10 subtests（75.00秒）。未调用真实Provider；未改业务、用户数据或公共API。记录Web TTS选择未传worker等既有偏差，后续按边界修复。
+
+## 2026-09-26T09:35:00Z Phase 19.1 最小 Live Smoke 探测与遥测记录完成
+
+- 严格受控执行授权范围内的 3 个最小 Live Smoke 调用，无长音频、全书或批量请求，失败不无限重试：
+  1. Qwen3.7-Flash：1 次最小文本请求至 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`，响应 HTTP 401（`invalid_api_key` / `authentication_error`），耗时 0.239s，request_count=1，retry_count=0。当前环境变量 `DASHSCOPE_API_KEY` 为占位符 `"你的KEY"`（来自 `~/.zshrc:180`），未加载真实密钥。
+  2. Qwen3-TTS-Instruct-Flash：1 条 32 字符中文音频请求至 `https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation`，响应 HTTP 401（`InvalidApiKey`），耗时 0.196s，request_count=1，retry_count=0，物理请求遥测成功落盘至 `output/smoke/usage/physical_requests.jsonl`。
+  3. Gemini 3.8 Flash-Lite TTS：1 条最小双人对话 TTS 请求至 `https://generativelanguage.googleapis.com/v1beta/interactions`，响应 HTTP 200，耗时 5.848s，request_count=1，retry_count=0，成功生成 4.4 秒双人对话音频并落盘至 `output/smoke/gemini_smoke.wav`（217,264 字节，RIFF/WAV，24000Hz 16-bit PCM 单声道，RMS 能量 3177.63，确认包含真实语音信号），物理请求遥测成功记录。
+- 3 个 Smoke 结束后立即安全停止，绝无完整生成或长音频生成；未 push，未改动仓库跟踪代码。
+
+## 2026-09-26T10:08:00Z Phase 19.1 Qwen 双模型真实凭据 Live Smoke 全量通过
+
+- 用户更新真实 `DASHSCOPE_API_KEY` 凭据后，严格限制只重试之前失败的两个 Qwen 最小请求（未重复调用已通过的 Gemini），失败不无限重试，绝无长音频或全书批量调用：
+  1. Qwen3.7-Flash：1 次最小文本请求（prompt: "请回复两个字：收到。"），端点 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`，响应 **HTTP 200**，耗时 3.280s，request_count=1，retry_count=0。输出文本 `"收到。"`，reported_model 为 `qwen3.7-flash`，用量可解析（input 12 tokens / output 3 tokens），物理请求遥测成功记录。
+  2. Qwen3-TTS-Instruct-Flash：1 条 32 字符中文音频请求（"欢迎收听 BookCast 播客节目，我们今天讨论一本经典著作。"），端点 `https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation`，响应 **HTTP 200**，耗时 2.154s，request_count=1，retry_count=0。成功下载音频至 `output/smoke/qwen3_tts_smoke.wav`（280,364 字节，RIFF/WAV，24000Hz 16-bit PCM 单声道，总帧数 140,160，时长 5.84s，RMS 能量 2206.96，非零采样占比 65.3%，中文语音自然可播放，Cherry 音色与 instructions 指令生效），物理请求遥测成功落盘至 `output/smoke/usage/physical_requests.jsonl`。
+- 两个 Smoke 完成后立即停止，绝无自动开始完整生成；未 push，未改动仓库跟踪代码。
+
+- 2026-09-26 Phase19.3B Dialogue 离线检查点：冻结自制56.46秒E2E两次对话请求，两个重建 prompt 的 input_hash 与原 manifest 完全一致。A基线由历史资产读取（2调用、6099 reasoning tokens、25.66秒、估算0.0302元）；B仅设置DeepSeek官方 `thinking.type=disabled`，C仅缩短instruction，真实B/C调用数均为0。Runner要求显式 `--live`、每段先写receipt且禁止自动重复，物理请求遥测和未知usage保留。专项96 passed，全量离线711 passed/1 skipped/7 deselected/10 subtests，validator、compileall、diff check通过。当前进程无DeepSeek/DashScope key；无TTS/音频/Pipeline调用，生产路由未改。
+- 2026-09-26 Phase19.3B Dialogue 功能提交 `9a1f8d8213e1fcc5da3f760591f28ebd4a47758d` 上复测专项96 passed，validator/compileall/提交diff通过；同一代码工作树全量711 passed。交接快照仅记录此已验证提交，不自引用；未push。
+
+- 2026-09-26 凭证审计：`scripts/run_tts_ab.py:44` 疑似真实 Gemini 凭证曾作为无环境变量时回退，首次在本地 `8d6303d1dcc8` 引入并保留于 `9f3cfbaba9f0`；只读远端 refs 为旧 `7f43ad7`，未见远端暴露。已删除字面值并在 TTS 调用前要求环境变量；170 个当前跟踪文件及本地可达 907 个小文本 blob 跨 Provider 扫描无另一处类似生产硬编码。测试形似值已辨认为测试数据。受影响模块71 passed，无真实API、无push/历史改写；轮换仍待维护者。
+- 2026-09-26 凭证移除功能提交 `eb9b4605d613311b405ea15b70de06bde8cff57e` 上复测受影响模块71 passed，validator/compileall/提交差异检查通过；交接快照不自引用，未push。

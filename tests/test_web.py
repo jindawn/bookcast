@@ -426,3 +426,72 @@ def test_web_status_reports_official_retry_after_and_quota_reason(client):
     write_json(id_path(service.root, 'jobs', identifier) / 'submission.json', record.model_dump(mode='json'))
     status2 = client.get(f'/api/jobs/{identifier}').json()
     assert status2['quota_reason'] == 'DAILY_LIMIT'
+
+
+def test_web_worker_propagates_selected_tts_engine_to_pipeline(client, tmp_path, monkeypatch):
+    """Confirm the bug is fixed: explicit tts_engine reaches pipeline and manifest."""
+    from test_tts import UnitFake
+    config_path = tmp_path / 'multi_tts.toml'
+    config_path.write_text(
+        'schema_version = 1\n'
+        'llm_priority = ["mock-llm"]\n'
+        'tts_priority = ["mock-tones", "kokoro"]\n\n'
+        '[[providers]]\nname = "mock-llm"\nkind = "llm"\ntype = "mock"\nmodel = "mock-llm-v1"\n\n'
+        '[[providers]]\nname = "mock-tones"\nkind = "tts"\ntype = "mock"\nmodel = "mock-tones-v1"\n\n'
+        '[[providers]]\nname = "kokoro"\nkind = "tts"\ntype = "kokoro-local"\nmodel = "kokoro-multi-lang-v1_0"\n'
+        f'[providers.local_tts]\nmodel_dir = "{tmp_path / "models"}"\n'
+    )
+    client.app.state.service.config = config_path
+
+    native = UnitFake('kokoro')
+    monkeypatch.setattr('bookcast.adapters.kokoro.KokoroTTSProvider', lambda spec: native)
+
+    identifier, _ = submit(client, tts_engine='kokoro', minutes=1)
+    record = client.app.state.service.read(identifier)
+    assert record.settings['tts_selection'] == 'kokoro'
+
+    job = run(client, identifier)
+    assert job['state'] == 'SUCCEEDED'
+    assert job['task_providers']['tts'] == ['kokoro']
+    assert native.calls
+
+    path = Path(job['directory'])
+    manifest = load_manifest(path / 'manifest.json')
+    assert manifest.provider_settings['tts_selection'] == 'kokoro'
+    tts_calls = [c for c in manifest.ai_calls if c.kind == 'tts']
+    assert len(tts_calls) > 0
+    assert all(c.provider == 'kokoro' for c in tts_calls)
+
+
+def test_web_worker_resolves_gemini_tts_provider_name(client, tmp_path, monkeypatch):
+    """When the config defines gemini-tts, tts_engine='gemini' resolves to gemini-tts."""
+    config_path = tmp_path / 'gemini_config.toml'
+    config_path.write_text(
+        'schema_version = 1\n'
+        'llm_priority = ["mock-llm"]\n'
+        'tts_priority = ["mock-tones", "gemini-tts"]\n\n'
+        '[[providers]]\nname = "mock-llm"\nkind = "llm"\ntype = "mock"\nmodel = "mock-llm-v1"\n\n'
+        '[[providers]]\nname = "mock-tones"\nkind = "tts"\ntype = "mock"\nmodel = "mock-tones-v1"\n\n'
+        '[[providers]]\nname = "gemini-tts"\nkind = "tts"\ntype = "gemini-tts"\nmodel = "gemini-3.8-flash-lite-tts"\n'
+        'api_key_env = "GEMINI_API_KEY"\n'
+        '[providers.cloud_tts]\nsend_text_to_cloud = true\nhost_voice = "Kore"\nguest_voice = "Puck"\n'
+    )
+    client.app.state.service.config = config_path
+    monkeypatch.setenv('GEMINI_API_KEY', 'test-gemini-key')
+
+    from test_gemini_tts import SegmentFake
+    segment_fake = SegmentFake('gemini-tts')
+    monkeypatch.setattr('bookcast.adapters.gemini.GeminiTTSProvider', lambda spec: segment_fake)
+
+    identifier, _ = submit(client, tts_engine='gemini', minutes=1)
+    record = client.app.state.service.read(identifier)
+    assert record.settings['tts_selection'] == 'gemini-tts'
+
+    job = run(client, identifier)
+    assert job['state'] == 'SUCCEEDED'
+    assert job['task_providers']['tts'] == ['gemini-tts']
+    assert segment_fake.calls
+
+    path = Path(job['directory'])
+    manifest = load_manifest(path / 'manifest.json')
+    assert manifest.provider_settings['tts_selection'] == 'gemini-tts'

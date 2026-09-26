@@ -54,12 +54,12 @@ def usage_snapshot(calls, reuse_counts=None, prices=None):
 
 
 
-def tts_usage_snapshot(calls, root_dir=None):
+def tts_usage_snapshot(calls, root_dir=None, prices=None):
     from collections import defaultdict
     import json
     rows = defaultdict(lambda: {
         'request_count': 0, 'retry_count': 0, 'successful_chunks': 0, 'failed_chunks': 0, 'duration_seconds': 0.0,
-        'input_tokens': 0, 'output_tokens': 0, 'usage_available': False
+        'characters': 0, 'input_tokens': 0, 'output_tokens': 0, 'usage_available': False
     })
     
     for call in calls:
@@ -90,14 +90,33 @@ def tts_usage_snapshot(calls, root_dir=None):
                         with open(root_dir / artifact) as af:
                             data = json.load(af)
                             row['duration_seconds'] += data.get('duration_seconds', 0.0)
+                            row['characters'] += data.get('character_count', 0)
                     except Exception:
                         pass
                         
     entries = []
+    prices = prices or {}
     for (provider, model), row in sorted(rows.items()):
+        if row['characters'] == 0 and row['input_tokens'] > 0:
+            row['characters'] = row['input_tokens']
         if not row['usage_available']:
             row.pop('input_tokens', None)
             row.pop('output_tokens', None)
-        entries.append({'provider': provider, 'model': model, **row})
+        price = prices.get((provider, model)) or prices.get(model)
+        estimated_cost = None
+        if price is not None:
+            char_price = price.get('characters', price.get('characters_per_million', 0.0))
+            sec_price = price.get('audio_seconds', price.get('audio_seconds_per_million', 0.0))
+            uncached_price = price.get('input', price.get('uncached_input_per_million', 0.0))
+            out_price = price.get('output', price.get('output_per_million', 0.0))
+            cost = 0.0
+            if char_price > 0 and row['characters'] > 0:
+                cost += row['characters'] * char_price / 1_000_000
+            elif sec_price > 0 and row['duration_seconds'] > 0:
+                cost += row['duration_seconds'] * sec_price / 1_000_000
+            elif (uncached_price > 0 or out_price > 0) and row.get('input_tokens') is not None:
+                cost += (row.get('input_tokens', 0) * uncached_price + row.get('output_tokens', 0) * out_price) / 1_000_000
+            estimated_cost = round(cost, 6)
+        entries.append({'provider': provider, 'model': model, **row, 'estimated_cost': estimated_cost})
         
     return {'schema_version': 1, 'tts_usage': entries}

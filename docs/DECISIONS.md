@@ -204,3 +204,9 @@ Gemini 使用标准库调用官方、仍有文档的 generateContent REST TTS；
 状态：accepted；日期：2026-09-26。细化 D-019 的 Gemini Adapter；实际 TTS 传输已迁移至 Interactions API。Core 在每次逐段调用时显式传入 Job/output/逻辑 chunk 身份及 Job 内遥测路径，Adapter 不再从临时 WAV 文件名推导身份。HTTP 状态和结构化原因仅映射内部安全枚举；原始错误正文、status、reason、转录、凭证与音频数据均不持久化。物理请求结果另记 `usage/physical_requests.jsonl`，只有响应提供明确 usage 证据时账单证据为 `confirmed`，否则为 `unknown`；遥测写入失败只产生安全 diagnostic，不改变合成结果。
 
 单机各 worker 共享用户本地 `~/.bookcast/gemini_tts_slots.sqlite3`，用 SQLite `BEGIN IMMEDIATE` 原子预约每次 TTS HTTP 发送（包括 retry），发送前再复核实际已发送时间。默认与最低间隔均为 25 秒；退避和 Retry-After 先在可注入的单调时钟上形成截止时间，再等待 `max(共享限流截止、Retry-After 截止、指数退避截止)`，避免远期 Retry-After 提前占据共享槽。持久化单调时钟值在同一次开机的进程间可比较；时钟回拨不会靠墙钟突破限制，检测到重启时清理过期预约。SQLite 事务随进程退出释放，已预约而未发送最多浪费相应有限时间槽。系统重启、极端调度延迟和供应商最终账单仍需实机观察；本决策未改变 Gemini 语音、chunk、音频解码或费用费率。
+
+## D-025 — 显式任务路由复用既有调用链
+
+状态：accepted；日期：2026-09-26。Phase19 R1为LLM增加可选general/cheap/complex/high_quality配置，以中央task_profiles映射选择独立ProviderChain；不将厂商名写入业务。未配置路由、明确Provider override继续使用原链。重试、脱敏、usage和持久化不复制；恢复和配置缓存遵循D-014，改变route不重制有效完成步骤。
+
+新路由只引用llm_priority中已启用实例，备用必须显式声明；每profile隔离sticky fallback。旧配置不序列化空路由字段。TTS质量路由是后续范围，新方案计划默认禁用跨供应商fallback，旧链暂不改变。默认模型/公共API修改须先说明。完整理由、替代方案和阶段边界见 [model-routing-refactor.md](model-routing-refactor.md)。

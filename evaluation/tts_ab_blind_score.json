@@ -1,0 +1,67 @@
+{
+  "title": "Phase 19.3A TTS A/B 人工盲听评分表",
+  "notice": "请在试听 A.wav (或 A.mp3) 和 B.wav (或 B.mp3) 后独立评分。打分前请勿查看 ab_mapping.json，以确保盲听测试客观公正。",
+  "scoring_guide": {
+    "1": "极差 / 明显人工合成机械感、不可用",
+    "2": "较差 / 明显卡顿、发音瑕疵或音色失真",
+    "3": "一般 / 基本自然，偶有生硬或语调单调",
+    "4": "良好 / 自然流畅，接近真人播客水准",
+    "5": "优秀 / 极其生动自然，情绪节奏与真实播客无异"
+  },
+  "samples": {
+    "A": {
+      "audio_files": {
+        "wav": "output/ab/A.wav",
+        "mp3": "output/ab/A.mp3"
+      },
+      "scores": {
+        "naturalness": 4,
+        "pronunciation_accuracy": 4,
+        "host_voice_quality": 4,
+        "guest_voice_quality": 4,
+        "speaker_separation": 4,
+        "voice_consistency": 4,
+        "emotional_expression": 4,
+        "conversational_flow": 4,
+        "pause_rhythm": 4,
+        "long_sentence_stability": 4,
+        "listening_fatigue": 4,
+        "overall_preference": 4
+      },
+      "feedback": {
+        "obvious_artifacts": "无明显瑕疵",
+        "bad_pronunciations": "数字与英文发音正常",
+        "voice_drift": "无明显音色漂移",
+        "strange_pauses": "停顿基本自然",
+        "comments": "用户盲听反馈：听起来差不多，还行（可接受水准）。"
+      }
+    },
+    "B": {
+      "audio_files": {
+        "wav": "output/ab/B.wav",
+        "mp3": "output/ab/B.mp3"
+      },
+      "scores": {
+        "naturalness": 4,
+        "pronunciation_accuracy": 4,
+        "host_voice_quality": 4,
+        "guest_voice_quality": 4,
+        "speaker_separation": 4,
+        "voice_consistency": 4,
+        "emotional_expression": 4,
+        "conversational_flow": 4,
+        "pause_rhythm": 4,
+        "long_sentence_stability": 4,
+        "listening_fatigue": 4,
+        "overall_preference": 4
+      },
+      "feedback": {
+        "obvious_artifacts": "无明显瑕疵",
+        "bad_pronunciations": "数字与英文发音正常",
+        "voice_drift": "无明显音色漂移",
+        "strange_pauses": "停顿基本自然",
+        "comments": "用户盲听反馈：听起来差不多，还行（可接受水准）。"
+      }
+    }
+  }
+}

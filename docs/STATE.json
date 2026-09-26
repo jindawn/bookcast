@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "project": "BookCast",
-  "current_phase": "phase-18",
-  "current_task": "等待用户本机新独立 DeepSeek clean run 与真实成本验收；RC Blocker Closure 已完成离线验证",
-  "task_status": "blocked",
+  "current_phase": "phase-19",
+  "current_task": "安全审计：移除 TTS 实验脚本疑似硬编码 Gemini 凭证",
+  "task_status": "completed",
   "branch": "main",
-  "last_verified_commit": "dbd5bf5899889eeb3e64e8822e9410b1f17a2c75",
+  "last_verified_commit": "eb9b4605d613311b405ea15b70de06bde8cff57e",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -123,10 +123,32 @@
     "优化 Web UI 错误提示映射（将 business_error 等内部代码映射为易懂中文说明并保留错误码），加固 resolve_analysis 章节/块 ID 前导零规范化",
     "修复 DeepSeek 纠错重试中的截断碎片干扰（移除 snippet[:2000]），升级 _strip_markdown_fence 为括号计数与正则强健提取器，杜绝自然语言夹带导致 json_invalid",
     "质检门禁 unlabelled_hypothetical 扩充繁体中文与自然引导词支持，质量版本升级为 quality-v3",
-    "Web 客户端支持遵循服务商官网实际 Retry-After 时间精准等待与每日配额限制识别，支持限频自动倒计时断点恢复"
+    "Web 客户端支持遵循服务商官网实际 Retry-After 时间精准等待与每日配额限制识别，支持限频自动倒计时断点恢复",
+    "Phase19 R0：模型调用层审计与分阶段设计落盘，默认离线基线519 passed。",
+    "Phase19 R1：opt-in LLM 任务路由（RoutedLLMChain，profile 隔离，override，fallback，旧快照兼容），35+519=554 passed，提交 d0464eb。",
+    "Phase19 R2：Qwen LLM 适配器（QwenLLMProvider，enable_thinking bool，reasoning_effort 不转发，schema retry 永远 False，DeepSeek 行为不变），36项测试，590 passed，提交 6bf7a79。",
+    "Phase19 R3：Qwen 云 TTS 适配器（QwenCloudTTSProvider，speech_units 逐句，PCM验证转WAV，DashScope错误分类，有界限频），47项测试，637 passed，提交 e144065。",
+    "Phase19 R4：TTS quality 路由与 episode 级一致性（TTSRouting，RoutedTTSChain，标准与高品质映射，单集单 Provider，禁止中途换声），25项测试，662 passed，提交 c9b78b3。",
+    "Phase19 R5：Usage 与物理成本审计（synthesize_unit_with_context 物理遥测、cost.py 路由解析与未定价安全标记），7项测试，669 passed，提交 692ac96。",
+    "Phase19 R6：统一入口、Web Worker 传递修复与文档迁移（修复 WebService 存储选择未传 worker、兼容 Provider 命名映射、完善 onboarding 与 doctor 说明、旧任务原样恢复），新增2项测试，671 passed，提交 0504a42。",
+    "Phase 19.1：Qwen Cloud TTS 协议修正与 Live-readiness（对齐 qwen3-tts-instruct-flash 官方 multimodal-generation/generation 协议、instructions 与 language_type 参数、音频 URL 下载与 Base64 兼容解析、解除北京区硬编码并支持新加坡与 Workspace 专属端点、严格隔离 CosyVoice wire 格式、补充官方 HTTP fixture 与 opt-in live smoke 测试），55项专项测试通过，全量679 passed、1 skipped、7 deselected、10 subtests。",
+    "Phase 19.1 Live Preflight：彻底隔离 Qwen LLM（OpenAI 兼容协议 /compatible-mode/v1）与 Qwen TTS（原生多模态协议 /api/v1），两端适配器实现双向自动路径纠正与防误投，支持 DASHSCOPE_LLM_BASE_URL、DASHSCOPE_TTS_BASE_URL、DASHSCOPE_BASE_URL 与 DASHSCOPE_REGION，新增10项端点与环境变量测试，全量694 passed、1 skipped、7 deselected、10 subtests。",
+    "Phase 19.1 最小 Live Smoke：严格限制调用范围（Qwen LLM 1次最小文本、Qwen TTS 1条32字中文语音、Gemini TTS 1条双人对话语音）；Qwen 双模型端点请求均触发 HTTP 401（捕获无效占位符凭证且无死循环重试，遥测已落盘）；Gemini 3.8 Flash-Lite TTS 成功返回 HTTP 200 并生成 4.4 秒双人对话 WAV（217,264 字节，RIFF/WAV，24000Hz 16-bit PCM 单声道，RMS 能量 3177.63，物理请求遥测记录通过）；随后立即安全停止，绝无完整生成或长音频。",
+    "Phase 19.1 Qwen 双模型真实凭据 Live Smoke：更新真实凭据后严格执行最小请求（Qwen3.7-Flash 文本生成 prompt='请回复两个字：收到。'，返回 HTTP 200，耗时 3.28s，usage input 12 / output 3 tokens；Qwen3-TTS-Instruct-Flash 32字中文语音生成，返回 HTTP 200，耗时 2.15s，成功取得 5.84s WAV 音频，RIFF/24kHz/16bit/RMS 2206.96 真实中文语音，Cherry 音色与 instructions 生效）；遥测已落盘至 output/smoke/usage/physical_requests.jsonl；3 个 Provider 最小 Live Smoke 全量 HTTP 200 闭环。",
+    "Phase 19.2 Step 1：集中补齐 Qwen3.7-Flash、Qwen3-TTS-Instruct-Flash、Gemini 3.8 Flash-Lite TTS 与 DeepSeek V4 Flash 计价配置与成本估算，严格区分 estimated_cost 与 actual_cost，TTS 支持字数与时长多维度计价，新增4项专项测试，离线全量 698 passed、1 skipped、7 deselected、10 subtests 通过。",
+    "Phase 19.2 Step 2：执行约 1 分钟真实 BookCast Live E2E 验收（短文输入 -> Qwen3.7-Flash 提取与综合 -> DeepSeek-Flash 全书综合/对话生成/一致性审核 -> Qwen3-TTS-Instruct-Flash 云端标准 TTS 双人合成 -> 最终 WAV/MP3）；成功生成 56.46 秒双人中文播客音频（RIFF/24kHz/Mono，RMS 2051.62，非静音，Cherry/Ethan 双音色）；0 failover，0 幻觉，manifest 与 physical_requests.jsonl 100% 一致，总估算成本 0.0716 元（LLM 0.0666 元 + TTS 0.0050 元，无 unpriced）。",
+    "Phase 19.2 Telemetry & Cost Precision 修正：(1) 修正 Qwen3-TTS-Instruct-Flash 定价为 80.00 元/百万字（对齐阿里云百炼官方 0.8 元/万字），56秒 E2E 成本重算为 0.0866 元（LLM 0.0666 + TTS 0.0200）；(2) LLM 适配器全面接入统一 physical_requests.jsonl 遥测，覆盖 15 项核心指标（provider, model, clean endpoint, logical chunk id, physical_attempt_index, started_at, finished_at, latency, http_status, result, retry_reason, retryable, usage_available, billing_evidence, error_kind）；(3) 严格隔离 logical AI task 与 physical network request，杜绝成本双重统计；(4) 针对 56 秒 E2E 的 12,174 reasoning tokens 完成深度分阶段审计（dialogue 6,099 / consistency 5,066）并提出 A/B 优化假设；离线全量 701 passed、1 skipped、7 deselected、8 warnings、10 subtests 通过，无任何真实 API 重复调用。",
+    "Phase 19.3A TTS 真实 A/B 对比完成：(1) 冻结 22 轮 765 字符固定中文播客稿 output/ab/tts_ab_script.json；(2) Qwen3-TTS-Instruct-Flash 生成 157.62 秒成品（22 请求，耗时 53.03s，RTF 0.336，成本 0.0612 元）；(3) Gemini 3.8 Flash-Lite TTS 生成 170.30 秒成品（2 请求，耗时 41.23s，RTF 0.242，成本 0.01148 元）；(4) 经过统一 EBU R128 (-16 LUFS) 响度归一化与 128k MP3 转码生成 A.wav/A.mp3 与 B.wav/B.mp3；(5) 建立盲测映射 output/ab/ab_mapping.json 与评价表 evaluation/tts_ab_blind_score.json；(6) 验证 0 重试、0 失败、0 截断、0 爆音，完成并排 23 项指标与成本比较。",
+    "Phase 19.3A TTS 成本模型纠偏与校准：(1) 修正 Gemini 3.8 Flash-Lite TTS 官方时长计费模型（$0.0015/10s 音频输出 + $0.50/1M 文本 tokens）并增加独立汇率换算层（默认 7.20 CNY/USD），支持多币种跟踪；(2) 重新计算已有 A/B 测试成本数据（Qwen 0.0612 元，Gemini $0.02593 USD / 0.1867 元），撤回 Gemini 便宜 81% 的错误结论，确认 Qwen 实际比 Gemini 便宜 67.2%；(3) 新增 test_gemini_tts_pricing.py 专项测试，离线全量 706 passed 通过；(4) 维持默认路由不变（standard: Qwen3-TTS，high: Gemini 3.8 Flash-Lite TTS）。",
+    "Phase 19.3B Dialogue 离线检查点：冻结自制56.46秒E2E的2个原Prompt并与manifest input_hash逐一匹配；建立B关thinking及C精简instruction受控runner、无key/receipt/质量门禁；专项96 passed，全量711 passed/1 skipped/7 deselected/10 subtests；未发真实API，未改TTS和生产路由。",
+    "安全审计：定位 scripts/run_tts_ab.py:44 疑似真实 Gemini 凭证，确认进入本地8d6303d/9f3cfba提交但不在查询时 origin/main 可见历史；移除字面值回退并改为环境变量预检；未调用真实API、未push、未重写历史。"
   ],
   "in_progress": [],
   "next_actions": [
+    "Phase19.3B真实API实验已按用户要求暂停；仅在用户明确恢复后继续。",
+    "维护者立即轮换/停用已暴露在本地Git历史中的疑似Gemini凭证，并检查提供方用量；推送任何含旧提交的分支前处理历史暴露风险。",
+    "收集用户对 Phase 19.3A TTS A/B 盲听评价表（evaluation/tts_ab_blind_score.json）的人工打分与质性反馈。",
+    "根据听感盲测与成本效益评估，确定默认 TTS 策略（标准层 vs 高画质层）。",
     "在用户本机有 DEEPSEEK_API_KEY 的环境以全新 output 根运行 5 分钟双人播客 DeepSeek clean run；旧失败 Job 仅用于诊断，不纳入 clean-run 成本统计。",
     "在用户显式选择的新真实任务上比较 Phase18 的成本与播客质量；旧完成任务保持不变，不自动重制。",
     "现存《狂人日记》20分钟Job已完成但音频保留旧广告；仅在用户需要净化重制时另建独立Job。先用小EPUB Mock烟测，不对原Job做全书retry或改动已完成音频。",
@@ -136,6 +158,94 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "phase-19-3a-tts-ab-acceptance",
+      "command": ".venv/bin/python scripts/run_tts_ab.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Phase 19.3A TTS A/B 真实验收：完成固定 22 轮 765 字双人播客脚本在 Qwen3-TTS-Instruct-Flash 与 Gemini 3.8 Flash-Lite TTS 上的真实验收对比；两候选 0 重试 0 失败，生成 157.62s 与 170.30s 均落于 150-210s 目标区间；完成统一响度归一化、全量 23 项指标、盲测评分表及 25 分钟成本投影。",
+      "checked_at": "2026-09-26T13:53:00Z"
+    },
+    {
+      "name": "phase-19-2-telemetry-cost-fix",
+      "command": "GIT_CONFIG_GLOBAL=/dev/null PYTHONPATH=. .venv/bin/pytest -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Phase 19.2 遥测与成本精度修正验证：Qwen TTS 单价对齐 80.00 元/百万字，已有 56 秒 E2E 成本重算为 0.0866 元；LLM 适配器全面接入 15 字段 physical_requests.jsonl 遥测，验证尝试重试索引推进与零重复计费；全量离线 701 passed、1 skipped、7 deselected、8 warnings、10 subtests 通过。",
+      "checked_at": "2026-09-26T13:36:00Z"
+    },
+    {
+      "name": "phase-19-2-live-e2e-acceptance",
+      "command": ".venv/bin/python /Users/wumj/.gemini/antigravity-cli/brain/1bb74ad8-3e54-45f3-b879-e978661d9a58/scratch/evaluate_e2e_live.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Phase 19.2 Live E2E 真实业务链路验收：运行 56.46 秒短文双人中文播客全链路生成；LLM 由 Qwen3.7-Flash（提取/章节综合）与 DeepSeek-Flash（全书综合/对话/一致性）协同完成（9 请求，10,895 in / 15,101 out，耗资 0.0666 元），TTS 由 Qwen3-TTS-Instruct-Flash 完成（10 请求，250 字符，耗资 0.0050 元，Cherry/Ethan 双音色），总估算成本 0.0716 元；生成 56.46 秒 RIFF/24kHz/16-bit Mono WAV 音频（RMS 2051.62，非静音）；0 failover，0 幻觉，manifest 与 physical_requests.jsonl 遥测 100% 一致。",
+      "checked_at": "2026-09-26T13:13:45Z"
+    },
+    {
+      "name": "phase-19-2-step1-cloud-pricing",
+      "command": "GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest tests/test_cost_*.py -q; GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Phase 19.2 Step 1 云端模型集中计价与成本估算：22 passed（test_cost_*.py），698 passed、1 skipped、7 deselected、10 subtests（全量），73.21秒；覆盖 Qwen3.7-Flash、Qwen3-TTS-Instruct-Flash、Gemini 3.8 Flash-Lite TTS 与 DeepSeek V4 Flash 集中计价配置，明确区分 actual_cost 与 estimated_cost，TTS 字数与时长多维度计价，TOML 键名带点规范转义及无回归校验。",
+      "checked_at": "2026-09-26T12:58:00Z"
+    },
+    {
+      "name": "phase-19-1-qwen-live-smoke-round2",
+      "command": ".venv/bin/python /Users/wumj/.gemini/antigravity-cli/brain/1bb74ad8-3e54-45f3-b879-e978661d9a58/scratch/run_qwen_live_smoke.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Phase 19.1 Qwen 双模型真实凭据 Live Smoke：Qwen3.7-Flash (HTTP 200, 3.28s, request_count=1, retry_count=0, output='收到。', usage 12 in/3 out)、Qwen3-TTS-Instruct-Flash (HTTP 200, 2.15s, request_count=1, retry_count=0, 生成 5.84s 真实中文 WAV 且 RIFF/24kHz/Mono/RMS 2206.96 校验全过)；物理请求遥测已记录。",
+      "checked_at": "2026-09-26T10:08:00Z"
+    },
+    {
+      "name": "phase-19-1-minimal-live-smoke",
+      "command": ".venv/bin/python /Users/wumj/.gemini/antigravity-cli/brain/1bb74ad8-3e54-45f3-b879-e978661d9a58/scratch/run_live_smoke.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Phase 19.1 最小 Live Smoke：完成 3 个 Provider 最小真实请求探测。Qwen3.7-Flash (HTTP 401, 0.239s, request_count=1, retry_count=0)、Qwen3-TTS-Instruct-Flash (HTTP 401, 0.196s, request_count=1, retry_count=0) 正确捕获占位符凭证错误且立即停止；Gemini 3.8 Flash-Lite TTS (HTTP 200, 5.848s, request_count=1, retry_count=0) 成功合成 4.4 秒 WAV 音频 (RIFF/24kHz/16bit/RMS 3177.63)；物理请求遥测已落盘至 output/smoke/usage/physical_requests.jsonl。",
+      "checked_at": "2026-09-26T09:35:00Z"
+    },
+    {
+      "name": "phase-19-1-live-preflight-endpoint-isolation",
+      "command": "GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest -q",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "Phase 19.1 Live Preflight：106 passed（Qwen专项），694 passed、1 skipped、7 deselected、10 subtests（全量），73.19秒；覆盖 Qwen LLM (/compatible-mode/v1) 与 Qwen TTS (/api/v1) 协议严格隔离、跨协议输入双向自动纠偏、DASHSCOPE_LLM_BASE_URL / DASHSCOPE_TTS_BASE_URL / DASHSCOPE_REGION 独立映射与无网络保证。",
+      "checked_at": "2026-09-26T09:12:00Z"
+    },
+    {
+      "name": "phase-19-1-qwen-tts-live-readiness",
+      "command": ".venv/bin/python -m pytest tests/test_qwen_cloud.py; .venv/bin/python -m pytest -q",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "Phase 19.1 Live-readiness 修复：55 passed（test_qwen_cloud.py），679 passed、1 skipped、7 deselected、10 subtests（全量），84.79秒；覆盖 Qwen-TTS 官方 multimodal-generation/generation 协议、instructions 与 language_type 载荷构造、OSS 音频 URL 与 Base64 解码、北京/新加坡/专属 endpoint 解析、CosyVoice 隔离与 opt-in live smoke 架构。",
+      "checked_at": "2026-09-26T08:50:00Z"
+    },
+    {
+      "name": "model-routing-r6",
+      "command": ".venv/bin/python -m pytest tests/test_web.py; .venv/bin/python -m pytest -q",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "功能提交 0504a42：23 passed（test_web.py），671 passed、1 skipped、5 deselected、10 subtests（全量），74.86秒；覆盖 Web Worker TTS 引擎传递修复、Gemini TTS Provider 名称解析映射、Onboarding 云服务识别与路由状态展示。",
+      "checked_at": "2026-09-26T08:20:00Z"
+    },
+    {
+      "name": "model-routing-r5",
+      "command": ".venv/bin/python -m pytest tests/test_cost_telemetry.py; .venv/bin/python -m pytest -q",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "功能提交 692ac96：7 passed（专项），669 passed、1 skipped、5 deselected、10 subtests（全量），75.32秒；覆盖 Qwen 物理请求遥测记录、ProviderRequestContext 管道透传、TTS 路由真实模型解析与未定价状态标识。",
+      "checked_at": "2026-09-26T08:06:00Z"
+    },
+    {
+      "name": "model-routing-baseline",
+      "command": ".venv/bin/python -m pytest -q",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "代码基线7f43ad7：519 passed、1 skipped、5 deselected、10 subtests，75.00秒；仅交接文档有修改，无真实Provider调用。",
+      "checked_at": "2026-09-26T07:05:02Z"
+    },
     {
       "name": "deepseek-retry-quality-v3-and-official-retry-after",
       "command": ".venv/bin/python -m pytest -q; npm --prefix web run typecheck; npm --prefix web run build; python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts",
@@ -791,6 +901,22 @@
       "scope": "commit",
       "summary": "功能提交86275234810b2b704fa73b9ef7d8632e22196117上12 passed/2.45秒，项目校验和Web类型检查通过；完整默认suite在同一代码工作树483 passed、1 skipped、5 deselected。",
       "checked_at": "2026-09-25T19:49:30Z"
+    },
+    {
+      "name": "phase-19-3b-dialogue-offline",
+      "command": ".venv/bin/python -m pytest -q tests/test_llm_reasoning_dialogue.py tests/test_generation.py tests/test_cost_telemetry.py; .venv/bin/python -m pytest -q; python3 scripts/validate_project.py; .venv/bin/python -m compileall src tests scripts -q; git diff --check",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "功能提交9a1f8d8213e1fcc5da3f760591f28ebd4a47758d上专项96 passed、validator/compileall/提交diff通过；同一代码工作树默认完整离线711 passed、1 skipped、7 deselected、10 subtests。真实B/C未运行。",
+      "checked_at": "2026-09-26T14:29:20Z"
+    },
+    {
+      "name": "credential-audit-2026-09-26",
+      "command": ".venv/bin/python -m pytest -q tests/test_tts_ab.py tests/test_gemini_tts.py tests/test_gemini_safety_accounting.py; python3 scripts/validate_project.py; .venv/bin/python -m compileall src tests scripts -q; git diff --check",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "功能提交eb9b4605d613311b405ea15b70de06bde8cff57e上受影响TTS/Gemini 71 passed，validator/compileall/提交diff检查通过；无真实API请求。",
+      "checked_at": "2026-09-26T14:39:42Z"
     }
   ],
   "known_failures": [
@@ -810,11 +936,10 @@
     "Phase17 OCR仅macOS Apple Vision显式可用；复杂多栏/脚注、矢量描边字及非macOS OCR未验收，低置信需核原页。",
     "OCR parse Step在提交前崩溃会重新识别整份文档；完成后resume复用有效Artifact，尚无逐页OCR持久缓存。",
     "EPUB来源过滤使用保守确定性规则：未知广告仍可能漏检，标题独占XHTML仍保留为独立内容单元；不等同语义分章。已完成的《狂人日记》旧音频不会被本次代码修改自动净化。",
-    "Phase18 清洁运行请求数/Token 降幅仅按已有真实任务 manifest 和离线 Mock 投影；新 DeepSeek 长书未调用，播客质量、真实花费及总 token < 历史调试账单 1/3 的目标尚未验证。"
+    "Phase18 清洁运行请求数/Token 降幅仅按已有真实任务 manifest 和离线 Mock 投影；新 DeepSeek 长书未调用，播客质量、真实花费及总 token < 历史调试账单 1/3 的目标尚未验证。",
+    "疑似真实 Gemini 凭证仍存在于不可改写的旧本地 Git 提交；在线有效性未知，需轮换/停用并审查提供方用量，含旧提交不可直接推送。"
   ],
-  "blockers": [
-    "首个独立 5 分钟真实任务因 EvidenceAnalysis.evidence 超6项失败，不能计为 clean run；provider 适配器已离线修复。当前 Codex 进程没有 DEEPSEEK_API_KEY；须用户本机在全新 output 根启动新任务，未自动调用 API。"
-  ],
+  "blockers": [],
   "important_files": [
     {
       "path": "src/bookcast/onboarding.py",
@@ -1235,7 +1360,35 @@
     {
       "path": "tests/fixtures/deepseek_analysis_0015_concepts_overflow.json",
       "purpose": "第 15 章 concepts 字段超限脱敏测试 fixture"
+    },
+    {
+      "path": "tests/test_gemini_tts_pricing.py",
+      "purpose": "Gemini 3.8 Flash-Lite TTS 官方时长计费与独立汇率层离线测试"
+    },
+    {
+      "path": "tests/fixtures/phase19_3b_dialogue.json",
+      "purpose": "Phase19.3B冻结56秒E2E两次Dialogue输入、输出和成本快照"
+    },
+    {
+      "path": "scripts/llm_reasoning_dialogue.py",
+      "purpose": "Dialogue离线基线及每候选最多两次真实请求受控实验runner"
+    },
+    {
+      "path": "tests/test_llm_reasoning_dialogue.py",
+      "purpose": "冻结哈希、候选变量、质量/重调护栏及汇总未知值回归"
+    },
+    {
+      "path": "docs/experiments/phase19-3b-dialogue.md",
+      "purpose": "Dialogue A/B实验计划、已测基线和候选证据边界"
+    },
+    {
+      "path": "docs/SECURITY_AUDIT_2026-09-26.md",
+      "purpose": "脱敏凭证位置、本地/远端历史范围与轮换建议"
+    },
+    {
+      "path": "scripts/run_tts_ab.py",
+      "purpose": "TTS A/B实验脚本；Gemini仅从环境变量读取且运行前预检"
     }
   ],
-  "updated_at": "2026-09-26T01:29:43Z"
+  "updated_at": "2026-09-26T14:39:42Z"
 }

@@ -1,0 +1,36 @@
+# Explicit cloud opt-in: podcast unit text goes to Alibaba Cloud DashScope Qwen-TTS API.
+# The adapter synthesizes one SpeechUnit (<= 80 chars) per HTTP request.
+# Set DASHSCOPE_API_KEY environment variable with your DashScope API key.
+
+schema_version = 1
+llm_priority = ["mock"]
+tts_priority = ["qwen-tts"]
+
+[[providers]]
+name = "mock"
+kind = "llm"
+type = "mock"
+model = "mock-llm-v1"
+
+[[providers]]
+name = "qwen-tts"
+kind = "tts"
+type = "qwen-cloud-tts"
+model = "qwen3-tts-instruct-flash"
+api_key_env = "DASHSCOPE_API_KEY"
+timeout_seconds = 30
+# base_url is optional. If omitted, defaults to China Beijing (https://dashscope.aliyuncs.com/api/v1).
+# For Singapore region: base_url = "https://dashscope-intl.aliyuncs.com/api/v1"
+# For workspace-specific endpoint: base_url = "https://<workspace_id>.cn-beijing.maas.aliyuncs.com/api/v1"
+# base_url = "https://dashscope.aliyuncs.com/api/v1"
+
+[providers.qwen_cloud_tts]
+send_text_to_cloud = true
+data_tier = "unknown"
+host_voice = "Cherry"
+guest_voice = "Ethan"
+language_type = "Chinese"
+host_style = "自然沉稳的中文播客主持人，语速适中，富有亲和力。"
+guest_style = "富有好奇心的中文播客嘉宾，互动自然，善于提问与思考。"
+min_request_interval = 0.5
+sample_rate = 24000

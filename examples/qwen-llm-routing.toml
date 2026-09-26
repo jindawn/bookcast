@@ -1,0 +1,40 @@
+# Offline Qwen LLM wire-fixture demonstration.
+# All providers below use mock transport; no real API keys or network required.
+# Real Qwen3.7-Flash config would set type="qwen-llm", base_url to the
+# DashScope-compatible endpoint, and api_key_env="DASHSCOPE_API_KEY".
+
+schema_version = 1
+llm_priority = ["qwen", "deepseek-compat"]
+tts_priority = ["mock-tts"]
+
+[llm_routing]
+general     = ["qwen"]
+cheap       = ["qwen"]
+complex     = ["deepseek-compat"]
+high_quality = ["deepseek-compat"]
+
+[llm_routing.task_profiles]
+extraction        = "cheap"
+chapter_synthesis = "general"
+book_synthesis    = "complex"
+dialogue          = "high_quality"
+consistency       = "high_quality"
+other             = "general"
+
+[[providers]]
+name  = "qwen"
+kind  = "llm"
+type  = "mock"
+model = "mock-llm-v1"
+
+[[providers]]
+name  = "deepseek-compat"
+kind  = "llm"
+type  = "mock"
+model = "mock-llm-v1"
+
+[[providers]]
+name  = "mock-tts"
+kind  = "tts"
+type  = "mock"
+model = "mock-tones-v1"

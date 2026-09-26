@@ -1,6 +1,23 @@
 import pytest
+import os
+import subprocess
+import sys
+from pathlib import Path
 from bookcast.content_models import SegmentScript
 from bookcast.models import PodcastScript, DialogueTurn
+
+
+def test_cloud_ab_runner_requires_gemini_key_before_any_provider_call(tmp_path):
+    script = Path(__file__).resolve().parents[1] / 'scripts/run_tts_ab.py'
+    env = os.environ.copy()
+    env.pop('GEMINI_API_KEY', None)
+    env.pop('DASHSCOPE_API_KEY', None)
+    env['HOME'] = str(tmp_path)
+    result = subprocess.run([sys.executable, str(script)], cwd=tmp_path, env=env,
+                            text=True, capture_output=True, timeout=20)
+    assert result.returncode != 0
+    assert 'GEMINI_API_KEY must be set' in result.stderr
+    assert not (tmp_path / 'output').exists()
 
 V5_FIXTURE = {
   "segment_id": "0001",

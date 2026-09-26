@@ -1,0 +1,31 @@
+# Offline TTS quality routing demonstration: all models below are Mock.
+# No network or API keys required.
+# standard -> mock-standard-tts
+# high_quality -> mock-high-tts
+
+schema_version = 1
+llm_priority = ["mock-llm"]
+tts_priority = ["mock-standard-tts", "mock-high-tts"]
+
+[tts_routing]
+standard = "mock-standard-tts"
+high_quality = "mock-high-tts"
+default_quality = "standard"
+
+[[providers]]
+name = "mock-llm"
+kind = "llm"
+type = "mock"
+model = "mock-llm-v1"
+
+[[providers]]
+name = "mock-standard-tts"
+kind = "tts"
+type = "mock"
+model = "mock-tones-v1"
+
+[[providers]]
+name = "mock-high-tts"
+kind = "tts"
+type = "mock"
+model = "mock-tones-v2"

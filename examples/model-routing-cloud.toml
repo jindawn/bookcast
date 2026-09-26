@@ -1,0 +1,119 @@
+# Full model routing configuration:
+# LLM:
+#   default/cheap/general -> Qwen3.7-Flash
+#   complex/high-quality -> DeepSeek V4 Flash
+# TTS:
+#   standard (default) -> Qwen3-TTS-Instruct (qwen-cloud-tts)
+#   high-quality -> Gemini 3.8 Flash-Lite TTS (gemini-tts)
+
+schema_version = 1
+llm_priority = ["qwen", "deepseek"]
+tts_priority = ["qwen-tts", "gemini-tts"]
+
+[llm_routing]
+general = ["qwen"]
+cheap = ["qwen"]
+complex = ["deepseek"]
+high_quality = ["deepseek"]
+
+[llm_routing.task_profiles]
+extraction = "cheap"
+chapter_synthesis = "general"
+book_synthesis = "complex"
+dialogue = "high_quality"
+consistency = "high_quality"
+other = "general"
+
+[tts_routing]
+standard = "qwen-tts"
+high_quality = "gemini-tts"
+default_quality = "standard"
+
+[[providers]]
+name = "qwen"
+kind = "llm"
+type = "qwen-llm"
+model = "qwen3.7-flash"
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key_env = "DASHSCOPE_API_KEY"
+timeout_seconds = 120
+[providers.generation]
+thinking = "disabled"
+
+[[providers]]
+name = "deepseek"
+kind = "llm"
+type = "openai-compatible"
+model = "deepseek-flash"
+base_url = "https://api.deepseek.com"
+api_key_env = "DEEPSEEK_API_KEY"
+timeout_seconds = 120
+
+[[providers]]
+name = "qwen-tts"
+kind = "tts"
+type = "qwen-cloud-tts"
+model = "qwen3-tts-instruct-flash"
+api_key_env = "DASHSCOPE_API_KEY"
+timeout_seconds = 30
+[providers.qwen_cloud_tts]
+send_text_to_cloud = true
+data_tier = "unknown"
+host_voice = "Cherry"
+guest_voice = "Ethan"
+language_type = "Chinese"
+host_style = "自然沉稳的中文播客主持人，语速适中，富有亲和力。"
+guest_style = "富有好奇心的中文播客嘉宾，互动自然，善于提问与思考。"
+min_request_interval = 0.5
+sample_rate = 24000
+
+[[providers]]
+name = "gemini-tts"
+kind = "tts"
+type = "gemini-tts"
+model = "gemini-3.8-flash-lite-tts"
+api_key_env = "GEMINI_API_KEY"
+timeout_seconds = 120
+[providers.cloud_tts]
+send_text_to_cloud = true
+data_tier = "unknown"
+host_voice = "Kore"
+guest_voice = "Puck"
+style_instruction = "自然的中文双人读书播客。HostA清晰平稳，HostB好奇、有追问感。严格朗读文本，不增加语气词或删改文字。"
+
+[pricing."qwen3.7-flash".default]
+cached_input_per_million = 0.20
+uncached_input_per_million = 1.00
+output_per_million = 2.00
+
+[pricing.deepseek-chat.off_peak]
+cached_input_per_million = 0.02
+uncached_input_per_million = 1.00
+output_per_million = 4.00
+
+[pricing.deepseek-chat.peak]
+cached_input_per_million = 0.04
+uncached_input_per_million = 2.00
+output_per_million = 8.00
+
+[pricing.deepseek-flash.off_peak]
+cached_input_per_million = 0.02
+uncached_input_per_million = 1.00
+output_per_million = 4.00
+
+[pricing.deepseek-flash.peak]
+cached_input_per_million = 0.04
+uncached_input_per_million = 2.00
+output_per_million = 8.00
+
+[pricing.qwen3-tts-instruct-flash.default]
+currency = "CNY"
+billing_unit = "characters"
+characters_per_million = 80.00
+
+[pricing."gemini-3.8-flash-lite-tts".default]
+currency = "USD"
+billing_unit = "audio_duration"
+audio_seconds_per_million = 150.00
+audio_tokens_per_million = 6.00
+uncached_input_per_million = 0.50

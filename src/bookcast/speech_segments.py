@@ -75,6 +75,7 @@ def render_segments(r, script):
             write_json(r.path(sidecar), {"audio_kind": info.audio_kind, "voices": [
                 {"provider": provider.name, "model": provider.model, "speaker": speaker, "voice": voice}
                 for speaker, voice in info.voices.items()], "duration_seconds": wav_seconds(r.path(name)),
+                "character_count": sum(len(t.text) for t in segment.turns),
                 "contract": SEGMENT_VERSION})
             return [name, sidecar]
 

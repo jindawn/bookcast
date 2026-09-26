@@ -231,3 +231,7 @@ Mock 仍是规则生成和测试音调，没有真实模型质量或人声验收
 ## 开发纪律
 
 阶段编号不构成实现承诺或发布时间表。若范围或顺序改变，应同步本文件与 STATE.json；涉及已确定架构约束时先阅读 DECISIONS.md，记录变更理由。每一阶段都沿用 [AGENTS.md](../AGENTS.md) 的测试、提交和交接要求。
+
+## Phase 19：模型调用层可替换性重构
+
+R0 审计设计完成，R1 显式启用的任务级 LLM Router 开始实施；R2–R6 尚属计划。保留现有默认、Provider、公共 API 与 RC 安全/恢复/成本能力。完整分阶段范围和门槛见 [model-routing-refactor.md](model-routing-refactor.md)，进度见 HANDOFF/STATE。旧 Phase18 真实 clean-run 仍待用户独立验收。

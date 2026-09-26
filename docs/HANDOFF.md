@@ -1,3 +1,148 @@
+# 2026-09-26 凭证安全审计与 Phase 19.3B 暂停
+
+用户已暂停 Phase19.3B 真实 API 实验。按要求优先处理已跟踪 TTS 实验脚本中的疑似硬编码凭证；完整脱敏审计见 [SECURITY_AUDIT_2026-09-26.md](SECURITY_AUDIT_2026-09-26.md)。不运行 DeepSeek B/C、TTS 或音频，不 push、不改写历史。
+
+- 修复前 `scripts/run_tts_ab.py:44` 将一个 53 字符、非明显占位符的值作为 `GEMINI_API_KEY` 回退；在线有效性未知，按可能真实凭证处理。修复已移除字面值，`main()` 在任何 TTS 请求前要求进程环境变量。
+- 该值进入本地 `8d6303d1dcc8` 与 `9f3cfbaba9f0` 的脚本版本，后续 HEAD 继承。只读远端 refs 查询中 `origin` 只有 `main`/`HEAD` 指向 `7f43ad7`，早于引入提交；查询时未见远端暴露。旧本地提交仍含该值，不能直接推送含旧提交的分支。建议立即停用/轮换并检查提供方用量。
+- 当前已跟踪文件与本地可达历史的跨 Provider 扫描未发现其他类似生产硬编码；测试中若干形似 key 的字符串具有测试上下文/重复顺序模式。`.gitignore` 已覆盖 `.env`，无须新增不被脚本自动加载的 `.env.example`。
+- 受影响 TTS/Gemini 回归 71 passed；无真实请求。项目校验、compileall、提交差异检查结果记录在 STATE/WORKLOG。已验证功能提交 `eb9b4605d613311b405ea15b70de06bde8cff57e`；交接快照按 D-006 不自引用。
+
+Exact Next Step：等待维护者轮换疑似凭证并决定旧本地提交的后续处理；Phase19.3B 真实 API 实验仅在用户明确恢复后继续。不要从旧脚本/历史复制该值，不要为检查有效性发起模型调用。
+
+---
+
+# Phase 19.3B Dialogue 离线实验检查点（2026-09-26）
+
+## 目标与现状
+
+用户要求仅优化 DeepSeek dialogue/consistency reasoning 成本，冻结 Phase19.3A TTS 与生产路由。当前完成 Dialogue **离线准备**，尚未执行新候选 B/C 真实调用；当前进程缺少 DEEPSEEK_API_KEY 和 DASHSCOPE_API_KEY。不要把候选降幅或质量写为已验证，也不要重新执行旧 E2E。
+
+## 已完成与关键文件
+
+- `tests/fixtures/phase19_3b_dialogue.json`：冻结自制短书的两次原 dialogue 输入、原输出与历史 usage；重建 prompt 的两个 input_hash 与原 manifest 完全相同。合成资产作为上下文保存，但并未假称完整综合结果进入原 dialogue prompt。
+- `scripts/llm_reasoning_dialogue.py`：离线重算历史 A；B 仅使用 DeepSeek 官方 `thinking.type=disabled`；C 仅缩短原 prompt 的 instruction。显式 `--live` 才允许真实请求；每候选最多两段，每段先写 receipt，失败拒绝自动重试，保留物理请求遥测、缺失 usage 为 null，并在确定性质量失败后停止。
+- `tests/test_llm_reasoning_dialogue.py`、`tests/conftest.py`：冻结哈希、单变量、schema/引用/长度/角色门禁、无 key 预检、receipt 防重调和未知用量汇总测试。
+- `docs/experiments/phase19-3b-dialogue.md`：A/B/C 方案、已测 A、待测 B/C、估算与外推边界。历史 A dialogue 为 2 调用、6099 reasoning tokens、25.66 秒、估算0.0302元。修正后的整集 56.46 秒 episode 估算0.0866元；25分钟线性外推约2.300元，不是报价。
+
+## 验证与 Git
+
+专项96 passed；默认全量离线711 passed、1 skipped、7 deselected、10 subtests；`python3 scripts/validate_project.py`、compileall、`git diff --check` 通过。无真实 API、TTS、音频或 Pipeline 调用。已验证功能提交 `9a1f8d8213e1fcc5da3f760591f28ebd4a47758d`，交接快照提交按 D-006 不自引用；尚未 push。
+
+## Exact Next Step
+
+先只读核对工作树与 `docs/experiments/phase19-3b-dialogue.md`。在**当前运行进程**安全具备真实 DEEPSEEK_API_KEY 后，人工确认冻结 fixture，再依次运行 `scripts/llm_reasoning_dialogue.py --candidate reduced --live` 和 `--candidate focused --live`，每个候选最多两次请求；不要重跑已有 receipt，失败要检查遥测并有界处理。人工逐轮核对事实和自然度，计算相对基线的 reasoning/latency/cost 降幅及 episode/25分钟投影，提交真实 Dialogue checkpoint。此后再冻结 Consistency 历史输入、创建七种确定性 fixture，独立实验 A/B/C；不改变生产默认。
+
+## 已知问题
+
+真实 B/C 结果与 Consistency 实验尚未完成。原历史 consistency 含 `unverifiable`，不能宣称基线质量全部通过。另在现存已跟踪 TTS 实验脚本中发现疑似硬编码 Google API 凭证，未验证有效性，也未改动冻结的 TTS 阶段；维护者应安排凭证轮换并另行清理，勿在聊天或提交中复述凭证值。
+
+---
+
+# Phase 19.3A TTS 真实 A/B 对比与成本模型校准完成：当前交接（2026-09-26）
+
+## Current State / Completed
+
+Phase 19.3A TTS 真实 A/B 对比（Qwen3-TTS-Instruct-Flash vs Gemini 3.8 Flash-Lite TTS）与计价模型校准已完成：
+
+1. **测试稿锁定**：
+   - 冻结唯一固定播客稿 `output/ab/tts_ab_script.json`：22 轮对话、765 个中文字符，覆盖普通陈述、疑问句、长句、短句、强调、数字（2026年、80%、3倍）、英文缩写（AI、API、stress test、feedback）、书名/人名（《思考，快与慢》、丹尼尔·卡尼曼、查理·芒格）、自然停顿与轻微情绪变化。两候选吃完全相同脚本。
+
+2. **计费模型纠偏与正式撤回声明**：
+   - **错误撤回**：正式撤回此前将 Gemini Lite 误按字符计费（15 元/百万字）得出的“Gemini 便宜 81.24%”、“25分钟仅需 0.10 元”的错误结论。
+   - **官方标准计费单位**：
+     * `qwen3-tts-instruct-flash`：80.00 CNY / 1,000,000 字符（0.8 元/万字）
+     * `gemini-3.8-flash-lite-tts`：$0.0015 / 10 秒（$150.00 USD / 1,000,000 秒）音频输出 + $0.50 USD / 1,000,000 文本输入 tokens；独立汇率层换算（默认 7.20 CNY/USD）。
+   - **架构升级**：
+     * `src/bookcast/provider_config.py`：支持 `currency`、`billing_unit`（'characters'/'audio_duration'/'audio_tokens'）、`audio_tokens_per_million` 及 `exchange_rates`。
+     * `src/bookcast/cost.py`：TTS 计费根据 `billing_unit` 分发，支持时长计费和汇率转换，保留 `original_cost`、`original_currency`、`exchange_rate`、`converted_cost`、`converted_currency`。
+
+3. **校准后的真实表现与成本对比（0 真实 API 增量调用）**：
+   - **Candidate A（Qwen3-TTS-Instruct-Flash）**：
+     * 音色：Cherry（Host）+ Ethan（Guest），正式风格 instruction。
+     * 单句单元合成：22 次物理请求，无重试、无失败。
+     * 耗时：墙上耗时 53.03s，平均延迟 2.41s，P95 延迟 3.63s。
+     * 音频：成品时长 157.62s（约 2 分 38 秒），RTF = 0.336。
+     * 成本：单价 80.00 元/百万字，本次耗资 **0.06120 元**，约 0.02330 元/成品分，25 分钟投影 **0.5824 元**。
+   - **Candidate B（Gemini 3.8 Flash-Lite TTS）**：
+     * 音色：Kore（Host）+ Puck（Guest），语义对齐之正式风格 prompt。
+     * 多轮片段合成：2 次物理请求（590字 + 175字），无重试、无失败。
+     * 耗时：墙上耗时 41.23s，平均延迟 20.61s，P95 延迟 22.23s。
+     * 音频：成品时长 170.30s（约 2 分 50 秒），RTF = 0.242。
+     * 成本：时长计费（$0.0015/10s）+ 文本 tokens（$0.50/1M tokens），原始成本 **$0.02593 USD**，折合人民币（7.20）为 **0.1867 元**，约 0.0658 元/成品分，25 分钟投影 **$0.2285 USD**（约 **1.645 元**）。
+   - **真实对比结论**：在人民币计费视角下，**Qwen3-TTS 实际上比 Gemini 3.8 Flash-Lite TTS 便宜 67.2%**（Gemini 约为 Qwen 成本的 2.82~3.05 倍）。
+
+4. **统一后处理与盲听资产**：
+   - 两份音频均经过完全一致的 FFmpeg EBU R128 (-16 LUFS) 响度归一化（输出 24kHz/16-bit PCM 单声道 WAV）及 128kbps MP3 转码。
+   - 产物清单：
+     * `output/ab/A.wav` (7.2MB), `output/ab/A.mp3` (2.4MB)
+     * `output/ab/B.wav` (7.8MB), `output/ab/B.mp3` (2.6MB)
+     * `output/ab/ab_mapping.json` (内部盲测映射)
+     * `output/ab/metrics.json` (已纠偏更新的双币种客观指标)
+     * `evaluation/tts_ab_blind_score.json` (12 维度人工盲听评分表)
+
+## In Progress / Exact Next Step
+
+1. **用户盲听反馈已获得**：
+   - 用户试听 A 与 B 后反馈：“A.mp3和B.mp3听起来差不多，都还行”。
+2. **路由决策**：
+   - 遵照指示，**暂停对默认 TTS 路由的任何调整**，维持方案 1：
+     * `standard`: `qwen3-tts-instruct-flash`（高性价比，细粒度单句生成与控制）
+     * `high`: `gemini-3.8-flash-lite-tts`（云端长文本多轮连贯，音质稳定）
+3. 严格遵守安全规则：不随意切换路由，不自动进入下一阶段，绝不 push 到远程仓库。
+
+## Remaining / Compatibility Notes
+
+旧默认（纯 Mock）、既有 TTS Provider（`kokoro-local`、`gemini-tts`、`qwen-local`、`cosyvoice-v2`）和公共 API 保持 100% 向后兼容。旧 Job 恢复严格遵循历史快照，不发生破坏。
+
+## Tests Passed / Last Stable Commit
+
+- 稳定提交快照：`281f0ac8f6d82c34d2150a0da52556dd3081f608`
+- 验证脚本：`python scripts/validate_project.py` 通过
+- 离线回归：701 passed, 1 skipped, 7 deselected, 8 warnings, 10 subtests passed
+- 成本与遥测专项测试：`tests/test_cost_telemetry.py` 14 passed
+- 静态校验：`python3 scripts/validate_project.py` 通过，`git diff --check` 通过。
+
+## Tests Not Yet Run / Known Issues
+
+未执行长音频真实调用。真实 API 调用必须等待用户明确授权。
+
+## Files Changed / Commands To Continue
+
+Phase 19.2 Telemetry & Cost Precision 修正文件：
+- `bookcast.toml`
+- `examples/model-routing-cloud.toml`
+- `src/bookcast/provider_api.py`
+- `src/bookcast/adapters/compatible.py`
+- `src/bookcast/adapters/qwen_llm.py`
+- `src/bookcast/adapters/qwen_cloud.py`
+- `src/bookcast/pipeline.py`
+- `src/bookcast/model_routing.py`
+- `src/bookcast/provider_chain.py`
+- `tests/test_cost_telemetry.py`
+- `output/e2e/a834c024a7d11624be66f19b/usage/cost_summary.json`
+- `output/e2e/a834c024a7d11624be66f19b/manifest.json`
+- `output/e2e/a834c024a7d11624be66f19b/e2e_acceptance_report.json`
+- `docs/STATE.json`
+- `docs/WORKLOG.md`
+- `docs/HANDOFF.md`
+- `src/bookcast/adapters/qwen_cloud.py`
+- `src/bookcast/provider_config.py`
+- `examples/qwen-cloud-tts.toml`
+- `examples/model-routing-cloud.toml`
+- `tests/test_qwen_cloud.py`
+- `tests/conftest.py`
+- `tests/test_live_dashscope.py`（新增）
+- `tests/fixtures/qwen3_tts_instruct_flash_response.json`（新增）
+- `docs/PROVIDERS.md`、`docs/HANDOFF.md`、`docs/STATE.json`、`docs/WORKLOG.md`
+
+验证命令：
+- 完整离线测试：`GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest -q`
+- 项目静态校验：`GIT_CONFIG_GLOBAL=/dev/null python3 scripts/validate_project.py`
+- 编译检查：`.venv/bin/python -m compileall src tests scripts -q`
+
+
+---
+
 ## 2026-09-26 遵循官网实际要求时间重试与每日配额精准识别
 
 目标：根据服务商官方实际要求时间（Retry-After）进行精准冷却倒计时，识别 Google Gemini 免费层每日配额限制（DAILY_LIMIT），并升级质检门禁繁体支持与 quality-v3。
