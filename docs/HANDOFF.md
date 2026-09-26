@@ -1,3 +1,15 @@
+# 2026-09-26 Git Secret History Cleanup：干净分支交接
+
+用户暂停全部 Phase19.3B 实验。已在 `codex/phase19-clean-history` 从最新 `origin/main=7f43ad7` 建立新本地祖先链；旧 `main=7473ff8` 原样保留为恢复点，不能直接推送。未 push、未改写旧历史。详见 [CLEAN_HISTORY_2026-09-26.md](CLEAN_HISTORY_2026-09-26.md)。
+
+新分支首个安全功能提交 `18d86c2` 直接重放旧 `main` 已净化的最终跟踪树，创建前树完全相同；R0–R6、19.1、19.2、19.3A、19.3B离线准备与凭证移除的有效代码效果均保留。旧含值提交不是新分支祖先；旧 Gemini 值在新分支全部810个可达 blob 中不存在。其他凭证形似候选均属测试或示例，无另一处生产硬编码。
+
+Phase19专项196 passed；完整离线713 passed、1 skipped、7 deselected、10 subtests；validator、compileall和diff检查通过。新分支仅适合显式推送自身，旧main、其他本地分支、`--all`/`--mirror`不在安全结论内。Provider侧轮换仍由维护者完成；用户当前禁止任何 push。
+
+Exact Next Step：等待维护者轮换旧 Gemini Key，并等待用户明确恢复 Phase19.3B。旧main仅作本地恢复点；不要运行DeepSeek B/C、TTS或其他真实API，不要push。
+
+---
+
 # 2026-09-26 凭证安全审计与 Phase 19.3B 暂停
 
 用户已暂停 Phase19.3B 真实 API 实验。按要求优先处理已跟踪 TTS 实验脚本中的疑似硬编码凭证；完整脱敏审计见 [SECURITY_AUDIT_2026-09-26.md](SECURITY_AUDIT_2026-09-26.md)。不运行 DeepSeek B/C、TTS 或音频，不 push、不改写历史。

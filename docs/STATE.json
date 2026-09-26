@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-19",
-  "current_task": "安全审计：移除 TTS 实验脚本疑似硬编码 Gemini 凭证",
+  "current_task": "Git Secret History Cleanup：干净本地分支已重建并验证，Phase19.3B真实实验暂停",
   "task_status": "completed",
-  "branch": "main",
-  "last_verified_commit": "eb9b4605d613311b405ea15b70de06bde8cff57e",
+  "branch": "codex/phase19-clean-history",
+  "last_verified_commit": "18d86c2e682393eff4205d7f4c426a69832aa678",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -141,12 +141,13 @@
     "Phase 19.3A TTS 真实 A/B 对比完成：(1) 冻结 22 轮 765 字符固定中文播客稿 output/ab/tts_ab_script.json；(2) Qwen3-TTS-Instruct-Flash 生成 157.62 秒成品（22 请求，耗时 53.03s，RTF 0.336，成本 0.0612 元）；(3) Gemini 3.8 Flash-Lite TTS 生成 170.30 秒成品（2 请求，耗时 41.23s，RTF 0.242，成本 0.01148 元）；(4) 经过统一 EBU R128 (-16 LUFS) 响度归一化与 128k MP3 转码生成 A.wav/A.mp3 与 B.wav/B.mp3；(5) 建立盲测映射 output/ab/ab_mapping.json 与评价表 evaluation/tts_ab_blind_score.json；(6) 验证 0 重试、0 失败、0 截断、0 爆音，完成并排 23 项指标与成本比较。",
     "Phase 19.3A TTS 成本模型纠偏与校准：(1) 修正 Gemini 3.8 Flash-Lite TTS 官方时长计费模型（$0.0015/10s 音频输出 + $0.50/1M 文本 tokens）并增加独立汇率换算层（默认 7.20 CNY/USD），支持多币种跟踪；(2) 重新计算已有 A/B 测试成本数据（Qwen 0.0612 元，Gemini $0.02593 USD / 0.1867 元），撤回 Gemini 便宜 81% 的错误结论，确认 Qwen 实际比 Gemini 便宜 67.2%；(3) 新增 test_gemini_tts_pricing.py 专项测试，离线全量 706 passed 通过；(4) 维持默认路由不变（standard: Qwen3-TTS，high: Gemini 3.8 Flash-Lite TTS）。",
     "Phase 19.3B Dialogue 离线检查点：冻结自制56.46秒E2E的2个原Prompt并与manifest input_hash逐一匹配；建立B关thinking及C精简instruction受控runner、无key/receipt/质量门禁；专项96 passed，全量711 passed/1 skipped/7 deselected/10 subtests；未发真实API，未改TTS和生产路由。",
-    "安全审计：定位 scripts/run_tts_ab.py:44 疑似真实 Gemini 凭证，确认进入本地8d6303d/9f3cfba提交但不在查询时 origin/main 可见历史；移除字面值回退并改为环境变量预检；未调用真实API、未push、未重写历史。"
+    "安全审计：定位 scripts/run_tts_ab.py:44 疑似真实 Gemini 凭证，确认进入本地8d6303d/9f3cfba提交但不在查询时 origin/main 可见历史；移除字面值回退并改为环境变量预检；未调用真实API、未push、未重写历史。",
+    "从最新origin/main新建codex/phase19-clean-history；以旧main已净化最终跟踪树重放48文件，树完全相同，旧main保留；旧Gemini值不在新分支可达810个blob，Phase19专项196 passed，全量离线713 passed/1 skipped/7 deselected/10 subtests，无真实API或push。"
   ],
   "in_progress": [],
   "next_actions": [
-    "Phase19.3B真实API实验已按用户要求暂停；仅在用户明确恢复后继续。",
-    "维护者立即轮换/停用已暴露在本地Git历史中的疑似Gemini凭证，并检查提供方用量；推送任何含旧提交的分支前处理历史暴露风险。",
+    "Phase19.3B全部实验按用户要求暂停，只有用户明确恢复后才可继续；不要从旧main或含值提交创建可推送分支。",
+    "仅在旧Gemini Key已轮换并明确需要发布时，显式审查/推送codex/phase19-clean-history；禁止推送旧main、--all或--mirror。",
     "收集用户对 Phase 19.3A TTS A/B 盲听评价表（evaluation/tts_ab_blind_score.json）的人工打分与质性反馈。",
     "根据听感盲测与成本效益评估，确定默认 TTS 策略（标准层 vs 高画质层）。",
     "在用户本机有 DEEPSEEK_API_KEY 的环境以全新 output 根运行 5 分钟双人播客 DeepSeek clean run；旧失败 Job 仅用于诊断，不纳入 clean-run 成本统计。",
@@ -917,6 +918,22 @@
       "scope": "commit",
       "summary": "功能提交eb9b4605d613311b405ea15b70de06bde8cff57e上受影响TTS/Gemini 71 passed，validator/compileall/提交diff检查通过；无真实API请求。",
       "checked_at": "2026-09-26T14:39:42Z"
+    },
+    {
+      "name": "clean-history-targeted",
+      "command": ".venv/bin/python -m pytest -q tests/test_model_routing.py tests/test_qwen_llm.py tests/test_qwen_cloud.py tests/test_tts_routing.py tests/test_cost_telemetry.py tests/test_tts_ab.py tests/test_gemini_tts_pricing.py tests/test_llm_reasoning_dialogue.py",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Phase19相关专项196 passed；无真实API。",
+      "checked_at": "2026-09-26T14:47:37Z"
+    },
+    {
+      "name": "clean-history-full-offline",
+      "command": ".venv/bin/python -m pytest -q",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "713 passed、1 skipped、7 deselected、10 subtests passed；新分支全部代码与旧main净化最终树相同。",
+      "checked_at": "2026-09-26T14:47:37Z"
     }
   ],
   "known_failures": [
@@ -1388,7 +1405,11 @@
     {
       "path": "scripts/run_tts_ab.py",
       "purpose": "TTS A/B实验脚本；Gemini仅从环境变量读取且运行前预检"
+    },
+    {
+      "path": "docs/CLEAN_HISTORY_2026-09-26.md",
+      "purpose": "干净分支重建、完整功能树等价、可达历史凭证扫描与验证证据"
     }
   ],
-  "updated_at": "2026-09-26T14:39:42Z"
+  "updated_at": "2026-09-26T14:47:37Z"
 }

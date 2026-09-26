@@ -748,3 +748,5 @@
 
 - 2026-09-26 凭证审计：`scripts/run_tts_ab.py:44` 疑似真实 Gemini 凭证曾作为无环境变量时回退，首次在本地 `8d6303d1dcc8` 引入并保留于 `9f3cfbaba9f0`；只读远端 refs 为旧 `7f43ad7`，未见远端暴露。已删除字面值并在 TTS 调用前要求环境变量；170 个当前跟踪文件及本地可达 907 个小文本 blob 跨 Provider 扫描无另一处类似生产硬编码。测试形似值已辨认为测试数据。受影响模块71 passed，无真实API、无push/历史改写；轮换仍待维护者。
 - 2026-09-26 凭证移除功能提交 `eb9b4605d613311b405ea15b70de06bde8cff57e` 上复测受影响模块71 passed，validator/compileall/提交差异检查通过；交接快照不自引用，未push。
+
+- 2026-09-26 Git Secret History Cleanup：只读查询确认origin/main=7f43ad7，从其创建codex/phase19-clean-history；重放旧main已净化最终跟踪树，48文件树完全一致，新功能提交18d86c2，旧main保留。旧含值提交不是新HEAD祖先，旧Gemini值在新历史810个可达blob精确扫描为0；跨Provider形似候选均为测试/示例。专项196 passed，默认完整离线713 passed/1 skipped/7 deselected/10 subtests；无真实API、无push。
