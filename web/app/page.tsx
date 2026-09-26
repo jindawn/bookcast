@@ -288,6 +288,22 @@ export default function Home() {
     }
   }
 
+  async function removeFromLibrary(job: Job) {
+    if (!window.confirm(`从书架移除《${job.title}》？本地书籍、音频和任务文件会保留。`))
+      return;
+    setBusy(`remove:${job.id}`);
+    setError("");
+    try {
+      await api(`/api/jobs/${job.id}`, { method: "DELETE" });
+      setSelected((id) => (id === job.id ? null : id));
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -842,33 +858,43 @@ export default function Home() {
           ) : (
             <div className="job-list">
               {jobs.map((job) => (
-                <button
-                  className={`job-card ${current?.id === job.id ? "selected" : ""}`}
-                  key={job.id}
-                  onClick={() => {
-                    setSelected(job.id);
-                    document
-                      .getElementById("now-heading")
-                      ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  }}
-                >
-                  <span className="job-cover">
-                    {job.title.slice(0, 1).toUpperCase()}
-                  </span>
-                  <div>
-                    <strong>{job.title}</strong>
-                    <small>
-                      {modes.find((m) => m.id === job.mode)?.name} · 目标{" "}
-                      {job.minutes} 分钟
-                    </small>
-                    <span
-                      className={`status ${job.state === "SUCCEEDED" ? "success" : ""}`}
-                    >
-                      {states[job.state] || job.state}
+                <div className="job-card-row" key={job.id}>
+                  <button
+                    className={`job-card ${current?.id === job.id ? "selected" : ""}`}
+                    onClick={() => {
+                      setSelected(job.id);
+                      document
+                        .getElementById("now-heading")
+                        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }}
+                  >
+                    <span className="job-cover">
+                      {job.title.slice(0, 1).toUpperCase()}
                     </span>
-                  </div>
-                  <span className="arrow">↗</span>
-                </button>
+                    <div>
+                      <strong>{job.title}</strong>
+                      <small>
+                        {modes.find((m) => m.id === job.mode)?.name} · 目标{" "}
+                        {job.minutes} 分钟
+                      </small>
+                      <span
+                        className={`status ${job.state === "SUCCEEDED" ? "success" : ""}`}
+                      >
+                        {states[job.state] || job.state}
+                      </span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className="job-remove"
+                    aria-label={`从书架移除 ${job.title}`}
+                    title={job.active ? "任务正在生成，暂时无法移除" : "从书架移除；本地文件保留"}
+                    disabled={job.active || busy === `remove:${job.id}`}
+                    onClick={() => void removeFromLibrary(job)}
+                  >
+                    移除
+                  </button>
+                </div>
               ))}
             </div>
           )}

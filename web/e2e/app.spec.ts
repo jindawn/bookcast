@@ -19,7 +19,7 @@ test("a missing selected task never displays another task's completed audio", as
     await route.fulfill({ json: { jobs, errors: [] } });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /Selected book/ }).click();
+  await page.locator(".job-card").filter({ hasText: "Selected book" }).click();
   await expect(page.getByRole("heading", { name: "Selected book" })).toBeVisible();
   jobs = [other];
   await expect(page.getByText("当前选中的任务暂时无法读取", { exact: false })).toBeVisible();
@@ -96,6 +96,15 @@ test("upload → Core generation → history → actual audio playback; mobile l
     ),
   ).toBe(true);
   await page.screenshot({ path: "test-results/mobile.png", fullPage: true });
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("本地书籍、音频和任务文件会保留");
+    await dialog.accept();
+  });
+  await page.getByRole("button", { name: /^从书架移除 浏览器演示/ }).click();
+  await expect(page.getByRole("heading", { name: /我的声音书架 0/ })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: /^从书架移除 浏览器演示/ })).toHaveCount(0);
+  expect(statSync(join(completed.directory, "podcast.mp3")).size).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
 

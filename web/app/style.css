@@ -588,14 +588,33 @@ h1 span {
   grid-template-columns: repeat(2, 1fr);
   gap: 14px;
 }
+.job-card-row {
+  position: relative;
+  min-width: 0;
+}
 .job-card {
   display: flex;
   text-align: left;
   align-items: center;
   gap: 15px;
-  padding: 17px;
+  padding: 17px 70px 17px 17px;
   min-width: 0;
+  width: 100%;
   background: #fffefa;
+}
+.job-remove {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+}
+.job-remove:hover:not(:disabled) {
+  color: #9c4b42;
+  text-decoration: underline;
 }
 .job-card.selected {
   border-color: #a4b891;

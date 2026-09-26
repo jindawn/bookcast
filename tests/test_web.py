@@ -62,6 +62,31 @@ def test_submission_defaults_to_twenty_minutes(client):
     assert record.request.minutes == 20
 
 
+def test_remove_from_library_keeps_local_job_and_audio(client):
+    identifier, _ = submit(client)
+    job = run(client, identifier)
+    output = Path(job['directory']) / 'podcast.mp3'
+    before = sha256_file(output)
+    response = client.delete(f'/api/jobs/{identifier}')
+    assert response.status_code == 200 and response.json() == {'removed': True}
+    assert client.get('/api/jobs').json()['jobs'] == []
+    assert client.app.state.service.read(identifier).removed_at
+    assert sha256_file(output) == before
+    assert client.get(f'/api/jobs/{identifier}').json()['state'] == 'SUCCEEDED'
+    assert client.delete(f'/api/jobs/{identifier}').status_code == 200
+    assert client.get('/api/jobs').json()['jobs'] == []
+
+
+def test_active_job_cannot_be_removed_from_library(client):
+    identifier, _ = submit(client)
+    service = client.app.state.service
+    with patch.object(service, 'status', return_value={'active': True}):
+        response = client.delete(f'/api/jobs/{identifier}')
+    assert response.status_code == 409
+    assert service.read(identifier).removed_at is None
+    assert len(client.get('/api/jobs').json()['jobs']) == 1
+
+
 def test_m4b_download_appears_only_after_explicit_export(client):
     identifier, _ = submit(client)
     job = run(client, identifier)

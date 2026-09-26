@@ -49,6 +49,7 @@ class WebJob(Model):
     status: Literal['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED_RETRYABLE', 'FAILED_PERMANENT'] = 'PENDING'
     error: str | None = None
     retry: bool = False
+    removed_at: str | None = None
     created_at: str = Field(default_factory=utc_now)
     updated_at: str = Field(default_factory=utc_now)
 
@@ -143,10 +144,22 @@ class WebService:
         root = artifact_path(self.root, 'jobs')
         for path in root.glob('*/submission.json'):
             try:
+                if self.read(path.parent.name).removed_at:
+                    continue
                 jobs.append(self.status(path.parent.name))
             except (BookCastError, OSError, ValueError, KeyError):
                 errors.append('一项本地任务记录损坏；请通过 CLI 检查，原文件未修改。')
         return {'jobs': sorted(jobs, key=lambda job: job['created_at'], reverse=True), 'errors': errors}
+
+    def remove(self, identifier: str):
+        with job_lock(self.root):
+            record = self.read(identifier)
+            if record.removed_at:
+                return
+            if self.status(identifier)['active']:
+                raise BookCastError('任务正在生成，请完成或停止后再从书架移除。')
+            record.removed_at = record.updated_at = utc_now()
+            write_json(id_path(self.root, 'jobs', identifier) / 'submission.json', record.model_dump(mode='json'))
 
     def submit(self, request: Submission, identifier: str):
         # Idempotency key comes from the client and survives uncertain HTTP responses.

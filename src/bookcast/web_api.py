@@ -109,6 +109,11 @@ def create_app(data_dir: Path = Path('data/web'), config: Path | None = None, ui
     def status(identifier: str):
         return service.status(identifier)
 
+    @app.delete('/api/jobs/{identifier}')
+    def remove(identifier: str):
+        service.remove(identifier)
+        return {'removed': True}
+
     @app.post('/api/jobs/{identifier}/resume', status_code=202)
     def resume(identifier: str):
         return service.dispatch(identifier)
