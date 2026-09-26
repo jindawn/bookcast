@@ -459,3 +459,5 @@
 - 2026-09-26T00:58:44Z：按 RC 错误日志契约在每条 Gemini 物理请求记录中显式增加 `chunk_id`、内部 `error_kind`、allowlist `safe_reason` 与 `retryable`，不保存上游原始文本。功能提交 `8f94f6553a427203b3db77a8ec6586c7aa92cd7c` 与同一代码工作树完整离线 suite 512 passed、1 skipped、5 deselected、10 subtests；该提交上 Gemini 专项 87 passed、项目校验通过，Web typecheck/compileall/diff check 通过；无真实 API 请求。
 
 - 2026-09-26T01:11:14Z：Web 新建任务页面与 API 默认目标时长统一为 20 分钟；功能提交 `f7c39c835e3b81ec7cfc7f11a7b67f17d4a0c31e`。Web API 18 passed、Web typecheck/build、浏览器 E2E 1 passed、项目校验与提交差异检查通过；未运行完整 Python suite，未调用真实 Provider，既有任务未修改。
+
+- 2026-09-26T01:16:18Z：Web 书架新增任务移除：可确认隐藏 Web 提交记录，活动任务拒绝，本地书籍/音频/Job 目录保留。功能提交 `41ec6b695a0cecee4bfef54f6e9573e1656a4fc2`；Web API 20 passed，typecheck/build，浏览器 E2E 4 passed，项目校验及 diff check 通过。首轮 E2E 因任务标题去扩展名与旧按钮定位歧义失败，修正后全过；未跑完整 Python suite、未调用真实 Provider。
