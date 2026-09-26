@@ -1,5 +1,7 @@
 # BookCast 路线图
 
+RC Blocker Closure 已针对 Gemini 错误持久化、物理请求身份和单机跨进程 3 RPM 预约完成离线实现；默认测试、静态校验与实机验证证据以 [STATE.json](STATE.json) 为准。真实供应商账单和系统级时序仍需发布前人工验收，见 D-024。
+
 路线图描述开发顺序和各阶段的验收目标，不把计划能力视为已经实现。当前执行状态以 [STATE.json](STATE.json) 为准，最新接力信息见 [HANDOFF.md](HANDOFF.md)。进入一个阶段前先核对实际代码，完成一个原子任务后运行对应测试。
 
 ## Phase 0：项目初始化与 Agent 接力

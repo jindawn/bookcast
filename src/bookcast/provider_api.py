@@ -3,6 +3,8 @@
 from enum import StrEnum
 import json
 from pathlib import Path
+from dataclasses import dataclass
+from collections.abc import Callable
 from typing import Literal, Protocol, TypeVar
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
@@ -174,3 +176,16 @@ class SegmentTTSProvider(TTSProvider, Protocol):
     def synthesize_segment(self, segment: SpeechSegment, destination: Path) -> SegmentSpeechInfo:
         """One bounded request; Core owns segmentation, checkpoints and concatenation."""
         ...
+
+
+@dataclass(frozen=True)
+class ProviderRequestContext:
+    """Call-scoped identity and destination for physical request diagnostics."""
+
+    job_id: str | None
+    output_id: str | None
+    logical_chunk_id: str
+    provider: str
+    model: str
+    telemetry_path: Path
+    on_telemetry_degraded: Callable[[str], None] | None = None

@@ -198,3 +198,9 @@ Gemini 使用标准库调用官方、仍有文档的 generateContent REST TTS；
 ## D-023 — 时长先约束昂贵内容阶段并逐阶段记录用量
 
 状态：accepted；日期：2026-09-25。保留全源块分析和证据坐标，逐章综合使用 12 主题有界批次；在全书综合前根据节目时长从书序范围中选候选章节。20 分钟最多 32 个候选、16 个节目片段；仅被选中的主题进入写作和一致性复核。章节综合关闭不必要的 reasoning，其余语义复核与质量阈值保持。Provider 使用已支持的服务端 usage，Core 写不含正文或凭证的 `usage/llm_usage.json`。已完成任务不自动重制；新编排只使依赖其变化的综合、规划与后续步骤失效，分析证据缓存按原契约保留。请求与 token 降幅是离线投影，内容质量须另行审听。详见 [LLM_COST.md](LLM_COST.md)。
+
+## D-024 — Gemini 物理请求安全边界与本机共享预约
+
+状态：accepted；日期：2026-09-26。细化 D-019 的 Gemini Adapter；实际 TTS 传输已迁移至 Interactions API。Core 在每次逐段调用时显式传入 Job/output/逻辑 chunk 身份及 Job 内遥测路径，Adapter 不再从临时 WAV 文件名推导身份。HTTP 状态和结构化原因仅映射内部安全枚举；原始错误正文、status、reason、转录、凭证与音频数据均不持久化。物理请求结果另记 `usage/physical_requests.jsonl`，只有响应提供明确 usage 证据时账单证据为 `confirmed`，否则为 `unknown`；遥测写入失败只产生安全 diagnostic，不改变合成结果。
+
+单机各 worker 共享用户本地 `~/.bookcast/gemini_tts_slots.sqlite3`，用 SQLite `BEGIN IMMEDIATE` 原子预约每次 TTS HTTP 发送（包括 retry），发送前再复核实际已发送时间。默认与最低间隔均为 25 秒；退避和 Retry-After 先在可注入的单调时钟上形成截止时间，再等待 `max(共享限流截止、Retry-After 截止、指数退避截止)`，避免远期 Retry-After 提前占据共享槽。持久化单调时钟值在同一次开机的进程间可比较；时钟回拨不会靠墙钟突破限制，检测到重启时清理过期预约。SQLite 事务随进程退出释放，已预约而未发送最多浪费相应有限时间槽。系统重启、极端调度延迟和供应商最终账单仍需实机观察；本决策未改变 Gemini 语音、chunk、音频解码或费用费率。

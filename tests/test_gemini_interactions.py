@@ -177,8 +177,8 @@ def test_decoder_failed_status(mock_urlopen, spec, tmp_path, monkeypatch):
     dest = tmp_path / "out3.wav"
     with pytest.raises(ProviderError) as exc:
         provider.synthesize_segment(segment, dest)
-    assert exc.value.error_type == "interaction_failed"
-    assert exc.value.validation_reason == "Content policy violation"
+    assert exc.value.error_type == "UNKNOWN"
+    assert exc.value.validation_reason == "UNKNOWN"
 
 @patch('bookcast.adapters.gemini.request.build_opener')
 def test_decoder_completed_no_audio(mock_urlopen, spec, tmp_path, monkeypatch):
@@ -201,5 +201,5 @@ def test_decoder_completed_no_audio(mock_urlopen, spec, tmp_path, monkeypatch):
     dest = tmp_path / "out4.wav"
     with pytest.raises(ProviderError) as exc:
         provider.synthesize_segment(segment, dest)
-    assert exc.value.error_type == "decode_error"
-    assert exc.value.validation_reason == "completed interaction contained no audio content"
+    assert exc.value.error_type == "DECODE_ERROR"
+    assert exc.value.validation_reason == "DECODE_ERROR"

@@ -80,8 +80,9 @@ def fake_gemini_time(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyP
     def sleeper(seconds: float) -> None:
         current[0] += seconds
 
-    monkeypatch.setattr(gemini, "time", SimpleNamespace(time=clock, sleep=sleeper))
-    monkeypatch.setattr(gemini.GeminiTTSProvider, "_last_request_time", 0.0)
+    monkeypatch.setattr(gemini, "time", SimpleNamespace(time=clock, monotonic=clock, sleep=sleeper))
+    monkeypatch.setenv("BOOKCAST_GEMINI_LIMITER_PATH",
+                       str(request.getfixturevalue("tmp_path") / "gemini-slots.sqlite3"))
 
 
 @pytest.fixture(autouse=True)

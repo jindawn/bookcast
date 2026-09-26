@@ -3,7 +3,8 @@ import json
 import re
 
 from .audio import concat_wav, wav_seconds
-from .provider_api import SpeechTurn, SpeechSegment, SegmentSpeechInfo, ProviderError, ErrorKind
+from .provider_api import (SpeechTurn, SpeechSegment, SegmentSpeechInfo, ProviderError,
+                           ProviderRequestContext, ErrorKind)
 from .storage import atomic_target, sha256_file, write_json
 
 SEGMENT_VERSION = "speech-segment-v1:pcm24k"
@@ -54,7 +55,20 @@ def render_segments(r, script):
             if len({t.speaker for t in segment.turns}) > 1 and not caps.multi_speaker:
                 raise ProviderError(ErrorKind.INPUT)
             with atomic_target(r.path(name)) as temporary:
-                info = SegmentSpeechInfo.model_validate(provider.synthesize_segment(segment, temporary))
+                contextual = getattr(provider, 'synthesize_segment_with_context', None)
+                if callable(contextual):
+                    context = ProviderRequestContext(
+                        job_id=r.manifest.job_id, output_id=r.manifest.output_id,
+                        logical_chunk_id=task, provider=provider.name, model=provider.model,
+                        telemetry_path=r.path('usage/physical_requests.jsonl'),
+                        on_telemetry_degraded=lambda reason: r.event(
+                            'telemetry_diagnostic', details={'diagnostic': reason,
+                                                            'logical_chunk_id': task}),
+                    )
+                    result = contextual(segment, temporary, context)
+                else:
+                    result = provider.synthesize_segment(segment, temporary)
+                info = SegmentSpeechInfo.model_validate(result)
                 if set(info.voices) != {t.speaker for t in segment.turns}:
                     raise ProviderError(ErrorKind.SCHEMA)
                 check_audio(temporary)

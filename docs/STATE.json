@@ -2,7 +2,7 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-18",
-  "current_task": "等待用户本机新独立 DeepSeek clean run 与真实成本验收",
+  "current_task": "等待用户本机新独立 DeepSeek clean run 与真实成本验收；RC Blocker Closure 已完成离线验证",
   "task_status": "blocked",
   "branch": "main",
   "last_verified_commit": "0992207bbd986ad4ff8eaccc1f76d15d35adb50d",
@@ -115,7 +115,8 @@
     "RC Stage 4: 严格区分 active_error 与 historical_attempt_errors；只有 failed/failed_retryable/blocked 状态存在 active_error；completed/SUCCEEDED 状态下 active_error 与 top-level error 为 null，同时在 manifest.ai_calls 与 events.jsonl 中完整保留历史 failed attempts 审计。",
     "RC Stage 5：生产成本摘要使用 Job 创建时配置/计价快照，Attempt 更新 usage 与原子摘要；CLI/Web 按 Job 身份验证并显示，缺失用量不标实际，按 Provider+model 分组；全路径离线回归通过。",
     "补齐遗漏的测试资产 tests/fixtures/deepseek_analysis_0015_concepts_overflow.json，在 .gitignore 忽略 debugging-*.md 本地会话记录并清理冗余副本。",
-    "RC Stage 6: 统一 Gemini TTS 音频解码器为单一规范路径 decode_audio，定义 AudioPayload 结构契约，移除冗余 decode_pcm，补齐 Interactions 音频定位、严格 Base64 解码、MIME 校验与 WAV 参数校验，脱敏 decode_error，全量 495 passed 与 62 项 Gemini 专项测试通过。"
+    "RC Stage 6: 统一 Gemini TTS 音频解码器为单一规范路径 decode_audio，定义 AudioPayload 结构契约，移除冗余 decode_pcm，补齐 Interactions 音频定位、严格 Base64 解码、MIME 校验与 WAV 参数校验，脱敏 decode_error，全量 495 passed 与 62 项 Gemini 专项测试通过。",
+    "RC Blocker Closure：Gemini 错误严格内部枚举、物理 HTTP 请求显式绑定 Job/output/logical chunk、SQLite 跨进程 25 秒预约与发送前复核；离线全量 511 passed，遥测故障不影响合成成功，未调用真实 Provider。"
   ],
   "in_progress": [],
   "next_actions": [
@@ -128,6 +129,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "rc-blocker-closure-gemini-security-identity-limiter",
+      "command": "UV_CACHE_DIR=/private/tmp/bookcast-uv-cache uv run pytest -q; python3 scripts/validate_project.py; npm --prefix web run typecheck; PATH=\"$PWD/.venv/bin:$PATH\" python -m compileall src tests scripts; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "511 passed、1 skipped、5 deselected、10 subtests；Gemini 错误泄漏、Job/chunk 身份、账单证据、遥测故障、跨实例/线程 SQLite 预约、Retry-After/退避与崩溃回归全部离线通过；项目校验、Web 类型和 Python 编译通过。",
+      "checked_at": "2026-09-26T00:47:03Z"
+    },
     {
       "name": "rc-stage-6-gemini-audio-decoder-unification",
       "command": ".venv/bin/pytest tests/test_gemini_tts.py tests/test_gemini_interactions.py tests/test_tts_voice_test.py -q; python3 scripts/validate_project.py; git diff HEAD^ HEAD --check",
@@ -1189,5 +1198,5 @@
       "purpose": "第 15 章 concepts 字段超限脱敏测试 fixture"
     }
   ],
-  "updated_at": "2026-09-25T20:10:30Z"
+  "updated_at": "2026-09-26T00:47:03Z"
 }

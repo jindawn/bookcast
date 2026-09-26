@@ -1,3 +1,15 @@
+## 2026-09-26 RC Blocker Closure：Gemini 安全错误、物理请求与共享限流
+
+目标：仅关闭最终 RC 交叉审计的三个阻断项；没有调用真实 Gemini/DeepSeek，没有改 prompt、chunk、费用费率、解码器、Kokoro 或 Web UI。
+
+完成：Gemini 上游错误正文和任意 status/reason 不再进入 Attempt、event、manifest 或 API，统一映射内部 `safe_reason` 枚举。Core 在逐段合成时通过 `ProviderRequestContext` 显式提供 Job/output/logical chunk 身份与该 Job 的 `usage/physical_requests.jsonl`；每次物理请求记录 HTTP/重试/usage/billing evidence。没有明确 usage 时 billing 为 `unknown`；日志写失败只置 `telemetry_degraded` 并写安全 `telemetry_diagnostic`，成功音频仍完成。
+
+Gemini 所有首次和重试 TTS 请求使用同一用户本地 SQLite 文件原子预约，最小间隔 25 秒；发送前复核实际发送时间。Retry-After 秒数/HTTP-date 与指数退避都转成单调时钟截止，按共享限流与重试截止的较晚者发送。长 Retry-After 先本地等待，避免崩溃占据远期槽；事务崩溃释放，没有永久锁。独立 FakeClock 测试覆盖多实例、两线程、延迟调度、崩溃、重试时序和配额。
+
+验证：完整默认离线 suite **511 passed、1 skipped、5 deselected、10 subtests passed**（76.82 秒）；`python3 scripts/validate_project.py`、`npm --prefix web run typecheck`、`python -m compileall src tests scripts`（通过 `.venv/bin` 在 PATH 中提供 Python）、`git diff --check` 均通过。失败的首轮全量为两个旧脚本 monkeypatch 未接受新的可选 context 参数，已用无 context 时兼容调用修复并复验；没有遗留本阶段失败。真实 Gemini 系统时钟/跨进程行为及账单判定只离线验证，发布前需在用户明确授权的独立任务上观察。本阶段不应重复改音频解码或重跑旧完成任务。最近已存在提交在本次工作开始时为 `240081e`；本段最终功能提交与交接快照请以 `git log -2` 为准。
+
+---
+
 ## 2026-09-26 RC Stage 6：统一 Gemini TTS Audio Decoder
 
 目标：解决 Gemini TTS 音频解码路径并存（`decode_audio` 与 `decode_pcm`）及校验缺失隐患，统一为单一 canonical decode path。

@@ -1,5 +1,7 @@
 # 架构
 
+RC Blocker Closure：Gemini Interactions TTS 的每个逻辑片段由 Core 显式附带 `ProviderRequestContext`（Job/output/chunk 身份与遥测位置）；Adapter 用本机共享 SQLite 原子预约、发送前复核和单调时钟处理所有首次与重试 HTTP 请求。原始上游错误仅映射内部安全枚举；物理请求账单证据按明确 usage 区分 `confirmed` 与 `unknown`，遥测失败不改变业务结果。详见 D-024。
+
 Phase 18 内容预算说明：`ContentFlow` 在全源 EvidenceAnalysis 和逐章有界综合之后，先按目标时长选跨书序候选章节，再做全书综合与本地 EpisodePlan；只有计划中的 segment 进入 dialogue/consistency/quality/语音。`llm_usage.py` 从 Attempt journal 生成不含正文的阶段用量视图。详见 [LLM_COST.md](LLM_COST.md)；旧完成任务不会自动重制。
 
 ## 当前实际实现（Phase 17）

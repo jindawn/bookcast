@@ -7,17 +7,18 @@ import json
 import os
 from pathlib import Path
 import random
-import re
+import sqlite3
 import struct
 import sys
 import time
+from email.utils import parsedate_to_datetime
 from collections.abc import Callable
 from urllib import error, request
 import wave
 
 from ..generation import ProviderUsage
 from ..provider_api import (ErrorKind, ProviderCapabilities, ProviderError, ProviderStatus,
-                            SpeechSegment, SegmentSpeechInfo)
+                            ProviderRequestContext, SpeechSegment, SegmentSpeechInfo)
 from ..storage import fingerprint
 
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -25,44 +26,75 @@ WIRE_VERSION = "gemini-generate-content-tts-v1:pcm-s16le-24k"
 MAX_RESPONSE = 32 * 1024 * 1024
 
 def sanitize_gemini_error(text: str) -> str:
-    if not isinstance(text, str):
-        return ""
-    text = re.sub(r'AIza[0-9A-Za-z-_]{35}', '[REDACTED]', text)
-    text = re.sub(r'(Bearer\s+)[A-Za-z0-9\-\._~\+/]+', r'\1[REDACTED]', text)
-    text = re.sub(r'(x-goog-api-key:?\s*)[A-Za-z0-9\-_]+', r'\1[REDACTED]', text)
-    text = re.sub(r'(?:[A-Za-z0-9+/]{4}){10,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?', '[REDACTED]', text)
-    if 'transcript' in text.lower() or len(text) > 200:
-        text = text[:100] + '... [REDACTED]'
-    return text
+    """Never retain upstream prose, including a supposedly harmless prefix."""
+    return "UNKNOWN"
 
-def classify_http(status, body, headers=None):
+
+SAFE_REASONS = frozenset({
+    'AUTH', 'PERMISSION', 'RATE_LIMIT', 'QUOTA', 'TIMEOUT', 'UNAVAILABLE',
+    'INVALID_REQUEST', 'DECODE_ERROR', 'UNKNOWN',
+})
+REASON_BY_KIND = {
+    ErrorKind.AUTH: 'AUTH', ErrorKind.PERMISSION: 'PERMISSION',
+    ErrorKind.RATE_LIMIT: 'RATE_LIMIT', ErrorKind.QUOTA: 'QUOTA',
+    ErrorKind.TIMEOUT: 'TIMEOUT', ErrorKind.UNAVAILABLE: 'UNAVAILABLE',
+    ErrorKind.INPUT: 'INVALID_REQUEST', ErrorKind.SCHEMA: 'DECODE_ERROR',
+}
+
+
+def safe_failure(failure: ProviderError) -> ProviderError:
+    """Constrain every value that can reach an Attempt, event, or Web DTO."""
+    reason = REASON_BY_KIND.get(failure.kind, 'UNKNOWN')
+    if reason not in SAFE_REASONS:
+        reason = 'UNKNOWN'
+    result = ProviderError(failure.kind, error_type=reason, validation_reason=reason)
+    result.retry_after = getattr(failure, 'retry_after', None)
+    result.quota_reason = getattr(failure, 'quota_reason', None)
+    return result
+
+
+def _retry_after_seconds(headers, wall_clock: Callable[[], float]) -> float | None:
+    if not headers:
+        return None
+    value = headers.get('Retry-After')
+    if value is None:
+        return None
+    try:
+        return max(0.0, float(value))
+    except (ValueError, TypeError):
+        try:
+            date = parsedate_to_datetime(value)
+            if date.tzinfo is None:
+                return None
+            return max(0.0, date.timestamp() - wall_clock())
+        except (ValueError, TypeError, OverflowError, IndexError):
+            return None
+
+def classify_http(status, body, headers=None, *, wall_clock=time.time):
     """Use structured status/reasons/quota IDs, never persist or match error prose."""
     try:
-        failure = json.loads(body).get('error', {})
+        document = json.loads(body)
+        failure = document.get('error', {}) if isinstance(document, dict) else {}
+        failure = failure if isinstance(failure, dict) else {}
         details = failure.get('details', [])
         details = [d for d in details if isinstance(d, dict)] if isinstance(details, list) else []
         reasons = {d.get('reason') for d in details if isinstance(d.get('reason'), str)}
     except (ValueError, AttributeError, TypeError):
         failure, details, reasons = {}, [], set()
         
-    error_status = failure.get('status', str(status))
-    # DO NOT print or persist raw message to prevent leaking transcripts or keys.
-        
-    retry_after = None
-    if headers and 'Retry-After' in headers:
-        try:
-            retry_after = int(headers['Retry-After'])
-        except ValueError:
-            pass
+    upstream_status = failure.get('status')
+    status_code = status if type(status) is int else 0
+    quota_reason = None
 
     kind = ErrorKind.BUSINESS
-    if status == 401 or failure.get('status') == 'UNAUTHENTICATED' or reasons & {'API_KEY_INVALID', 'API_KEY_EXPIRED'}:
+    if status_code == 401 or upstream_status == 'UNAUTHENTICATED' or reasons & {'API_KEY_INVALID', 'API_KEY_EXPIRED'}:
         kind = ErrorKind.AUTH
-    elif status == 403:
+    elif status_code == 403:
         kind = ErrorKind.PERMISSION
-    elif status == 402 or reasons & {'BILLING_DISABLED', 'BILLING_NOT_ACTIVE', 'QUOTA_EXCEEDED'}:
+    elif status_code == 402 or reasons & {'BILLING_DISABLED', 'BILLING_NOT_ACTIVE', 'QUOTA_EXCEEDED'}:
         kind = ErrorKind.QUOTA
-    elif status == 429:
+        quota_reason = 'BILLING' if reasons & {'BILLING_DISABLED', 'BILLING_NOT_ACTIVE'} else 'QUOTA'
+    elif status_code == 429:
         kind = ErrorKind.RATE_LIMIT
         violations = [v for d in details for v in (d.get('violations') if isinstance(d.get('violations'), list) else [])
                       if isinstance(v, dict)]
@@ -71,21 +103,17 @@ def classify_http(status, body, headers=None):
             if ('perday' in quota_id or 'per_day' in quota_id
                     or violation.get('quotaValue') in (0, '0')):
                 kind = ErrorKind.QUOTA
-        
-        # Determine exact 429 reason
-        if error_status == 'RESOURCE_EXHAUSTED':
-            error_status = 'quota_exceeded' if kind == ErrorKind.QUOTA else 'rate_limit_exceeded'
-            if 'too_many_requests' in failure.get('message', '').lower():
-                error_status = 'too_many_requests'
-    elif status in {408, 504}:
+                quota_reason = 'DAILY_LIMIT' if 'day' in quota_id else 'QUOTA'
+    elif status_code in {408, 504}:
         kind = ErrorKind.TIMEOUT
-    elif status >= 500:
+    elif status_code >= 500:
         kind = ErrorKind.UNAVAILABLE
     else:
         kind = ErrorKind.SCHEMA
 
-    err = ProviderError(kind, error_type=error_status)
-    err.retry_after = retry_after
+    err = safe_failure(ProviderError(kind))
+    err.retry_after = _retry_after_seconds(headers, wall_clock)
+    err.quota_reason = quota_reason
     return err
 
 
@@ -95,17 +123,78 @@ class NoRedirect(request.HTTPRedirectHandler):
         raise ProviderError(ErrorKind.INPUT)
 
 
+class GeminiRequestLimiter:
+    """Atomic slots shared by every local process using this SQLite database.
+
+    Monotonic values are comparable across processes on one boot. A lower value
+    after reboot resets stale state; an undetected old reservation is finite.
+    A wall-clock adjustment cannot advance a reservation.
+    """
+
+    def __init__(self, path: Path, *, clock: Callable[[], float] = time.monotonic):
+        self.path = Path(path)
+        self.clock = clock
+
+    def next_deadline(self) -> float:
+        with sqlite3.connect(self.path, timeout=5) as db:
+            row = db.execute('SELECT next_at, observed_at FROM slot WHERE id = 1').fetchone()
+        now = self.clock()
+        return max(now, row[0]) if row and now >= row[1] else now
+
+    def reserve_next_slot(self, interval: float) -> float:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(self.path, timeout=5) as db:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute('CREATE TABLE IF NOT EXISTS slot (id INTEGER PRIMARY KEY CHECK (id = 1), '
+                       'next_at REAL NOT NULL, observed_at REAL NOT NULL, last_sent_at REAL)')
+            row = db.execute('SELECT next_at, observed_at, last_sent_at FROM slot WHERE id = 1').fetchone()
+            now = self.clock()
+            # A lower observed monotonic value means a reboot. Future slots
+            # reserved by other live workers must never be mistaken for one.
+            previous = row[0] if row else now
+            rebooted = bool(row and now < row[1])
+            if rebooted:
+                previous = now
+            send_at = max(now, previous)
+            last_sent = None if rebooted or not row else row[2]
+            db.execute('INSERT INTO slot (id, next_at, observed_at, last_sent_at) VALUES (1, ?, ?, ?) '
+                       'ON CONFLICT(id) DO UPDATE SET next_at = excluded.next_at, '
+                       'observed_at = excluded.observed_at, last_sent_at = excluded.last_sent_at',
+                       (send_at + interval, now, last_sent))
+        return send_at
+
+    def claim_send_slot(self, interval: float) -> float:
+        """Recheck at send time so a delayed worker cannot crowd a later one."""
+        with sqlite3.connect(self.path, timeout=5) as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT observed_at, last_sent_at FROM slot WHERE id = 1').fetchone()
+            now = self.clock()
+            previous = None if row is None or now < row[0] else row[1]
+            allowed_at = max(now, previous + interval) if previous is not None else now
+            if allowed_at <= now:
+                db.execute('UPDATE slot SET last_sent_at = ?, observed_at = ? WHERE id = 1', (now, now))
+            else:
+                db.execute('UPDATE slot SET observed_at = ? WHERE id = 1', (now,))
+        return allowed_at
+
+
 class GeminiTTSProvider:
-    _last_request_time = 0.0
     def __init__(self, spec, *, clock: Callable[[], float] | None = None,
-                 sleeper: Callable[[float], None] | None = None):
+                 sleeper: Callable[[float], None] | None = None,
+                 limiter: GeminiRequestLimiter | None = None,
+                 wall_clock: Callable[[], float] | None = None):
         self.spec, self.name, self.model = spec, spec.name, spec.model
-        self.clock = clock if clock is not None else time.time
+        self.clock = clock if clock is not None else time.monotonic
         self.sleeper = sleeper if sleeper is not None else time.sleep
+        self.wall_clock = wall_clock if wall_clock is not None else time.time
+        limiter_path = Path(os.environ.get('BOOKCAST_GEMINI_LIMITER_PATH',
+                                        str(Path.home() / '.bookcast' / 'gemini_tts_slots.sqlite3')))
+        self.limiter = limiter if limiter is not None else GeminiRequestLimiter(limiter_path, clock=self.clock)
         self.settings = spec.cloud_tts
         self.last_status = ProviderStatus(provider=self.name, model=self.model)
         self.last_usage = None
         self.reported_model = None
+        self.telemetry_degraded = False
 
     def capabilities(self):
         return ProviderCapabilities(speech=True, speech_segments=True, multi_speaker=True, cloud=True)
@@ -115,109 +204,145 @@ class GeminiTTSProvider:
         return fingerprint({'adapter': WIRE_VERSION, 'model': self.model, 'endpoint': ENDPOINT,
                             'settings': self.settings.model_dump()})
 
-    def _request(self, payload=None, destination=None):
+    def _record_physical(self, context: ProviderRequestContext | None, record: dict) -> None:
+        if context is None:
+            return
+        try:
+            context.telemetry_path.parent.mkdir(parents=True, exist_ok=True)
+            encoded = (json.dumps(record, ensure_ascii=False, separators=(',', ':')) + '\n').encode()
+            fd = os.open(context.telemetry_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+            try:
+                if os.write(fd, encoded) != len(encoded):
+                    raise OSError('short telemetry write')
+            finally:
+                os.close(fd)
+        except OSError:
+            self.telemetry_degraded = True
+            if context.on_telemetry_degraded:
+                try:
+                    context.on_telemetry_degraded('PHYSICAL_REQUEST_LOG_UNAVAILABLE')
+                except Exception:
+                    pass
+
+    def _request(self, payload=None, destination=None, *, request_context: ProviderRequestContext | None = None):
         from ..models import utc_now
         key = os.environ.get(self.spec.api_key_env)
         if not key or not key.strip():
-            raise ProviderError(ErrorKind.AUTH)
+            raise safe_failure(ProviderError(ErrorKind.AUTH))
         url = ENDPOINT + self.model if payload is None else 'https://generativelanguage.googleapis.com/v1beta/interactions'
-        
+
+        if request_context and (request_context.provider != self.name or request_context.model != self.model):
+            raise safe_failure(ProviderError(ErrorKind.INPUT))
         attempts = 0
         backoffs = [10, 20, 40, 60]
-        
-        chunk_id = destination.stem if destination else "unknown"
-        physical_log = destination.parents[3] / 'usage' / 'physical_requests.jsonl' if destination else None
-        
-        def log_physical(status, result_status, retry_reason, usage_avail, billing, started, finished):
-            if physical_log:
-                physical_log.parent.mkdir(parents=True, exist_ok=True)
-                with physical_log.open('a', encoding='utf-8') as pf:
-                    import json
-                    pf.write(json.dumps({
-                        "chunk_id": chunk_id,
-                        "physical_attempt_index": attempts,
-                        "started_at": started,
-                        "finished_at": finished,
-                        "http_status": status if status is None else (int(status) if isinstance(status, int) else (int(str(status)) if str(status).isdigit() else 200)),
-                        "result": result_status,
-                        "retry_reason": retry_reason,
-                        "usage_available": usage_avail,
-                        "billing_status": billing
-                    }) + '\n')
-
+        interval = max(25, self.settings.min_request_interval) if payload is not None else 25
+        retry_deadline = self.clock()
         while True:
-            # Active RPM throttling
-            now = self.clock()
-            interval = getattr(self.settings, 'min_request_interval', 25)
-            if payload is not None and now - GeminiTTSProvider._last_request_time < interval:
-                sleep_time = interval - (now - GeminiTTSProvider._last_request_time)
-                self.sleeper(sleep_time)
-            
+            if payload is not None:
+                try:
+                    if retry_deadline > self.clock():
+                        # Wait locally before reserving. A crashed Retry-After
+                        # cannot strand a far-future shared slot.
+                        due = max(retry_deadline, self.limiter.next_deadline())
+                        delay = max(0.0, due - self.clock())
+                        if delay:
+                            self.sleeper(delay)
+                    send_at = self.limiter.reserve_next_slot(interval)
+                except (OSError, sqlite3.Error):
+                    raise safe_failure(ProviderError(ErrorKind.UNAVAILABLE)) from None
+                delay = max(0.0, send_at - self.clock())
+                if delay:
+                    self.sleeper(delay)
+                while True:
+                    try:
+                        allowed_at = self.limiter.claim_send_slot(interval)
+                    except (OSError, sqlite3.Error):
+                        raise safe_failure(ProviderError(ErrorKind.UNAVAILABLE)) from None
+                    delay = max(0.0, allowed_at - self.clock())
+                    if not delay:
+                        break
+                    self.sleeper(delay)
+
             started_at = utc_now()
             http_status = None
             usage_available = False
-            
+            billing_evidence = 'unknown'
             try:
-                if payload is not None:
-                    GeminiTTSProvider._last_request_time = self.clock()
-                    
                 req = request.Request(url, headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
                     data=json.dumps(payload, ensure_ascii=False).encode() if payload is not None else None)
                 with request.build_opener(NoRedirect()).open(req, timeout=self.spec.timeout_seconds) as response:
                     http_status = getattr(response, 'getcode', lambda: 200)()
                     raw = response.read(MAX_RESPONSE + 1)
-                
                 finished_at = utc_now()
                 if len(raw) > MAX_RESPONSE:
-                    raise ProviderError(ErrorKind.SCHEMA)
+                    raise safe_failure(ProviderError(ErrorKind.SCHEMA))
                 value = json.loads(raw)
                 if not isinstance(value, dict):
-                    raise ProviderError(ErrorKind.SCHEMA)
-                
-                # Check for usage
+                    raise safe_failure(ProviderError(ErrorKind.SCHEMA))
                 usage_metadata = value.get('usage_metadata') or value.get('usageMetadata')
-                if isinstance(usage_metadata, dict):
-                    usage_available = True
-                    
-                log_physical(http_status, "success", None, usage_available, "billed", started_at, finished_at)
+                usage_available = isinstance(usage_metadata, dict) and any(
+                    type(usage_metadata.get(field)) is int and usage_metadata[field] >= 0
+                    for field in ('prompt_token_count', 'promptTokenCount',
+                                  'candidates_token_count', 'candidatesTokenCount'))
+                billing_evidence = 'confirmed' if usage_available else 'unknown'
+                self._record_physical(request_context, self._physical_record(
+                    request_context, attempts, started_at, finished_at, http_status,
+                    'success', None, usage_available, billing_evidence))
                 return value
             except error.HTTPError as exc:
                 finished_at = utc_now()
                 http_status = exc.code
-                failure = classify_http(exc.code, exc.read(64 * 1024), exc.headers)
+                try:
+                    error_body = exc.read(64 * 1024)
+                except OSError:
+                    error_body = b'{}'
+                failure = classify_http(exc.code, error_body, exc.headers,
+                                        wall_clock=self.wall_clock)
             except error.URLError as exc:
                 finished_at = utc_now()
-                failure = ProviderError(ErrorKind.TIMEOUT if isinstance(exc.reason, TimeoutError) else ErrorKind.UNAVAILABLE)
+                failure = safe_failure(ProviderError(
+                    ErrorKind.TIMEOUT if isinstance(exc.reason, TimeoutError) else ErrorKind.UNAVAILABLE))
             except TimeoutError:
                 finished_at = utc_now()
-                failure = ProviderError(ErrorKind.TIMEOUT)
+                failure = safe_failure(ProviderError(ErrorKind.TIMEOUT))
             except (ValueError, UnicodeError):
                 finished_at = utc_now()
-                failure = ProviderError(ErrorKind.SCHEMA)
+                failure = safe_failure(ProviderError(ErrorKind.SCHEMA))
             except OSError:
                 finished_at = utc_now()
-                failure = ProviderError(ErrorKind.UNAVAILABLE)
+                failure = safe_failure(ProviderError(ErrorKind.UNAVAILABLE))
+            except ProviderError as exc:
+                finished_at = utc_now()
+                failure = safe_failure(exc)
 
-            # Determine billing status
-            billing_status = "unknown"
-            if http_status is not None:
-                # If we got a status code, the server rejected it or failed it, but usage isn't returned for non-200s in interactions API usually
-                billing_status = "unbilled" if http_status >= 400 else "unknown"
-
-            # Retry logic
+            self._record_physical(request_context, self._physical_record(
+                request_context, attempts, started_at, finished_at, http_status,
+                'failed', failure.kind.value, False, 'unknown',
+                getattr(failure, 'quota_reason', None)))
             if failure.kind in {ErrorKind.RATE_LIMIT, ErrorKind.TIMEOUT, ErrorKind.UNAVAILABLE} and attempts < 4:
-                log_physical(http_status, "failed", failure.kind.value, False, billing_status, started_at, finished_at)
                 delay = getattr(failure, 'retry_after', None)
-                if not delay:
+                if delay is None:
                     delay = backoffs[attempts] + random.uniform(0, 2)
-                # DO NOT print raw messages to avoid leak
-                self.sleeper(delay)
+                retry_deadline = self.clock() + delay
                 attempts += 1
-                GeminiTTSProvider._last_request_time = self.clock() - interval
                 continue
-                
-            log_physical(http_status, "failed", failure.kind.value, False, billing_status, started_at, finished_at)
             raise failure from None
+
+    def _physical_record(self, context, attempt, started, finished, status, result,
+                         retry_reason, usage_available, billing_evidence, quota_reason=None):
+        return {
+            'job_id': context.job_id if context else None,
+            'output_id': context.output_id if context else None,
+            'logical_chunk_id': context.logical_chunk_id if context else None,
+            'provider': self.name, 'model': self.model,
+            'physical_attempt_index': attempt,
+            'started_at': started, 'finished_at': finished,
+            'http_status': status if type(status) is int else None,
+            'result': result, 'retry_reason': retry_reason,
+            'usage_available': usage_available,
+            'billing_evidence': billing_evidence,
+            'quota_reason': quota_reason,
+        }
 
     def health_check(self):
         try:
@@ -232,9 +357,15 @@ class GeminiTTSProvider:
 
 
 
-    def synthesize_segment(self, segment: SpeechSegment, destination: Path) -> SegmentSpeechInfo:
+    def synthesize_segment_with_context(self, segment: SpeechSegment, destination: Path,
+                                        context: ProviderRequestContext) -> SegmentSpeechInfo:
+        return self.synthesize_segment(segment, destination, request_context=context)
+
+    def synthesize_segment(self, segment: SpeechSegment, destination: Path, *,
+                           request_context: ProviderRequestContext | None = None) -> SegmentSpeechInfo:
         from ..speech import normalize_tts_text
         self.last_usage, self.reported_model = None, None
+        self.telemetry_degraded = False
         segment = SpeechSegment.model_validate(segment)
         voices = {'主持人': self.settings.host_voice, '嘉宾': self.settings.guest_voice}
         selected = {t.speaker: voices[t.speaker] for t in segment.turns}
@@ -289,7 +420,8 @@ class GeminiTTSProvider:
             pass
             
         try:
-            result = self._request(payload, destination)
+            result = (self._request(payload, destination, request_context=request_context)
+                      if request_context is not None else self._request(payload, destination))
             # Try to grab usage metadata if present in interactions API
             usage = result.get('usage_metadata') or result.get('usageMetadata')
             if isinstance(usage, dict):
@@ -302,8 +434,9 @@ class GeminiTTSProvider:
 
             
         except ProviderError as failure:
-            self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
-            raise
+            safe = safe_failure(failure)
+            self.last_status = ProviderStatus.from_error(self.name, self.model, safe)
+            raise safe from None
             
         self.last_status = ProviderStatus(provider=self.name, model=self.model, availability='available')
         return SegmentSpeechInfo(voices=selected)
