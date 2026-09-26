@@ -1,3 +1,47 @@
+## 2026-09-26 遵循官网实际要求时间重试与每日配额精准识别
+
+目标：根据服务商官方实际要求时间（Retry-After）进行精准冷却倒计时，识别 Google Gemini 免费层每日配额限制（DAILY_LIMIT），并升级质检门禁繁体支持与 quality-v3。
+
+完成：
+1. **官方 Retry-After 与配额识别**：`classify_http` 多源提取官方等待时间（HTTP 头、`RetryInfo.retryDelay`、报错正文秒数），挂载 `retry_after`；识别 `per day` / `daily` 限额为 `ErrorKind.QUOTA` 且 `quota_reason = 'DAILY_LIMIT'`。
+2. **全链路透传与自动断点恢复**：`Job`、`Manifest`、`jobs.py`、`web_worker.py` 与 `web_service.py` 完整持久化并透传；Web 前端根据 `retry_after` 倒计时（增加 1s 裕量）并在归零时自动发起恢复（上限 5 次）；识别 `DAILY_LIMIT` 时阻断无意义重试并提供降级与配置指引。
+3. **质检门禁繁体中文支持**：`quality.py` 的 `attribution="hypothetical"` 检查扩充支持繁体字（「假設」、「設想」、「比如說」、「假使」、「假若」）与常用自然引词（「比如」、「譬如」、「如果」）；缓存版本升至 `quality-v3`。
+
+验证：离线全量 519 passed、1 skipped、5 deselected、10 subtests 全部通过；Web typecheck / build 通过；项目校验通过。
+
+下一步：引导用户在浏览器中测试断点恢复；如遇 Gemini 免费层每日配额耗尽，按提示更换 Key、升级付费结算或切换至 Kokoro 本地语音引擎。
+
+---
+
+## 2026-09-26 DeepSeek 纠错重试截断碎片消除与强健 JSON 提取器
+
+目标：彻底解决任务《十一家注孙子》在第 98 步（`analysis:0011:0005`）出现的 `schema_error`（`json_invalid`）永久失败问题。
+
+根因排查与解决：
+1. **截断碎片污染导致 Attempt 2 语法损坏**：此前 `prepare_schema_retry` 会把上一次失败时记录的 `self._last_raw_response` 粗暴按字符截断取前 2000 个字符拼进重试提示词（`Fix structure while preserving content semantics: {snippet[:2000]}`），向大模型注入了包含未闭合引号和括号的残缺 JSON 碎片，导致 DeepSeek 在 Attempt 2 尝试接续或引用该碎片，引发根节点反序列化失败 `validation_field: "$", validation_reason: "json_invalid"`。
+2. **剥离截断碎片**：在 `prepare_schema_retry` 中彻底移除 `[:2000]` 残缺代码片段，保持重试指令清爽明确（如仅保留 `evidence must contain at most 6 items. Regenerate the full JSON with all required fields.`），促使模型以完整正确的结构重新输出。
+3. **强健 JSON 提取器升级**：重构 `_strip_markdown_fence`，结合 Markdown 代码块正则匹配与字符级括号匹配计数器（bracket-matching），稳健剥离大模型在 JSON 前后输出的思考过程（Thinking Process）及解释性闲聊，并精准处理字符串内转义引号与花括号，杜绝自然语言夹杂导致 `jiter` / Pydantic 解析异常。
+4. **验证**：新增 `test_deepseek_conversational_retry_with_complex_text_and_no_truncated_snippet` 专项单测；离线全量 **516 passed, 1 skipped, 10 subtests passed** 全部通过；`npm run build` 重新构建通过；`python3 scripts/validate_project.py` 校验通过。
+
+下一步：引导用户在浏览器上刷新页面后点击“已修复，重试任务”，断点继续恢复《十一家注孙子》第 98 步及后续章节的生成。
+
+---
+
+## 2026-09-26 Web 任务错误展示友好映射与章节分析 ID 规范化
+
+目标：针对 Web 界面任务报错裸露内部枚举代码 `business_error` 的问题，提供清晰友好的中文错误解释与代码对照；同时在算法层加固 `resolve_analysis` 对章节/分块 ID 前导零表示（如 "10" vs "0010"）的安全规范化对齐。
+
+完成：
+1. 前端 `web/app/page.tsx` 新增 `ERROR_DESCRIPTIONS` 字典与 `formatError` 转换函数，覆盖 `business_error`、`schema_error`、`auth_failure`、`quota_exhausted`、`rate_limit`、`timeout`、`temporary_unavailable`、`bad_input`、`interrupted` 等所有核心错误枚举；展示格式为 `业务校验未通过（章节提取或关联证据与原文不匹配） (business_error)`，既清晰易懂又保留底层代码便于排查。
+2. 后端 `src/bookcast/content.py` 的 `resolve_analysis` 对模型返回的 `chapter_id` 与 `chunk_id` 在数值等价时自动规范化为权威 `payload` 中的带前导零格式（如 "10" -> "0010"），避免因字符串表现差异导致误判 `business_error`。
+3. 离线全量 515 passed、1 skipped、10 subtests passed 全部通过；`npm run build` 成功。
+
+验证：测试套件全量通过，无回归；`python3 scripts/validate_project.py` 验证通过。
+
+下一步：引导用户在前端界面点击“已修复，重试任务”，断点继续《十一家注孙子》任务的生成。
+
+---
+
 ## 2026-09-26 Web 书架移除反馈优化与旧服务降级引导
 
 目标：当用户在声音书架执行任务移除时，若本地服务未重启或发生错误，提供就地可见反馈与明确操作指引，并更新前端构建静态产物。

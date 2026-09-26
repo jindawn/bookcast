@@ -5,7 +5,7 @@
   "current_task": "等待用户本机新独立 DeepSeek clean run 与真实成本验收；RC Blocker Closure 已完成离线验证",
   "task_status": "blocked",
   "branch": "main",
-  "last_verified_commit": "73adc9b02f4cce76bdc23cf43193a473d5fcb560",
+  "last_verified_commit": "dbd5bf5899889eeb3e64e8822e9410b1f17a2c75",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -119,7 +119,11 @@
     "RC Blocker Closure：Gemini 错误严格内部枚举、HTTP 请求拒绝与响应解码分别标记 INVALID_REQUEST/DECODE_ERROR、物理 HTTP 请求显式绑定 Job/output/logical chunk、SQLite 跨进程 25 秒预约与发送前复核；离线全量 512 passed，遥测故障不影响合成成功，未调用真实 Provider。",
     "Web 新建任务页面与 API 默认目标时长统一为 20 分钟；既有 Job 记录保持原预算，功能提交 f7c39c8 已验证",
     "Web 声音书架任务可确认移除；移除记录持久隐藏、活动任务拒绝移除、本地书籍与音频保留，功能提交 41ec6b6 已验证",
-    "Web 书架移除失败在书架区就地提示，405 友好引导重启服务，测试覆盖旧服务降级与前端交互，功能提交 73adc9b 已验证"
+    "Web 书架移除失败在书架区就地提示，405 友好引导重启服务，测试覆盖旧服务降级与前端交互，功能提交 73adc9b 已验证",
+    "优化 Web UI 错误提示映射（将 business_error 等内部代码映射为易懂中文说明并保留错误码），加固 resolve_analysis 章节/块 ID 前导零规范化",
+    "修复 DeepSeek 纠错重试中的截断碎片干扰（移除 snippet[:2000]），升级 _strip_markdown_fence 为括号计数与正则强健提取器，杜绝自然语言夹带导致 json_invalid",
+    "质检门禁 unlabelled_hypothetical 扩充繁体中文与自然引导词支持，质量版本升级为 quality-v3",
+    "Web 客户端支持遵循服务商官网实际 Retry-After 时间精准等待与每日配额限制识别，支持限频自动倒计时断点恢复"
   ],
   "in_progress": [],
   "next_actions": [
@@ -132,6 +136,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "deepseek-retry-quality-v3-and-official-retry-after",
+      "command": ".venv/bin/python -m pytest -q; npm --prefix web run typecheck; npm --prefix web run build; python3 scripts/validate_project.py; .venv/bin/python -m compileall -q src tests scripts",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "519 passed、1 skipped、5 deselected、10 subtests；Web typecheck 与 build 通过；项目校验与 compileall 均通过。覆盖 DeepSeek 截断碎片剥离与括号匹配 JSON 提取、繁体假设检查与 quality-v3、官方 Retry-After 与每日配额分类及 Web 自动断点恢复倒计时。",
+      "checked_at": "2026-09-26T06:54:00Z"
+    },
     {
       "name": "web-library-remove",
       "command": ".venv/bin/python -m pytest -q tests/test_web.py; npm --prefix web run typecheck; npm --prefix web run build; npm --prefix web run test:e2e; python3 scripts/validate_project.py; git diff HEAD^ HEAD --check",

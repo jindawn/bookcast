@@ -2,6 +2,14 @@
 
 本文件只追加重要、可验证的开发事实。已写入的历史条目不重写；纠错另加条目。时间使用 UTC，后续条目包含任务、结果、测试与关联提交（若当时已存在）。
 
+## 2026-09-26T04:05:00Z — 遵循服务商官网实际要求时间重试与每日配额精准识别
+
+- 问题复盘：用户反馈系统不要盲目猜测 20s 倒计时重试。实测 Google Gemini Interactions 429 报错，官方通过 `Retry-After` 头及 `Please retry in 58s` 指明了精确等待时间；且对于免费层 key，官方返回了 `(limit: 10 requests per day on Free Tier)` 每日限额信息。此前前端盲目倒计时 20s 重试，既早于官方要求时间导致重试必然撞墙，又未能区分单日配额耗尽与短时限频。
+- 官方重试时间提取：在 `gemini.py` 的 `classify_http` 中支持多源提取官方要求时间（HTTP `Retry-After` 头、`details` 中 `google.rpc.RetryInfo.retryDelay`、以及报错消息中的 `Please retry in (\d+)s`），并挂载为 `err.retry_after`；同时支持检测 `per day` / `daily`，识别为 `ErrorKind.QUOTA` 且 `quota_reason = 'DAILY_LIMIT'`。
+- 全链路数据透传：在 `Job`、`Manifest`、`jobs.py`、`web_worker.py` 与 `web_service.py` 中持久化并向 Web API 透传 `retry_after` 与 `quota_reason`。
+- 前端对齐官方时间：在 `web/app/page.tsx` 中取消硬编码的 20s 猜测，直接根据官方实际要求时间（`retry_after`）设定倒计时（增加 1s 安全裕量），并在 UI 中明确标注“已按官网实际要求时间等待”，同时在识别到 `DAILY_LIMIT` 每日额度耗尽时阻断无意义的自动循环重试，提示用户更换 API Key、升级结算或切换至 Kokoro TTS。
+- 验证情况：新增 `tests/test_gemini_tts.py` 与 `tests/test_web.py` 回归测试，前端 `npm run build` 成功，134 项单元测试全部通过，`python scripts/validate_project.py` 验证通过。
+
 ## 2026-09-12T21:18:00Z — Phase 0 初始化开始
 
 - 检查工作目录为空，没有已有应用代码、AGENTS.md 或 Git 历史。
@@ -463,3 +471,11 @@
 - 2026-09-26T01:16:18Z：Web 书架新增任务移除：可确认隐藏 Web 提交记录，活动任务拒绝，本地书籍/音频/Job 目录保留。功能提交 `41ec6b695a0cecee4bfef54f6e9573e1656a4fc2`；Web API 20 passed，typecheck/build，浏览器 E2E 4 passed，项目校验及 diff check 通过。首轮 E2E 因任务标题去扩展名与旧按钮定位歧义失败，修正后全过；未跑完整 Python suite、未调用真实 Provider。
 
 - 2026-09-26T01:29:43Z：Web 书架移除错误就地展示与旧服务友好引导；405 状态拦截并提示重启服务，新增 libraryError 独立状态与书架区域警告段落；重新构建导出 web/out 静态资源；E2E 覆盖旧服务降级与正常提示。功能提交 `73adc9b02f4cce76bdc23cf43193a473d5fcb560`，Web API 20 passed，typecheck/build 通过，浏览器 E2E 5 passed，项目校验与提交检查通过。
+
+- 2026-09-26T02:22:15Z：Web 任务错误友好映射与章节分析 ID 规范化。前端 `web/app/page.tsx` 针对 `business_error`、`schema_error` 等裸露内部错误枚举提供 `ERROR_DESCRIPTIONS` 友好中文描述映射（保留错误代码供技术定位）；后端 `src/bookcast/content.py` 在 `resolve_analysis` 中增加对 `chapter_id` 和 `chunk_id` 前导零数值安全对齐（如 "10" 规范化为 "0010"），防止格式差异引发误判。离线全量 515 passed、1 skipped、10 subtests 全部通过；`npm run build` 生成最新静态产物；项目校验与提交差异检查通过。
+
+- 2026-09-26T02:26:00Z：修复 DeepSeek 纠错重试中的截断碎片干扰与复杂对话文本 JSON 提取。在 `src/bookcast/adapters/compatible.py` 的 `prepare_schema_retry` 中彻底移除截断的 `{snippet[:2000]}` 碎片，避免向模型注入残缺语法垃圾；升级 `_strip_markdown_fence`，结合正则代码块和括号匹配计数器（bracket-matching），稳健剥离思考过程（Thinking Process）及前后自然语言废话，精准提取顶层合法 JSON。新增 `test_deepseek_conversational_retry_with_complex_text_and_no_truncated_snippet` 测试，离线全量 516 passed、1 skipped、10 subtests 全部通过，Next.js 重新编译，项目校验与提交差异检查通过。
+
+- 2026-09-26T02:56:00Z：修复质检门禁 `unlabelled_hypothetical` 繁体中文及同义词支持并升级质量缓存版本。在 `src/bookcast/quality.py` 中将 `attribution="hypothetical"` 检查的合法假设引导词扩充支持繁体字（「假設」、「設想」、「比如說」、「假使」、「假若」）与常用自然引词（「比如」、「譬如」、「如果」），防止模型在古籍/繁体语境下合法发言因字形差异被误判阻断；在 `src/bookcast/content.py` 中将质量检查缓存由 `quality-v2` 升级为 `quality-v3`，确保任务重试时自动以新规则重新评估并清除阻断；前端同步完善 `business_error` 中文文案及构建静态产物。新增 `test_quality_traditional_chinese_hypothetical_check`，离线回归 517 passed、1 skipped、10 subtests 全通，项目校验通过。
+
+- 2026-09-26T03:12:00Z：Web 前端支持可恢复异常（如 rate_limit 限频）自动倒计时断点恢复。在 `web/app/page.tsx` 中新增 `autoResumeSeconds` 倒计时与 `autoResumeCount` 重试计数逻辑，当任务处于 `FAILED_RETRYABLE` 且属于 `rate_limit` / 网络可恢复异常时，界面自动启动 20 秒安全冷却倒计时，实时向用户展示倒计时与重试轮次，并在倒计时归零时自动发起从断点恢复；同时按钮支持用户随时点击立即恢复，最大自动恢复上限设为 5 次以避免死循环。Playwright E2E 5 passed、Web 20 passed、Next.js 重新编译导出，项目校验通过。
