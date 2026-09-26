@@ -5,7 +5,7 @@
   "current_task": "等待用户本机新独立 DeepSeek clean run 与真实成本验收；RC Blocker Closure 已完成离线验证",
   "task_status": "blocked",
   "branch": "main",
-  "last_verified_commit": "0992207bbd986ad4ff8eaccc1f76d15d35adb50d",
+  "last_verified_commit": "5a04985ff3330d88671eeaa55c946506c473bcf8",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -133,9 +133,9 @@
       "name": "rc-blocker-closure-gemini-security-identity-limiter",
       "command": "UV_CACHE_DIR=/private/tmp/bookcast-uv-cache uv run pytest -q; python3 scripts/validate_project.py; npm --prefix web run typecheck; PATH=\"$PWD/.venv/bin:$PATH\" python -m compileall src tests scripts; git diff --check",
       "status": "passed",
-      "scope": "working_tree",
-      "summary": "511 passed、1 skipped、5 deselected、10 subtests；Gemini 错误泄漏、Job/chunk 身份、账单证据、遥测故障、跨实例/线程 SQLite 预约、Retry-After/退避与崩溃回归全部离线通过；项目校验、Web 类型和 Python 编译通过。",
-      "checked_at": "2026-09-26T00:47:03Z"
+      "scope": "commit",
+      "summary": "提交 5a04985ff3330d88671eeaa55c946506c473bcf8 上 511 passed、1 skipped、5 deselected、10 subtests；Gemini 错误泄漏、Job/chunk 身份、账单证据、遥测故障、跨实例/线程 SQLite 预约、Retry-After/退避与崩溃回归全部离线通过；项目校验、Web 类型和 Python 编译通过。",
+      "checked_at": "2026-09-26T00:51:28Z"
     },
     {
       "name": "rc-stage-6-gemini-audio-decoder-unification",
@@ -1198,5 +1198,5 @@
       "purpose": "第 15 章 concepts 字段超限脱敏测试 fixture"
     }
   ],
-  "updated_at": "2026-09-26T00:47:03Z"
+  "updated_at": "2026-09-26T00:51:28Z"
 }
