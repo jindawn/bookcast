@@ -6,7 +6,7 @@
 
 Gemini 所有首次和重试 TTS 请求使用同一用户本地 SQLite 文件原子预约，最小间隔 25 秒；发送前复核实际发送时间。Retry-After 秒数/HTTP-date 与指数退避都转成单调时钟截止，按共享限流与重试截止的较晚者发送。长 Retry-After 先本地等待，避免崩溃占据远期槽；事务崩溃释放，没有永久锁。独立 FakeClock 测试覆盖多实例、两线程、延迟调度、崩溃、重试时序和配额。
 
-验证：功能提交 `5a04985ff3330d88671eeaa55c946506c473bcf8` 上完整默认离线 suite **511 passed、1 skipped、5 deselected、10 subtests passed**（73.72 秒）；`python3 scripts/validate_project.py`、`npm --prefix web run typecheck`、`python -m compileall src tests scripts`（通过 `.venv/bin` 在 PATH 中提供 Python）、`git diff HEAD^ HEAD --check` 均通过。失败的首轮全量为两个旧脚本 monkeypatch 未接受新的可选 context 参数，已用无 context 时兼容调用修复并复验；没有遗留本阶段失败。真实 Gemini 系统时钟/跨进程行为及账单判定只离线验证，发布前需在用户明确授权的独立任务上观察。本阶段不应重复改音频解码或重跑旧完成任务。交接快照自身提交按 D-006 使用 `git log -1` 查询，不在 STATE 中自引用。
+验证：功能提交 `5a04985ff3330d88671eeaa55c946506c473bcf8` 及 HTTP 400 `INVALID_REQUEST` 分类补丁提交 `9f9fd41fa413f0f8902f75e9c07f3aeaeb55cec8` 均已验证；最新提交上完整默认离线 suite **512 passed、1 skipped、5 deselected、10 subtests passed**（68.93 秒）；`python3 scripts/validate_project.py`、`npm --prefix web run typecheck`、`python -m compileall src tests scripts`（通过 `.venv/bin` 在 PATH 中提供 Python）、`git diff HEAD^ HEAD --check` 均通过。失败的首轮全量为两个旧脚本 monkeypatch 未接受新的可选 context 参数，已用无 context 时兼容调用修复并复验；没有遗留本阶段失败。真实 Gemini 系统时钟/跨进程行为及账单判定只离线验证，发布前需在用户明确授权的独立任务上观察。本阶段不应重复改音频解码或重跑旧完成任务。交接快照自身提交按 D-006 使用 `git log -1` 查询，不在 STATE 中自引用。
 
 ---
 
