@@ -118,7 +118,9 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const data = await response.json();
   if (!response.ok)
     throw new Error(
-      typeof data.detail === "string"
+      response.status === 405
+        ? "本地服务仍在运行旧版本，请重启 bookcast serve 后重试。"
+        : typeof data.detail === "string"
         ? data.detail
         : "操作未成功，请检查服务并重试。",
     );
@@ -162,6 +164,7 @@ export default function Home() {
   const [busy, setBusy] = useState("");
   const [providerBusy, setProviderBusy] = useState(false);
   const [historyErrors, setHistoryErrors] = useState<string[]>([]);
+  const [libraryError, setLibraryError] = useState("");
   const submission = useRef<{ payload: string; key: string } | null>(null);
   const current = selected ? jobs.find((job) => job.id === selected) : jobs[0];
   const selectedUnavailable = selected !== null && !current;
@@ -292,13 +295,13 @@ export default function Home() {
     if (!window.confirm(`从书架移除《${job.title}》？本地书籍、音频和任务文件会保留。`))
       return;
     setBusy(`remove:${job.id}`);
-    setError("");
+    setLibraryError("");
     try {
       await api(`/api/jobs/${job.id}`, { method: "DELETE" });
       setSelected((id) => (id === job.id ? null : id));
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setLibraryError((e as Error).message);
     } finally {
       setBusy("");
     }
@@ -848,6 +851,11 @@ export default function Home() {
               {e}
             </p>
           ))}
+          {libraryError && (
+            <p role="alert" className="notice error">
+              {libraryError}
+            </p>
+          )}
           {selectedUnavailable && (
             <p role="alert" className="notice error">
               当前选中的任务暂时无法读取，请检查任务记录并刷新页面；不会显示其他任务的音频。
@@ -863,6 +871,7 @@ export default function Home() {
                     className={`job-card ${current?.id === job.id ? "selected" : ""}`}
                     onClick={() => {
                       setSelected(job.id);
+                      setLibraryError("");
                       document
                         .getElementById("now-heading")
                         ?.scrollIntoView({ behavior: "smooth", block: "center" });

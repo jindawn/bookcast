@@ -27,6 +27,26 @@ test("a missing selected task never displays another task's completed audio", as
   await expect(page.getByRole("heading", { name: "Other completed book" })).toHaveCount(0);
 });
 
+test("an older local service reports why library removal failed", async ({ page }) => {
+  await page.route("**/api/jobs", (route) => route.fulfill({ json: {
+    jobs: [{
+      id: "a".repeat(32), title: "Saved book", mode: "two_host", minutes: 20,
+      state: "SUCCEEDED", active: false, created_at: "2026-09-24T00:00:00Z",
+      directory: "/tmp/bookcast-fixture", core_job_id: null, error: null,
+      warnings: [], audio_url: null, m4b_url: null, can_resume: false,
+      can_retry: false, progress: null,
+    }], errors: [],
+  } }));
+  await page.route("**/api/jobs/*", (route) => route.fulfill({
+    status: 405, json: { detail: "Method Not Allowed" },
+  }));
+  await page.goto("/");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "从书架移除 Saved book" }).click();
+  await expect(page.locator("#library").getByRole("alert")).toContainText("请重启 bookcast serve");
+  await expect(page.getByRole("button", { name: "从书架移除 Saved book" })).toBeVisible();
+});
+
 test("upload → Core generation → history → actual audio playback; mobile layout", async ({
   page,
 }) => {
