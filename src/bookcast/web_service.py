@@ -27,7 +27,7 @@ class Submission(Model):
     search_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
     edition: str | None = Field(default=None, max_length=100)
     mode: Literal['summary', 'deep_read', 'two_host'] = 'two_host'
-    minutes: int = Field(default=10, ge=1, le=120)
+    minutes: int = Field(default=20, ge=1, le=120)
     tts_engine: Literal['gemini', 'kokoro', 'auto'] = 'auto'
 
     @model_validator(mode='after')

@@ -152,7 +152,7 @@ export default function Home() {
   const [edition, setEdition] = useState("");
   const [mode, setMode] = useState<Mode>("two_host");
   const [ttsEngine, setTtsEngine] = useState<"auto" | "gemini" | "kokoro">("auto");
-  const [minutes, setMinutes] = useState(40);
+  const [minutes, setMinutes] = useState(20);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);

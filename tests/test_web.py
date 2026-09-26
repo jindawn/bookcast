@@ -55,6 +55,13 @@ def snapshot(path):
     return {p: (p.stat().st_mtime_ns, sha256_file(p)) for p in path.rglob('*') if p.is_file() and p.name != '.lock'}
 
 
+def test_submission_defaults_to_twenty_minutes(client):
+    identifier, pending = submit(client)
+    assert pending['minutes'] == 20
+    record = client.app.state.service.read(identifier)
+    assert record.request.minutes == 20
+
+
 def test_m4b_download_appears_only_after_explicit_export(client):
     identifier, _ = submit(client)
     job = run(client, identifier)

@@ -47,7 +47,7 @@ test("upload → Core generation → history → actual audio playback; mobile l
       ),
     });
   await page.getByRole("radio", { name: /双人播客/ }).click();
-  await page.getByLabel("目标时长").fill("40");
+  await expect(page.getByLabel("目标时长")).toHaveValue("20");
   const submitted = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/jobs") &&
@@ -56,7 +56,7 @@ test("upload → Core generation → history → actual audio playback; mobile l
   await page.getByRole("button", { name: "生成播客" }).click();
   const job = await (await submitted).json();
   expect(job.mode).toBe("two_host");
-  expect(job.minutes).toBe(40);
+  expect(job.minutes).toBe(20);
   const audio = page.getByLabel("播客音频");
   await expect(audio).toBeVisible({ timeout: 30_000 });
   await expect
