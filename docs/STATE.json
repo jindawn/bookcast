@@ -2,7 +2,7 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-19",
-  "current_task": "Phase19.3B Baseline A诊断传输失败；等待网络条件与再次诊断授权",
+  "current_task": "Phase19.3B最小DeepSeek请求HTTP400且无上游详情；Baseline A未执行",
   "task_status": "blocked",
   "branch": "codex/phase19-clean-history",
   "last_verified_commit": "fe9139ac6653cbefff44e881829aea5297e7d927",
@@ -145,12 +145,12 @@
     "从最新origin/main新建codex/phase19-clean-history；以旧main已净化最终跟踪树重放48文件，树完全相同，旧main保留；旧Gemini值不在新分支可达810个blob，Phase19专项196 passed，全量离线713 passed/1 skipped/7 deselected/10 subtests，无真实API或push。",
     "Phase19.3B Dialogue单次请求检查点：历史A未重调；B thinking off和C精简Prompt各1次物理请求、0重试，均HTTP400 input_error且usage为空；安全receipt/遥测及统一指标已归档，专项96 passed，未做TTS/E2E/Consistency。",
     "Phase19.3B HTTP400纯离线审计：原E2E与B/C由同一CompatibleLLMProvider构造wire；A→B仅thinking字段，A→C仅user instruction；端点、模型、schema JSON模式及其余参数相同。确认两次上游body/code/message均未保存，新增离线wire契约回归；相关Provider/Dialogue测试145 passed，无真实API。",
-    "Phase19.3B DeepSeek非2xx安全错误观察及冻结Baseline A独立单请求诊断；诊断未收到HTTP响应，C/B未运行。"
+    "Phase19.3B DeepSeek非2xx安全错误观察及冻结Baseline A独立单请求诊断；诊断未收到HTTP响应，C/B未运行。",
+    "Phase19.3B最小DeepSeek官方Chat Completion仅一次真实请求：HTTP400、无上游详情；Baseline A未执行。"
   ],
   "in_progress": [],
   "next_actions": [
-    "先只读确认执行环境到DeepSeek的网络通路；本轮Baseline A已尝试一次，不得删除收据或自动重试，任何再次真实请求需用户明确授权。",
-    "若将来Baseline A收到200，按授权仅执行Candidate C一次；若收到400，根据安全上游code/message分析兼容性；B/Consistency/TTS/E2E保持暂停。",
+    "先只读核对当前环境代理/网络配置或获取本次400的脱敏中间层/服务端诊断；再次真实请求须用户重新授权，不得自动重试。",
     "仅完成冻结段0001的Dialogue B/C各一次真实DeepSeek请求并报告；当前额度低，完成即交接，禁止Consistency/TTS/E2E。",
     "收集用户对 Phase 19.3A TTS A/B 盲听评价表（evaluation/tts_ab_blind_score.json）的人工打分与质性反馈。",
     "根据听感盲测与成本效益评估，确定默认 TTS 策略（标准层 vs 高画质层）。",
@@ -985,10 +985,11 @@
     "疑似真实 Gemini 凭证仍存在于不可改写的旧本地 Git 提交；在线有效性未知，需轮换/停用并审查提供方用量，含旧提交不可直接推送。",
     "Phase19.3B Dialogue B/C仅各一次请求均HTTP400，无法计算reasoning/latency/cost降幅或质量差异；上游原始错误正文未保存，具体拒绝原因未知，禁止本轮重试。",
     "Phase19.3B两次HTTP400仅有内部input_error；上游code/message/body在classify_http后丢弃，具体服务端拒绝原因不可从现存数据恢复。",
-    "Phase19.3B冻结Baseline A本轮诊断未收到HTTP响应（temporary_unavailable、status null）；无法判断当前DeepSeek服务上的200/400或先前B/C 400根因。"
+    "Phase19.3B冻结Baseline A本轮诊断未收到HTTP响应（temporary_unavailable、status null）；无法判断当前DeepSeek服务上的200/400或先前B/C 400根因。",
+    "2026-09-27最小DeepSeek请求HTTP400但无code/message/request_id/content-type，无法确定是DeepSeek源站还是代理返回；本轮无Baseline A请求。"
   ],
   "blockers": [
-    "冻结Baseline A单次诊断已尝试，但未收到HTTP响应（temporary_unavailable、http_status null）；无法判断上游200/400或定位此前400根因。不能自动重试，需确认网络条件并取得新的真实诊断授权。"
+    "单次最小DeepSeek Chat Completion收到HTTP400，但响应没有可提取的code/message/request_id/content-type；无法判定来源为服务端或代理，也无法确定鉴权/模型/环境根因。按用户门禁停止，Baseline A未执行。"
   ],
   "important_files": [
     {
@@ -1460,5 +1461,5 @@
       "purpose": "冻结段0001的独立单物理请求诊断入口和防重复receipt"
     }
   ],
-  "updated_at": "2026-09-27T01:15:23Z"
+  "updated_at": "2026-09-27T01:23:06Z"
 }

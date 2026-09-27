@@ -758,3 +758,5 @@
 - 2026-09-27 HTTP400离线审计功能提交 `fe9139ac6653cbefff44e881829aea5297e7d927` 上复测Dialogue/Provider专项145 passed，validator/compileall/提交差异检查通过；无真实API、未改生产wire，交接快照不自引用且未push。
 
 - 2026-09-27T01:15:23Z Phase19.3B：DeepSeek非2xx安全上游观察与单请求诊断收据完成；148项专项通过。冻结Baseline A尝试未收到HTTP响应（temporary_unavailable、status null、约0.016秒），无usage/上游错误详情；未运行C/B，未push。
+
+- 2026-09-27T01:23:06Z Phase19.3B 最小DeepSeek Chat Completion单次真实请求收到HTTP400，约0.146秒；无可提取code/message/request_id/content-type。未执行Baseline A及其他请求；收据在忽略目录，零重试，未push。

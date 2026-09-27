@@ -1,3 +1,11 @@
+# Phase 19.3B 最小 DeepSeek API 请求诊断（2026-09-27）
+
+使用当前进程密钥对官方`/chat/completions`发出一次最小请求：`deepseek-flash`、单条“只回复：OK”user message，无response_format、thinking、tools或结构化输出。收到HTTP 400，约0.146秒；响应未提供可提取的code、message、request_id或content-type。脱敏收据在忽略目录`output/llm-reasoning-ab/dialogue/diagnostics/minimal-chat-20260927.json`。仅能确认有HTTP响应，不能确定它由DeepSeek源站还是中间代理返回，也不能判断Key/model有效性或此前B/C的400根因。按用户门禁未执行Baseline A；本轮总计一次真实请求、零重试，B/C/Consistency/TTS/E2E均未运行。
+
+下一步最小动作：在不发新API请求的前提下核对当前运行环境的代理/网络配置，或取得本次400对应的代理/服务端脱敏诊断信息。再次真实请求须重新授权；不要删除单次请求收据，不push。
+
+---
+
 # Phase 19.3B Baseline A 单次诊断与安全错误观察（2026-09-27）
 
 ## Completed
