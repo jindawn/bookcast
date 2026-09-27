@@ -1,31 +1,45 @@
-# Phase 19.3B Consistency 纯离线两级阶梯核验框架（2026-09-27）
+# Phase 19.3B Consistency 最小 Live Smoke 完成（2026-09-27）
 
 ## Completed
 
-实现并锁定了 Phase 19.3B Consistency 优化实验的完整离线框架：
-1. **测试集与 Ground Truth**：在 [phase19_3b_consistency.json](../tests/fixtures/phase19_3b_consistency.json) 建立 10 类确定性测试用例，覆盖 7 类强制核心事实风险（完全正确、轻微无依据扩写、明显幻觉、数字错误、人物归因错误、丢失关键限定条件、与原文明显矛盾）以及历史真实段落 0001、0002 与假说思考实验边界；每个案例均有显式确定性的 `has_error`、`expected_tier1_status`、`flawed_turn_indices` 与 `expected_verdicts`。
-2. **两级阶梯核验（Two-Tier Consistency，Candidate C）**：编写 [llm_reasoning_consistency.py](../scripts/llm_reasoning_consistency.py)，实现 Tier 1 Qwen3.7-Flash 极简初筛契约 `Tier1ScreeningResult(status, suspicious_turn_ids, reasons)`，仅接收发言与精简论据；PASS 时直接放行，0 次 DeepSeek 调用；REVIEW 时升轨定向深度复核，仅将可疑轮次及对应 Claim 发送至 DeepSeek（严禁将整个 episode 再次交给 DeepSeek），并合并最终一致性结论。
-3. **指标评测与离线基准**：实现 TP/TN/FP/FN、精确率、召回率、升轨率、DeepSeek 规避率及基于计价快照的成本测算，结果归档于 [phase19-3b-consistency.md](experiments/phase19-3b-consistency.md) 与忽略目录 [benchmark JSON](../output/llm-reasoning-ab/consistency/offline-consistency-benchmark.json)。基准表明 Two-Tier 可规避 30% DeepSeek 调用，成本降低 77.5%，召回率 100%，假阴性（漏检）为 0。
-4. **安全与验证**：专项测试 [test_llm_reasoning_consistency.py](../tests/test_llm_reasoning_consistency.py) 13 项通过，全量离线 733 passed、1 skipped、7 deselected、10 subtests 全部通过（74.93s）；未发起真实 API 请求，生产 Router、Dialogue 生产配置及 TTS 均完全保持不变。
+在用户明确授权下，完成 Phase 19.3B Consistency 优化实验的最小受控真实请求（Live Smoke），**总真实物理请求严格限制为 3 次，0 次重试**：
+1. **Case 1 (`case_1_completely_correct`)**：
+   - Qwen3.7-Flash Tier 1（1 次物理请求）：HTTP 200、0.915s、输入 964 / 输出 28 tokens、估算成本 ¥0.001020；返回 `status = "PASS"`，`suspicious_turn_ids = []`。
+   - DeepSeek Tier 2：**0 次调用（直接跳过，DeepSeek 规避达成 100%）**。
+   - 一致性裁决：4 轮发言全部判定为 `supported`，无事实错误。
+2. **Case 4 (`case_4_numerical_error`)**：
+   - Qwen3.7-Flash Tier 1（1 次物理请求）：HTTP 200、2.498s、输入 934 / 输出 128 tokens、估算成本 ¥0.001190；返回 `status = "REVIEW"`，`suspicious_turn_ids = [4]`（精准锁定 turn 4，无多余嫌疑轮次）。
+   - DeepSeek-Flash Tier 2（1 次物理请求）：HTTP 200、1.510s、**仅发送 1 轮**（`turn_4`，严禁发送整篇）、输入 781 / 输出 213 / **Reasoning 118 tokens**（较 Baseline 2500+ 大幅缩减）、估算成本 ¥0.001508；返回 `verdict = "contradicted"`，精确指出“1985年权威调研”“98.5%”“400页以上”等数字和归属无原文依据。
+   - 一致性裁决：第 0、2 轮保持 `supported`，第 4 轮判定为 `contradicted`，成功检出数字与归属事实错误。
+3. **指标与物理审计**：
+   - 实际调用：Qwen 2 次，DeepSeek 1 次（总计 3 次物理请求，0 重试，0 失败）。
+   - 升轨率：50.0% (1/2)；DeepSeek 规避率：50.0% (1/2)。
+   - 检测质量：TP=1, TN=1, FP=0, FN=0（漏检为 0），Precision=100.0%, Recall=100.0%（仅限本次 2 样本）。
+   - 总估算成本：¥0.003718。
+   - 物理遥测日志记录于忽略目录 `output/llm-reasoning-ab/consistency/live-smoke-20260927/physical_requests.jsonl`，收据在 `twotier-*.json`。
 
 ## Not Completed / Evidence Limits
 
-目前仅完成纯离线架构、测试集、路由流控与基准度量，**尚未发起任何真实 Qwen 或 DeepSeek API 请求**。两级阶梯在真实模型输出下的实际初筛召回率与真实网络延迟仍待真实受控实验验证；当前不得宣称真实降本已在生产验证，也不能修改生产 Router。
+- **严禁过度外推**：本次仅为 2 个样本（`case_1` 与 `case_4`）的最小可行性冒烟验证，**绝不可据此外推为“真实生产全量召回率 100%”或“生产成本必定下降 77.5%”**。
+- 两级阶梯（Candidate C）目前仅作为独立离线实验资产，**未修改生产 Router，未修改生产默认配置**。
+- 未执行其他 8 个 fixture 的真实调用，未执行 TTS、未生成音频、未执行全量 E2E。
 
 ## Last Stable Commit / Exact Next Step
 
-已验证功能提交 `c4a57c5ad29e09ca5809ef759798700c8cab3eff`：新增 13 项专项与 10 类测试集，全量离线 733 项 pytest、validator、compileall、diff check 全过。交接快照自身按 D-006 不自引用。下一步等待用户对最小真实实验进行授权：计划选取 `case_1`（完全正确）与 `case_4`（数字错误）进行最小真实调用（预计 Qwen 2 次，DeepSeek 1 次）；未获授权前不发起真实调用，不修改生产配置，不进行 push。
+已验证功能提交 `e5ad6205ea721810f2bff9f02d919916b2e1fbbb`：3 次物理请求全部成功且 0 重试，离线 13 项专项通过，validator、compileall、diff check 全过。交接快照自身按 D-006 不自引用。
+当前实验已严格停机，等待维护者审阅本次 Live Smoke 的初筛精准度、数字错误捕获与成本延迟表现。未获授权前不发起新请求，不修改生产配置，不 push。
 
 ## Files To Read / Commands To Continue
 
-`docs/experiments/phase19-3b-consistency.md`、`scripts/llm_reasoning_consistency.py`、`tests/fixtures/phase19_3b_consistency.json`、`tests/test_llm_reasoning_consistency.py`、`docs/STATE.json`。
-仅离线验证命令：
+`docs/experiments/phase19-3b-consistency.md`、`output/llm-reasoning-ab/consistency/live-smoke-20260927/physical_requests.jsonl`、`scripts/llm_reasoning_consistency.py`、`tests/fixtures/phase19_3b_consistency.json`、`docs/STATE.json`。
+离线复验命令：
 `GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest -p no:cacheprovider -q tests/test_llm_reasoning_consistency.py tests/test_llm_reasoning_dialogue.py tests/test_generation.py tests/test_cost_telemetry.py`；
 `GIT_CONFIG_GLOBAL=/dev/null python3 scripts/validate_project.py`；
 `GIT_CONFIG_GLOBAL=/dev/null git diff --check`。
 **严禁自行添加 `--live` 发起真实 API 请求。**
 
 ---
+
 
 # Phase 19.3B Dialogue Candidate D 单次实验（2026-09-27）
 
