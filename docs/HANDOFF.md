@@ -10,7 +10,7 @@
 
 ## Last Stable Commit / Exact Next Step
 
-先前已验证功能提交 `e2c8eac04a5457b3051ca9f4f7baf402fe3b5d44`；本次离线审计提交及交接快照在Git/STATE更新，快照不自引用。下一步先尝试找回旧请求的可信**脱敏**上游 code/type/message（当前没有）；或在用户另行授权后，设计独立、有界的诊断请求及安全错误观察点。未取得证据前不修改生产或实验wire、不重跑失败receipt、不进入Consistency。保持 `codex/phase19-clean-history`，不push。
+本次已验证离线审计提交 `fe9139ac6653cbefff44e881829aea5297e7d927`；交接快照按 D-006 不自引用。下一步先尝试找回旧请求的可信**脱敏**上游 code/type/message（当前没有）；或在用户另行授权后，设计独立、有界的诊断请求及安全错误观察点。未取得证据前不修改生产或实验wire、不重跑失败receipt、不进入Consistency。保持 `codex/phase19-clean-history`，不push。
 
 ## Files To Read / Commands To Continue
 
