@@ -762,3 +762,5 @@
 - 2026-09-27T01:23:06Z Phase19.3B 最小DeepSeek Chat Completion单次真实请求收到HTTP400，约0.146秒；无可提取code/message/request_id/content-type。未执行Baseline A及其他请求；收据在忽略目录，零重试，未push。
 
 - 2026-09-27T01:39:26Z Phase19.3B 冻结段0001：历史A未调用；B thinking off与C精简Prompt各1次正式Adapter请求，均HTTP200、schema有效、零重试。B reasoning usage未知、成本估算降47.98%、长度365字失败；C reasoning 707（比A降44.81%）、成本估算降39.74%、长度173字失败。专项149 passed，validator/compileall/diff通过；功能提交cd8cc544746d50d8c0f3df138007a23f92ccfabf，无Consistency/TTS/E2E/push。
+
+- 2026-09-27T01:47:53Z Phase19.3B Candidate D仅一次真实请求HTTP200/零重试：122字、5轮、交替/schema/coverage/重复率门禁通过；reasoning4630与估算成本¥0.020496均超过历史A，预声明成功条件失败，停止自动调参。151项专项、validator/compileall/diff通过；功能提交14dbe6c8fd1301176fe5214d8660449ff6e8969c，未进入Consistency/TTS/E2E、未push。

@@ -1,3 +1,23 @@
+# Phase 19.3B Dialogue Candidate D 单次实验（2026-09-27）
+
+## Completed
+
+基于C精简Prompt仅加入五轮/字数/主持人嘉宾交替约束；冻结输入、claims/evidence、schema、model、正式Provider和thinking默认行为不变。D通过正式Adapter**仅调用1次**，HTTP200、schema有效、0重试。产生122字符/5轮、交替有效、Claim coverage 100%、unsupported IDs/数字发言0、repetition 0；确定性输出形状门禁通过。结果见 [phase19-3b-dialogue-d.md](experiments/phase19-3b-dialogue-d.md) 和 [JSON指标](experiments/phase19-3b-dialogue-d.json)。历史A、先前C均未重调，B不再投入；没有Consistency/TTS/E2E或push。
+
+## Not Completed / Failed Success Gate
+
+D reasoning 4630，超过A的1281（增加261.44%）；估算成本¥0.020496，超过A的¥0.008122（增加152.35%）。因此**D不满足预声明成功条件**，不得自动调Prompt或重试。文本审读未见明显无依据source claim，但有“仅只”措辞不自然，最后对因果质疑回应不充分；无真人试听。A历史延迟与C/D请求延迟口径不同，不能把百分比视为严格同口径。
+
+## Last Stable Commit / Exact Next Step
+
+已验证功能提交 `14dbe6c8fd1301176fe5214d8660449ff6e8969c`：151项Dialogue/Provider专项通过，project validator、compileall、diff check通过。交接快照自身按D-006不自引用。下一步由维护者审阅D的高reasoning/成本与内容质量，再决定是否明确授权新的Dialogue策略；不要继续B/D采样，不自动宣布Winner、修改生产配置或进入Consistency。
+
+## Files To Read / Commands To Continue
+
+`docs/experiments/phase19-3b-dialogue-d.md`、`docs/experiments/phase19-3b-dialogue-d.json`、`docs/experiments/phase19-3b-dialogue-controlled.md`、`scripts/llm_reasoning_dialogue.py`、`scripts/llm_reasoning_diagnostic.py`、`tests/test_llm_reasoning_dialogue.py`、`docs/STATE.json`。仅离线复验：`.venv/bin/python -m pytest -q tests/test_llm_reasoning_dialogue.py tests/test_generation.py tests/test_providers.py tests/test_cost_telemetry.py`；`python3 scripts/validate_project.py`；`.venv/bin/python -m compileall src tests scripts -q`；`git diff --check`。
+
+---
+
 # Phase 19.3B Dialogue B/C 单次受控实验（2026-09-27）
 
 ## Completed
