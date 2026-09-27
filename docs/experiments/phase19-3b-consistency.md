@@ -195,3 +195,91 @@
   > 本次 Live Smoke 仅针对 2 个精心构造的极限/典型用例（`case_1` 与 `case_4`）进行了最小可行性概念验证。**严禁将本次 2 个样本的评测结果外推为“两级阶梯真实全量召回率达到 100%”或“生产成本必定下降 77.5%”**。离线基准评测（10 个用例）与 Live Smoke 评测（2 个用例）必须严格分开记录。
 - **生产隔离性**：生产 `model_routing.py`、生产 Dialogue 配置、TTS 模块完全保持冻结，未作任何侵入式修改。
 
+---
+
+## Live Validation Set 实验结果与生产候选 Gate 评估（2026-09-27）
+
+在最小 Live Smoke（2 样本）验证通过后，按照受控流程执行了包含 6 个典型用例的 Live Validation Set，目标深入验证 Tier 1（Qwen3.7-Flash）是否会对不同类型事实风险发生漏检（Zero False Negatives）。
+
+### 1. 受控请求与硬上限执行情况
+
+- **测试集构成（6 个冻结用例）**：
+  - 负样本（2 个）：`case_1_completely_correct`（完全正确）、`case_10_hypothetical_boundary`（思想实验/假说边界）
+  - 正样本（4 个）：`case_3_obvious_hallucination`（伪科学幻觉）、`case_5_incorrect_attribution`（张冠李戴归因）、`case_6_missing_critical_qualifier`（丢失否定条件/因果颠倒）、`case_7_obvious_contradiction`（公然反向唱反调）
+- **复用机制**：`case_1_completely_correct` 直接复用 Live Smoke 真实结果（0 次新物理请求）；`case_4_numerical_error` 保持历史完成状态，不重复调用。
+- **物理请求审计**：
+  - 新增 Qwen3.7-Flash 请求：**5 次**（`case_10`, `case_3`, `case_5`, `case_6`, `case_7`）
+  - 新增 DeepSeek-Flash 定向复核请求：**4 次**（仅 4 个正样本触发 REVIEW 后升轨）
+  - **总新增物理请求数**：**9 次**（**严格达到硬上限 9 次，0 次自动重试，0 次失败**）
+  - 物理遥测落盘：`output/llm-reasoning-ab/consistency/live-validation-20260927/physical_requests.jsonl`
+  - 逐用例收据：`output/llm-reasoning-ab/consistency/live-validation-20260927/twotier-*.json`
+
+### 2. Live Validation 逐用例执行明细表
+
+| 用例 ID | 类别 | Ground Truth 风险 | Qwen Tier 1 状态 | 可疑轮次定位 | 升轨复核 | DeepSeek 裁决 (仅可疑轮) | 最终一致性裁决 | 是否正确 |
+| :--- | :--- | :---: | :---: | :---: | :---: | :--- | :--- | :---: |
+| `case_1_completely_correct` | completely_correct | 无错误 (has_error: False) | **PASS** (复用) | `[]` | 否 (0 调用) | - (免除调用) | 0..3: supported | ✅ 正确 (TN) |
+| `case_10_hypothetical_boundary` | hypothetical_boundary | 无错误 (has_error: False) | **PASS** (0.911s) | `[]` | 否 (0 调用) | - (免除调用) | 0,2,3: supported | ✅ 正确 (TN) |
+| `case_3_obvious_hallucination` | obvious_hallucination | 幻觉 (turn 2: 量子纠缠芯片/外星知识库) | **REVIEW** (3.597s) | `[2]` (精准) | 是 (1.033s) | turn 2: `contradicted` (Reasoning: 64) | 0,4: supported<br>2: contradicted | ✅ 正确 (TP) |
+| `case_5_incorrect_attribution` | incorrect_attribution | 归因错误 (turn 4: 芒格名言冠给爱因斯坦) | **REVIEW** (1.707s) | `[4]` (精准) | 是 (1.847s) | turn 4: `contradicted` (Reasoning: 309) | 0,2: supported<br>4: contradicted | ✅ 正确 (TP) |
+| `case_6_missing_critical_qualifier` | missing_critical_qualifier | 否定丢失 (turn 0: 宣称被动吸收自动变智慧) | **REVIEW** (2.394s) | `[0]` (精准) | 是 (1.895s) | turn 0: `contradicted` (Reasoning: 130) | 1,2,3: supported<br>0: contradicted | ✅ 正确 (TP) |
+| `case_7_obvious_contradiction` | obvious_contradiction | 严重矛盾 (turn 0: 抨击阅读为最被动自欺欺人) | **REVIEW** (2.280s) | `[0]` (精准) | 是 (2.224s) | turn 0: `contradicted` (Reasoning: 262) | 2,4: supported<br>0: contradicted | ✅ 正确 (TP) |
+
+### 3. 统计汇总与混淆矩阵
+
+```
+                  Ground Truth Positive     Ground Truth Negative
+Detected Positive         4 (TP)                    0 (FP)
+Detected Negative         0 (FN)                    2 (TN)
+```
+
+- **真阳性 (TP)**：**4**（伪科学幻觉、人物归因错误、否定限定丢失、反向矛盾 100% 检出）
+- **真阴性 (TN)**：**2**（完全正确与思想实验边界案例 100% PASS 放行）
+- **假阳性 (FP)**：**0**（负样本无一误报，特异度 Specificity = 100.0%）
+- **假阴性 (FN)**：**0**（**零漏检！核心事实风险检出召回率 Recall = 100.0%**）
+- **精确率 (Precision)**：**100.0%** (4/4)
+- **召回率 (Recall)**：**100.0%** (4/4)
+- **可疑轮次定位精确度 (Turn Localization Accuracy)**：
+  - 精确匹配率 (Exact Match Rate)：**100.0%** (4/4 错误轮次集合与初筛嫌疑集合完全一致，无多标、无漏标)
+  - 覆盖率 (Covered Rate)：**100.0%** (4/4)
+- **调用流控表现**：
+  - 升轨复核率 (Escalation Rate)：**66.7%** (4/6)
+  - DeepSeek 调用规避率 (Avoided %)：**33.3%** (2/6 案例完全 0 DeepSeek 调用)
+  - 负样本 DeepSeek 规避率：**100.0%** (2/2 负样本均未发起 Tier 2 调用)
+- **推理 Token 与耗时**：
+  - DeepSeek 平均 Reasoning Tokens：**191.25 tokens**（相较 Baseline 2500+ 下降 **92.4%**）
+  - 本轮 9 次新增物理请求总耗时：**17.888s**（平均单次请求约 1.98s）
+  - 本轮 9 次新增物理请求总成本：**¥0.011522**（Qwen ¥0.005065 + DeepSeek ¥0.006457）
+  - 6 个用例全生命周期总估算成本：**¥0.012542**（平均单篇约 ¥0.00209）
+
+### 4. False Negative (FN) 专项深度分析
+
+在本次受控验证中，**FN = 0**。深入分析 4 类典型风险的识别机理：
+1. **伪科学幻觉（`case_3`）**：Qwen 初筛精准抓住“量子纠缠芯片”“外星知识库”等完全超出原文范围的荒谬词汇，给出 REVIEW 并定位 turn 2；DeepSeek 仅以 64 reasoning tokens 即确认 contradicted。
+2. **人物归因（`case_5`）**：Qwen 初筛明确指出引述名言存在主体错位（芒格被写成爱因斯坦），定位 turn 4；DeepSeek 迅速完成裁决。
+3. **否定条件丢失与因果颠倒（`case_6`）**：Qwen 初筛识别出“被动吸收并不能自动转变成智慧”被错误翻转为“只要被动吸收就能自动变成智慧”，指出否定关系严重失真，定位 turn 0；DeepSeek 裁决准确。
+4. **与原文核心主张直接唱反调（`case_7`）**：Qwen 初筛捕获“严厉抨击阅读是人类最被动、最低效自欺欺人行为”与原文“拓展认知边界最高效方式”截然相反，定位 turn 0；DeepSeek 裁决准确。
+5. **上下文裁剪与定向投喂有效性**：DeepSeek Tier 2 **仅接收被初筛标记的单一发言轮次及对应引述 Claims**，未注入完整 episode，但 4 次定向复核均产出了与全量输入等价甚至更为精准简练的裁决与原因，且推理开销从数千 tokens 缩减至 64~309 tokens，证实了上下文裁剪定向复核的可行性。
+6. **假说/思想实验边界（`case_10`）**：剧本中包含嘉宾提出的 `attribution="hypothetical"` 思想实验（“设想一个人读完全部图书却闭门不出”），Tier 1 提示词严格仅抽取 `attribution="source"` 的发言送检，未对假说进行无病呻吟的虚假事实核验，3 轮 source 发言全部顺畅 PASS，证明了边界过滤机制的稳健性。
+
+### 5. 生产候选 Gate (Production Candidate Gate) 逐项判定
+
+| 门禁条件 | 验证指标 / 表现 | 判定结果 |
+| :--- | :--- | :---: |
+| 1. 本轮新增正样本 FN = 0 | 4 个正样本全部被检出，FN = 0，Recall = 100.0% | **PASS** |
+| 2. 四类典型错误全部送入 REVIEW | 幻觉、归因、限定词、矛盾 4 类全部返回 REVIEW 并精准定位 turn_index | **PASS** |
+| 3. DeepSeek 定向复核未受裁剪干扰 | 4 次定向复核裁决（100% contradicted）均符合 Ground Truth，原因详实准确 | **PASS** |
+| 4. 负样本未出现严重误报 | case_1 与 case_10 全部 PASS，FP = 0，0 次多余 DeepSeek 调用 | **PASS** |
+| 5. Schema 全部有效 | Pydantic 严格模式下，Tier 1 与 Tier 2 所有 JSON 结构校验 100% 通过 | **PASS** |
+| 6. 物理遥测与成本审计完整 | 9 条物理记录与收据完整，字段齐备，计价快照核算无遗漏 | **PASS** |
+
+### 6. 状态标记与生产边界
+
+- **架构状态**：由于 6 项门禁条件全部严格满足，Two-Tier Consistency 方案在当前仓库中正式标记为：
+  ```
+  STATUS: PRODUCTION_CANDIDATE
+  ```
+- **生产配置不变式**：
+  > [!IMPORTANT]
+  > 标记为 `PRODUCTION_CANDIDATE` 仅表示两级阶梯核验已具备生产集成的质量与成本资格，**绝不等于已在生产中启用（NOT PRODUCTION_ENABLED）**。
+  > 生产 `src/bookcast/model_routing.py`、生产 Dialogue 配置、TTS 模块完全保持原有配置不变，未做任何修改。未来是否合并入生产流水线由维护者审阅决定。

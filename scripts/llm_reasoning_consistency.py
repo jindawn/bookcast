@@ -248,6 +248,73 @@ def calculate_detection_metrics(results: list[dict], fixtures: list[dict]) -> di
     }
 
 
+def calculate_localization_metrics(results: list[dict], fixtures: list[dict]) -> dict:
+    fixture_map = {f['id']: f for f in fixtures}
+    exact_matches = 0
+    covered_matches = 0
+    total_positive = 0
+    clean_passes = 0
+    total_negative = 0
+
+    details = []
+    for res in results:
+        fid = res['fixture_id']
+        f_item = fixture_map.get(fid)
+        if not f_item:
+            continue
+        gt = f_item['ground_truth']
+        t1 = res.get('tier1') or {}
+        suspicious = set(t1.get('suspicious_turn_ids') or [])
+        flawed = set(gt.get('flawed_turn_indices') or [])
+
+        if gt['has_error']:
+            total_positive += 1
+            is_exact = (suspicious == flawed)
+            is_covered = flawed.issubset(suspicious)
+            if is_exact:
+                exact_matches += 1
+            if is_covered:
+                covered_matches += 1
+            details.append({
+                'fixture_id': fid,
+                'category': f_item['category'],
+                'has_error': True,
+                'flawed_turns': sorted(list(flawed)),
+                'suspicious_turns': sorted(list(suspicious)),
+                'exact_match': is_exact,
+                'covered': is_covered
+            })
+        else:
+            total_negative += 1
+            is_clean = (t1.get('status') == 'PASS' and len(suspicious) == 0)
+            if is_clean:
+                clean_passes += 1
+            details.append({
+                'fixture_id': fid,
+                'category': f_item['category'],
+                'has_error': False,
+                'flawed_turns': [],
+                'suspicious_turns': sorted(list(suspicious)),
+                'clean_pass': is_clean
+            })
+
+    exact_acc = round(exact_matches / total_positive, 4) if total_positive > 0 else 1.0
+    covered_acc = round(covered_matches / total_positive, 4) if total_positive > 0 else 1.0
+    specificity = round(clean_passes / total_negative, 4) if total_negative > 0 else 1.0
+
+    return {
+        'total_positive': total_positive,
+        'exact_localization_matches': exact_matches,
+        'exact_localization_accuracy': exact_acc,
+        'covered_localization_matches': covered_matches,
+        'covered_localization_accuracy': covered_acc,
+        'total_negative': total_negative,
+        'clean_passes': clean_passes,
+        'specificity': specificity,
+        'details': details
+    }
+
+
 def evaluate_two_tier_offline(fixture_item: dict) -> dict:
     """Offline simulation of Candidate C using ground truth expectations."""
     gt = fixture_item['ground_truth']
@@ -468,6 +535,7 @@ def execute_two_tier_live(fixture_item: dict, output_dir: Path, cost_snapshot: d
     if dest.exists():
         prev = json.loads(dest.read_text(encoding='utf-8'))
         if prev.get('status') == 'completed' and prev.get('prompt_hash') == hash_t1:
+            prev['_reused'] = True
             return prev
         raise RuntimeError(f'Previous receipt for {fid} exists and requires manual inspection; refusing automatic retry')
 
@@ -679,6 +747,10 @@ def main() -> int:
     parser.add_argument('--live', action='store_true', help='Allow controlled live API calls (requires authorization)')
     parser.add_argument('--fixtures', type=str, default=None, help='Comma-separated list of fixture IDs to run (required in --live mode)')
     parser.add_argument('--output', type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument('--max-calls', type=int, default=9, help='Maximum total new physical calls allowed across all providers')
+    parser.add_argument('--max-qwen-calls', type=int, default=5, help='Maximum new Qwen Tier 1 physical calls allowed')
+    parser.add_argument('--max-deepseek-calls', type=int, default=4, help='Maximum new DeepSeek Tier 2 physical calls allowed')
+    parser.add_argument('--report-name', type=str, default=None, help='Filename for the summary report JSON')
     args = parser.parse_args()
 
     fixtures_data = load_fixture()
@@ -721,27 +793,175 @@ def main() -> int:
 
     args.output.mkdir(parents=True, exist_ok=True)
     live_results = []
-    total_physical_calls = 0
+    new_qwen_calls = 0
+    new_deepseek_calls = 0
+    total_new_physical_calls = 0
+
     for f in fixtures_to_run:
+        fid = f['id']
+        dest = args.output / f'twotier-{fid}.json'
+        is_already_cached = dest.exists()
+
+        if not is_already_cached:
+            if new_qwen_calls >= args.max_qwen_calls:
+                print(f"[LIMIT] Reached max new Qwen calls limit ({args.max_qwen_calls}), stopping before {fid}.")
+                break
+            if total_new_physical_calls >= args.max_calls:
+                print(f"[LIMIT] Reached max total new physical calls limit ({args.max_calls}), stopping before {fid}.")
+                break
+
         # Case 1 is strictly Tier 1 only (0 DeepSeek calls)
-        allow_escalate = (f['id'] != 'case_1_completely_correct')
-        res = execute_two_tier_live(f, args.output, fixtures_data['cost_snapshot'], allow_escalate=allow_escalate)
+        # DeepSeek is only authorized if limits permit
+        can_escalate = (
+            (fid != 'case_1_completely_correct')
+            and (new_deepseek_calls < args.max_deepseek_calls)
+            and (total_new_physical_calls + 2 <= args.max_calls)
+        )
+
+        res = execute_two_tier_live(f, args.output, fixtures_data['cost_snapshot'], allow_escalate=can_escalate)
         live_results.append(res)
-        total_physical_calls += res['qwen_calls'] + res['deepseek_calls']
-        if total_physical_calls >= 3:
+
+        if not res.get('_reused'):
+            q_calls = res.get('qwen_calls', 0)
+            ds_calls = res.get('deepseek_calls', 0)
+            new_qwen_calls += q_calls
+            new_deepseek_calls += ds_calls
+            total_new_physical_calls += (q_calls + ds_calls)
+            print(f"[LIVE] {fid}: Qwen={q_calls}, DeepSeek={ds_calls} | New totals: Qwen={new_qwen_calls}/{args.max_qwen_calls}, DS={new_deepseek_calls}/{args.max_deepseek_calls}, Total={total_new_physical_calls}/{args.max_calls}")
+        else:
+            print(f"[REUSED] {fid}: Reused completed result from disk (0 new calls).")
+
+        if total_new_physical_calls >= args.max_calls:
+            print(f"[LIMIT] Total new physical calls limit reached ({total_new_physical_calls}), stopping.")
             break
 
-    metrics = calculate_detection_metrics(live_results, fixtures_to_run)
+    detection_metrics = calculate_detection_metrics(live_results, fixtures_to_run)
+    localization_metrics = calculate_localization_metrics(live_results, fixtures_to_run)
+
+    # Detailed per-case breakdown
+    fixture_map = {f['id']: f for f in fixtures_to_run}
+    case_breakdown = []
+    for res in live_results:
+        fid = res['fixture_id']
+        f_item = fixture_map.get(fid)
+        gt = f_item['ground_truth'] if f_item else {}
+        t1 = res.get('tier1') or {}
+        t2 = res.get('tier2')
+        checks = res.get('checks', [])
+        deepseek_verdicts = {}
+        final_verdicts = {c['turn_index']: c['verdict'] for c in checks}
+        if t2 and 'reviewed_turns' in t2:
+            for c in checks:
+                if c['turn_index'] in t2['reviewed_turns']:
+                    deepseek_verdicts[c['turn_index']] = c['verdict']
+
+        case_breakdown.append({
+            'fixture_id': fid,
+            'category': res.get('category'),
+            'reused_from_cache': bool(res.get('_reused')),
+            'ground_truth': {
+                'has_error': gt.get('has_error'),
+                'error_types': gt.get('error_types', []),
+                'flawed_turn_indices': gt.get('flawed_turn_indices', []),
+                'expected_tier1_status': gt.get('expected_tier1_status'),
+                'expected_verdicts': gt.get('expected_verdicts', {})
+            },
+            'tier1': {
+                'status': t1.get('status'),
+                'suspicious_turn_ids': t1.get('suspicious_turn_ids', []),
+                'reasons': t1.get('reasons', []),
+                'latency_seconds': t1.get('latency_seconds'),
+                'usage': t1.get('usage')
+            },
+            'tier2': {
+                'escalated': res.get('escalated', False),
+                'reviewed_turns': t2.get('reviewed_turns', []) if t2 else [],
+                'sent_turns_count': t2.get('sent_turns_count', 0) if t2 else 0,
+                'latency_seconds': t2.get('latency_seconds') if t2 else None,
+                'usage': t2.get('usage') if t2 else None
+            },
+            'deepseek_verdicts': deepseek_verdicts,
+            'final_verdicts': final_verdicts,
+            'detected_error': res.get('detected_error'),
+            'is_detection_correct': (gt.get('has_error') == res.get('detected_error')),
+            'estimated_cost_cny': res.get('estimated_cost_cny'),
+            'total_latency_seconds': res.get('latency_seconds'),
+            'schema_valid': res.get('schema_valid', True)
+        })
+
+    escalated_count = sum(1 for r in live_results if r.get('escalated'))
+    total_cases = len(live_results)
+    escalation_rate = round(escalated_count / total_cases, 4) if total_cases > 0 else 0.0
+    avoided_count = total_cases - escalated_count
+    deepseek_avoided_pct = round((avoided_count / total_cases) * 100, 2) if total_cases > 0 else 0.0
+
+    total_qwen_calls = sum(r.get('qwen_calls', 0) for r in live_results)
+    total_deepseek_calls = sum(r.get('deepseek_calls', 0) for r in live_results)
+    total_physical_calls = total_qwen_calls + total_deepseek_calls
+
+    total_cost_cny = round(sum(r.get('estimated_cost_cny', 0.0) for r in live_results), 6)
+    new_cost_cny = round(sum(r.get('estimated_cost_cny', 0.0) for r in live_results if not r.get('_reused')), 6)
+
+    # Cost breakdown by model
+    qwen_cost_cny = 0.0
+    deepseek_cost_cny = 0.0
+    now_utc = datetime.now(timezone.utc)
+    for r in live_results:
+        t1_u = r.get('tier1', {}).get('usage')
+        if t1_u:
+            c = estimate_cost_for_model('qwen3.7-flash', ProviderUsage(**t1_u), now_utc, fixtures_data['cost_snapshot'])
+            if c:
+                qwen_cost_cny += c
+        t2_u = r.get('tier2', {}).get('usage') if r.get('tier2') else None
+        if t2_u:
+            c = estimate_cost_for_model('deepseek-flash', ProviderUsage(**t2_u), now_utc, fixtures_data['cost_snapshot'])
+            if c:
+                deepseek_cost_cny += c
+    qwen_cost_cny = round(qwen_cost_cny, 6)
+    deepseek_cost_cny = round(deepseek_cost_cny, 6)
+
+    total_latency_seconds = round(sum(r.get('latency_seconds', 0.0) for r in live_results), 3)
+    new_latency_seconds = round(sum(r.get('latency_seconds', 0.0) for r in live_results if not r.get('_reused')), 3)
+
+    mode = 'live_validation' if 'validation' in str(args.output) else 'live_smoke'
     report = {
         'candidate': 'twotier',
-        'mode': 'live_smoke',
+        'mode': mode,
         'fixtures_count': len(live_results),
-        'total_physical_calls': total_physical_calls,
-        'detection_quality': metrics,
+        'reused_fixtures_count': sum(1 for r in live_results if r.get('_reused')),
+        'new_fixtures_count': sum(1 for r in live_results if not r.get('_reused')),
+        'new_calls': {
+            'qwen_calls': new_qwen_calls,
+            'deepseek_calls': new_deepseek_calls,
+            'total_new_physical_calls': total_new_physical_calls,
+            'max_allowed_calls': args.max_calls
+        },
+        'overall_calls': {
+            'total_qwen_calls': total_qwen_calls,
+            'total_deepseek_calls': total_deepseek_calls,
+            'total_physical_calls': total_physical_calls,
+            'escalation_rate': escalation_rate,
+            'deepseek_calls_avoided_pct': deepseek_avoided_pct
+        },
+        'detection_quality': detection_metrics,
+        'localization_quality': localization_metrics,
+        'costs': {
+            'total_cost_cny': total_cost_cny,
+            'new_cost_cny': new_cost_cny,
+            'qwen_cost_cny': qwen_cost_cny,
+            'deepseek_cost_cny': deepseek_cost_cny
+        },
+        'latencies': {
+            'total_latency_seconds': total_latency_seconds,
+            'new_latency_seconds': new_latency_seconds
+        },
+        'case_breakdown': case_breakdown,
         'results': live_results
     }
-    write_json(args.output / 'live-smoke-metrics.json', report)
-    print(f"\nLive smoke completed ({len(live_results)} fixtures, {total_physical_calls} physical requests):")
+
+    report_filename = args.report_name or (f'{mode}-metrics.json')
+    write_json(args.output / report_filename, report)
+    print(f"\n{mode} completed ({len(live_results)} fixtures, {total_new_physical_calls} new physical requests, {total_physical_calls} overall calls):")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 
