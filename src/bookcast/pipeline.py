@@ -55,10 +55,19 @@ class Pipeline:
     def generate(self, source: Path, *, resume: bool = False, metadata_seed: BookMetadata | None = None,
                  mode: str | None = None, minutes: int | None = None, revise_segment: str | None = None,
                  extraction_options: DocumentExtractionOptions | None = None,
+                 consistency_shadow_mode: bool | None = None,
                  _root: Path | None = None, _retry: bool = True, _by_id: bool = False) -> Path:
         if revise_segment and not resume:
             raise BookCastError("修订片段需要 --resume。")
-        options = ContentOptions(mode="two_host" if mode is None else mode, minutes=10 if minutes is None else minutes)
+        if consistency_shadow_mode is None:
+            if hasattr(self.llm, 'routing') and hasattr(self.llm.routing, 'consistency_shadow_mode'):
+                shadow_mode = self.llm.routing.consistency_shadow_mode
+            else:
+                shadow_mode = False
+        else:
+            shadow_mode = bool(consistency_shadow_mode)
+        options = ContentOptions(mode="two_host" if mode is None else mode, minutes=10 if minutes is None else minutes,
+                                 consistency_shadow_mode=shadow_mode)
         source = source.resolve()
         if not source.is_file():
             raise BookCastError(f"输入文件不存在：{source}")
@@ -92,9 +101,14 @@ class Pipeline:
                     raise BookCastError("文档提取/OCR 设置改变，请使用新的 --output-dir。")
                 if manifest.pipeline_version == "2":
                     stored = ContentOptions.model_validate(manifest.content_options)
-                    requested = ContentOptions(mode=stored.mode if mode is None else mode, minutes=stored.minutes if minutes is None else minutes)
-                    if requested != stored:
+                    requested = ContentOptions(mode=stored.mode if mode is None else mode,
+                                               minutes=stored.minutes if minutes is None else minutes,
+                                               consistency_shadow_mode=stored.consistency_shadow_mode if consistency_shadow_mode is None else shadow_mode)
+                    if requested.mode != stored.mode or requested.minutes != stored.minutes:
                         raise BookCastError("内容模式或预算改变，请使用另一个 --output-dir，避免混用旧脚本。")
+                    if requested.consistency_shadow_mode != stored.consistency_shadow_mode:
+                        manifest.content_options['consistency_shadow_mode'] = requested.consistency_shadow_mode
+                        write_json(manifest_path, manifest.model_dump())
                 elif mode is not None or minutes is not None:
                     raise BookCastError("旧任务保留原流水线；使用新的 --output-dir 创建分层内容任务。")
                 if (_by_id and not _retry and not revise_segment and (manifest.state == TaskState.FAILED_PERMANENT
@@ -132,7 +146,7 @@ class Pipeline:
                                     book_id=book_id, source_sha256=digest, source_name=source.name,
                                     source_path=str(source), metadata_seed=metadata_seed, provider_settings=self.provider_settings,
                                     source_format=source_format, config=config, pipeline_version="2",
-                                    content_options=options.model_dump(),
+                                    content_options=options.model_dump() if options.consistency_shadow_mode else {'mode': options.mode, 'minutes': options.minutes},
                                     extraction_options=extraction_options if extraction_options and extraction_options.mode == "auto" else None)
                 write_json(manifest_path, manifest.model_dump())
             changed = False
@@ -177,7 +191,8 @@ class Pipeline:
                     runner.save()
         return root
 
-    def resume_job(self, root: Path, *, retry: bool = False, revise_segment: str | None = None) -> Path:
+    def resume_job(self, root: Path, *, retry: bool = False, revise_segment: str | None = None,
+                   consistency_shadow_mode: bool | None = None) -> Path:
         root = root.resolve()
         manifest = load_manifest(artifact_path(root, 'manifest.json'))
         source = artifact_path(root, f'source/input.{manifest.source_format}')
@@ -188,6 +203,7 @@ class Pipeline:
             source = original
         return self.generate(source, resume=True, metadata_seed=manifest.metadata_seed,
                              revise_segment=revise_segment, extraction_options=manifest.extraction_options,
+                             consistency_shadow_mode=consistency_shadow_mode,
                              _root=root, _retry=retry, _by_id=True)
 
 

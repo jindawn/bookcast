@@ -5,10 +5,19 @@ from .content_models import CATEGORIES, ConsistencyReview, ClaimReview, Finding,
 
 def generate(payload):
     operation = payload['operation']
+    if operation == 'consistency_tier1':
+        from .shadow_consistency import Tier1ScreeningResult
+        return Tier1ScreeningResult(
+            status='REVIEW',
+            suspicious_turn_ids=[t['turn_index'] for t in payload['turns']],
+            reasons=['Mock 不具备语义核验能力；需人工对照引用证据。']
+        )
     if operation == 'consistency':
         return ConsistencyReview(segment_id=payload['script']['segment_id'], is_mock=True,
-            checks=[ClaimReview(turn_index=i, verdict='unverifiable', reason='Mock 不具备语义核验能力；需人工对照引用证据。')
-                    for i, t in enumerate(payload['script']['turns']) if t['attribution'] == 'source'])
+            checks=[ClaimReview(turn_index=t.get('turn_index', i) if isinstance(t, dict) else getattr(t, 'turn_index', i),
+                                verdict='unverifiable', reason='Mock 不具备语义核验能力；需人工对照引用证据。')
+                    for i, t in enumerate(payload['script']['turns'])
+                    if (t.get('attribution') if isinstance(t, dict) else getattr(t, 'attribution', None)) == 'source'])
     if operation == 'analysis':
         chapter, offset = payload['chapter'], payload['start']
         text = chapter['text']

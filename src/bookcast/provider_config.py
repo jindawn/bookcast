@@ -187,6 +187,7 @@ class LLMRouting(Model):
     complex: list[str] = Field(min_length=1)
     high_quality: list[str] = Field(min_length=1)
     task_profiles: dict[TaskType, LLMTaskProfile] = Field(default_factory=dict)
+    consistency_shadow_mode: bool = False
 
     def profile_for_task(self, task: str) -> LLMTaskProfile:
         defaults: dict[TaskType, LLMTaskProfile] = {

@@ -223,6 +223,30 @@ class ContentFlow:
                             importance=max(t.importance for t in m.themes)) for m in merged]
             level += 1
 
+    def _run_shadow_consistency(self, plan, scripts, reviews, claims):
+        if not getattr(self.options, 'consistency_shadow_mode', False):
+            return
+        try:
+            from .shadow_consistency import run_shadow_consistency_for_segment, save_shadow_consistency_comparison
+            results = []
+            for segment, script, review in zip(plan.segments, scripts, reviews, strict=True):
+                segment_claims = {cid: claims[cid] for cid in segment.claim_ids if cid in claims}
+                rev = self.r.manifest.segment_revisions.get(segment.id, 0)
+                res = run_shadow_consistency_for_segment(
+                    runner=self.r,
+                    segment=segment,
+                    script=script,
+                    claims=segment_claims,
+                    production_review=review,
+                    revision=rev
+                )
+                results.append(res)
+            save_shadow_consistency_comparison(self.r, results)
+        except Exception as exc:
+            self.r.event('telemetry_diagnostic', details={
+                'diagnostic': f"shadow_consistency_pipeline_error: {type(exc).__name__}: {exc}"
+            })
+
     def run(self):
         r, claims, chapter_themes, chapter_paths = self.r, {}, [], []
         pending = []
@@ -337,6 +361,7 @@ class ContentFlow:
                                                'revision': rev},
                                ConsistencyReview, validate_review)
             reviews.append(review)
+        self._run_shadow_consistency(plan, scripts, reviews, claims)
         from .quality import evaluate
         chapters = [self.read(f'chapters/{cid}.json', Chapter) for cid in self.metadata.chapter_ids]
         selected_claims = {cid: claims[cid] for seg in plan.segments for cid in seg.claim_ids}
@@ -444,6 +469,7 @@ class ContentFlow:
                               'source': self.metadata.source_sha256}, 'evaluation/quality.json',
                    lambda: evaluate(plan, scripts, claims, chapters, reviews))
             report = json.loads(r.path('evaluation/quality.json').read_text(encoding='utf-8'))
+            self._run_shadow_consistency(plan, scripts, reviews, claims)
 
         if report['blocking_issues']:
             raise BookCastError('内容质量检查未通过；请检查 evaluation/quality.json，未调用 TTS。')

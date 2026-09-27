@@ -10,6 +10,7 @@ ShortText = Annotated[str, Field(min_length=1, max_length=240)]
 class ContentOptions(Model):
     mode: Mode = 'two_host'
     minutes: int = Field(default=10, ge=1, le=120)
+    consistency_shadow_mode: bool = False
 
 
 class Finding(Model):

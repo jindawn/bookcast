@@ -159,6 +159,7 @@ def acquire(
     resume: Annotated[bool, typer.Option(help="继续未完成的音频生成任务；获取步骤自动复用检查点")] = False,
     mode: Annotated[str | None, typer.Option(help="生成模式：summary / deep_read / two_host")] = None,
     minutes: Annotated[int | None, typer.Option(min=1, max=120, help="生成脚本的目标分钟数")] = None,
+    shadow_consistency: Annotated[bool, typer.Option("--shadow-consistency/--no-shadow-consistency", help="在旁路运行两级一致性审核 (Two-Tier Shadow Mode)，不影响生产裁决与最终音频")] = False,
 ) -> None:
     """书名 → 明确版本 → 合法来源 → 安全获取 → 本地解析，默认不调用 AI。"""
     from .acquisition import Acquirer, choose_edition
@@ -211,7 +212,8 @@ def acquire(
             result["warnings"].append("来源版权声明仅指美国公有领域；其他地区需核对当地适用条件。")
         if generate_audio:
             pipeline = generation_pipeline(Path(result['file']), pipeline_output_dir, config, provider, tts_provider, resume)
-            job = pipeline.generate(Path(result['file']), resume=resume, metadata_seed=metadata, mode=mode, minutes=minutes)
+            job = pipeline.generate(Path(result['file']), resume=resume, metadata_seed=metadata, mode=mode, minutes=minutes,
+                                    consistency_shadow_mode=shadow_consistency)
             result["pipeline_job"], result["podcast"] = str(job), str(job / "podcast.mp3")
         typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
     except (BookCastError, OSError, ValueError) as exc:
@@ -232,6 +234,7 @@ def generate(
     minutes: Annotated[int | None, typer.Option(min=1, max=120, help="脚本目标分钟数；新任务默认10")] = None,
     revise_segment: Annotated[str | None, typer.Option(help="与 --resume 配合，重新生成指定片段及受影响下游")] = None,
     ocr: Annotated[str, typer.Option(help="off / auto；auto 仅在 macOS 显式使用本地 Apple Vision 处理图片文字")] = "off",
+    shadow_consistency: Annotated[bool, typer.Option("--shadow-consistency/--no-shadow-consistency", help="在旁路运行两级一致性审核 (Two-Tier Shadow Mode)，不影响生产裁决与最终音频")] = False,
 ) -> None:
     """分块分析、全书综合、节目规划、脚本复核与音频；默认 Mock 离线运行。"""
     try:
@@ -242,7 +245,8 @@ def generate(
         extraction = DocumentExtractionOptions(mode="auto", provider="apple-vision") if ocr == "auto" else None
         pipeline = generation_pipeline(source, output_dir, config, provider, tts_provider, resume)
         root = pipeline.generate(source, resume=resume, mode=mode, minutes=minutes,
-                                 revise_segment=revise_segment, extraction_options=extraction)
+                                 revise_segment=revise_segment, extraction_options=extraction,
+                                 consistency_shadow_mode=shadow_consistency)
         manifest = load_manifest(root / "manifest.json")
     except (BookCastError, OSError, ValueError) as exc:
         typer.echo(f"错误：{exc}", err=True)
