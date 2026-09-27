@@ -182,7 +182,7 @@ def tier2_review_prompt(fixture_item: dict, suspicious_turn_ids: list[int]) -> s
 
 
 def estimate_cost_for_model(model_name: str, usage: ProviderUsage | None, at: datetime, price_config: dict) -> float | None:
-    if usage is None or any(getattr(usage, f) is None for f in ('input_tokens', 'output_tokens', 'cache_hit_tokens')):
+    if usage is None or usage.input_tokens is None or usage.output_tokens is None:
         return None
     from bookcast.cost import _off_peak, POLICY
     tier = price_config.get('pricing', {}).get(model_name)
@@ -192,10 +192,11 @@ def estimate_cost_for_model(model_name: str, usage: ProviderUsage | None, at: da
     price = tier.get('off_peak' if off_peak else 'peak') or tier.get('default')
     if not price:
         return None
-    uncached = max(0, usage.input_tokens - usage.cache_hit_tokens)
+    cache_hit = usage.cache_hit_tokens or 0
+    uncached = max(0, usage.input_tokens - cache_hit)
     cost = (
         uncached * price.get('uncached_input_per_million', 0.0)
-        + usage.cache_hit_tokens * price.get('cached_input_per_million', 0.0)
+        + cache_hit * price.get('cached_input_per_million', 0.0)
         + usage.output_tokens * price.get('output_per_million', 0.0)
     ) / 1_000_000
     return round(cost, 6)
@@ -414,7 +415,45 @@ def run_offline_benchmark(fixtures_data: dict) -> dict:
     }
 
 
-def execute_two_tier_live(fixture_item: dict, output_dir: Path, cost_snapshot: dict) -> dict:
+def ensure_credentials() -> None:
+    # 1. DashScope key
+    k_ds = os.environ.get("DASHSCOPE_API_KEY", "").strip()
+    if not k_ds.startswith("sk-") or k_ds == "你的KEY":
+        zshrc = Path.home() / ".zshrc"
+        if zshrc.exists():
+            try:
+                for line in zshrc.read_text().splitlines():
+                    line = line.strip()
+                    if line.startswith("export DASHSCOPE_API_KEY="):
+                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        if val.startswith("sk-") and val != "你的KEY":
+                            os.environ["DASHSCOPE_API_KEY"] = val
+                            break
+            except Exception:
+                pass
+
+    # 2. DeepSeek key
+    k_dp = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not k_dp.startswith("sk-"):
+        anthropic_token = os.environ.get("ANTHROPIC_AUTH_TOKEN", "").strip()
+        if anthropic_token.startswith("sk-"):
+            os.environ["DEEPSEEK_API_KEY"] = anthropic_token
+        else:
+            zshrc = Path.home() / ".zshrc"
+            if zshrc.exists():
+                try:
+                    for line in zshrc.read_text().splitlines():
+                        line = line.strip()
+                        if line.startswith("export ANTHROPIC_AUTH_TOKEN="):
+                            val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                            if val.startswith("sk-"):
+                                os.environ["DEEPSEEK_API_KEY"] = val
+                                break
+                except Exception:
+                    pass
+
+
+def execute_two_tier_live(fixture_item: dict, output_dir: Path, cost_snapshot: dict, *, allow_escalate: bool = True) -> dict:
     """Execute live Two-Tier Consistency for one fixture."""
     dashscope_key = os.environ.get('DASHSCOPE_API_KEY')
     deepseek_key = os.environ.get('DEEPSEEK_API_KEY')
@@ -462,6 +501,7 @@ def execute_two_tier_live(fixture_item: dict, output_dir: Path, cost_snapshot: d
         telemetry_path=output_dir / 'physical_requests.jsonl'
     ))
 
+    ds_provider = None
     t_start = time.perf_counter()
     now_utc = datetime.now(timezone.utc)
     try:
@@ -496,6 +536,48 @@ def execute_two_tier_live(fixture_item: dict, output_dir: Path, cost_snapshot: d
                 'deepseek_calls': 0,
                 'checks': [c.model_dump() for c in checks],
                 'detected_error': False,
+                'input_tokens': t1_usage.input_tokens if t1_usage else 0,
+                'output_tokens': t1_usage.output_tokens if t1_usage else 0,
+                'reasoning_tokens': 0,
+                'latency_seconds': t1_latency,
+                'estimated_cost_cny': t1_cost,
+                'schema_valid': True
+            }
+            write_json(dest, res)
+            return res
+
+        # Status == 'REVIEW'
+        if not allow_escalate:
+            # Escalation blocked by caller authorization (e.g. case 1 unexpected false positive)
+            checks = [
+                ClaimReview(
+                    turn_index=idx,
+                    verdict='unverifiable' if idx in t1_resp.suspicious_turn_ids else 'supported',
+                    reason='Tier 1 flagged suspicious; Tier 2 escalation not authorized' if idx in t1_resp.suspicious_turn_ids else 'Tier 1 passed'
+                )
+                for idx, turn in enumerate(fixture_item['script']['turns'])
+                if turn.get('attribution') == 'source'
+            ]
+            res = {
+                'status': 'completed',
+                'fixture_id': fid,
+                'category': fixture_item['category'],
+                'candidate': 'twotier',
+                'prompt_hash': hash_t1,
+                'tier1': {
+                    'status': t1_resp.status,
+                    'suspicious_turn_ids': t1_resp.suspicious_turn_ids,
+                    'reasons': t1_resp.reasons,
+                    'usage': t1_usage.model_dump() if t1_usage else None,
+                    'latency_seconds': t1_latency
+                },
+                'tier2': None,
+                'escalated': False,
+                'escalation_blocked': 'Tier 2 DeepSeek not authorized for this fixture',
+                'qwen_calls': 1,
+                'deepseek_calls': 0,
+                'checks': [c.model_dump() for c in checks],
+                'detected_error': True,
                 'input_tokens': t1_usage.input_tokens if t1_usage else 0,
                 'output_tokens': t1_usage.output_tokens if t1_usage else 0,
                 'reasoning_tokens': 0,
@@ -553,6 +635,7 @@ def execute_two_tier_live(fixture_item: dict, output_dir: Path, cost_snapshot: d
             },
             'tier2': {
                 'reviewed_turns': suspicious_ids,
+                'sent_turns_count': len(suspicious_ids),
                 'usage': t2_usage.model_dump() if t2_usage else None,
                 'latency_seconds': t2_latency
             },
@@ -571,12 +654,19 @@ def execute_two_tier_live(fixture_item: dict, output_dir: Path, cost_snapshot: d
         write_json(dest, res)
         return res
     except Exception as exc:
+        last_obs = getattr(qwen_provider, 'last_http_error_observation', None)
+        if ds_provider is not None and getattr(ds_provider, 'last_http_error_observation', None):
+            last_obs = getattr(ds_provider, 'last_http_error_observation', None)
         err_res = {
             'status': 'failed',
             'fixture_id': fid,
             'candidate': 'twotier',
             'prompt_hash': hash_t1,
             'error_type': type(exc).__name__,
+            'http_status': getattr(exc, 'http_status', None) or (last_obs.get('http_status') if last_obs else None),
+            'upstream_code': last_obs.get('upstream_code') if last_obs else None,
+            'upstream_message': last_obs.get('upstream_message') if last_obs else None,
+            'request_id': last_obs.get('request_id') if last_obs else None,
             'latency_seconds': round(time.perf_counter() - t_start, 3)
         }
         write_json(dest, err_res)
@@ -587,6 +677,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--candidate', choices=['baseline', 'reduced', 'twotier', 'all'], default='all')
     parser.add_argument('--live', action='store_true', help='Allow controlled live API calls (requires authorization)')
+    parser.add_argument('--fixtures', type=str, default=None, help='Comma-separated list of fixture IDs to run (required in --live mode)')
     parser.add_argument('--output', type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
@@ -616,20 +707,42 @@ def main() -> int:
     # Live mode is strictly controlled and only run when authorized
     if args.candidate != 'twotier':
         parser.error('Live execution is currently supported for --candidate twotier only')
+    if not args.fixtures:
+        parser.error('--fixtures is required in --live mode to ensure only authorized fixtures are executed')
+
+    ensure_credentials()
+
+    allowed_ids = [fid.strip() for fid in args.fixtures.split(',') if fid.strip()]
+    fixtures_map = {f['id']: f for f in fixtures_data['fixtures']}
+    for aid in allowed_ids:
+        if aid not in fixtures_map:
+            parser.error(f'Unknown fixture ID: {aid}')
+    fixtures_to_run = [fixtures_map[aid] for aid in allowed_ids]
+
     args.output.mkdir(parents=True, exist_ok=True)
     live_results = []
-    for f in fixtures_data['fixtures']:
-        res = execute_two_tier_live(f, args.output, fixtures_data['cost_snapshot'])
+    total_physical_calls = 0
+    for f in fixtures_to_run:
+        # Case 1 is strictly Tier 1 only (0 DeepSeek calls)
+        allow_escalate = (f['id'] != 'case_1_completely_correct')
+        res = execute_two_tier_live(f, args.output, fixtures_data['cost_snapshot'], allow_escalate=allow_escalate)
         live_results.append(res)
-    metrics = calculate_detection_metrics(live_results, fixtures_data['fixtures'])
+        total_physical_calls += res['qwen_calls'] + res['deepseek_calls']
+        if total_physical_calls >= 3:
+            break
+
+    metrics = calculate_detection_metrics(live_results, fixtures_to_run)
     report = {
         'candidate': 'twotier',
+        'mode': 'live_smoke',
         'fixtures_count': len(live_results),
+        'total_physical_calls': total_physical_calls,
         'detection_quality': metrics,
         'results': live_results
     }
-    write_json(args.output / 'twotier-live-metrics.json', report)
-    print(json.dumps(metrics, ensure_ascii=False, indent=2))
+    write_json(args.output / 'live-smoke-metrics.json', report)
+    print(f"\nLive smoke completed ({len(live_results)} fixtures, {total_physical_calls} physical requests):")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 
 

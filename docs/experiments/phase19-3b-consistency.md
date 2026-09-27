@@ -131,17 +131,67 @@
 
 ---
 
-## 下一步与真实调用预算规划（等待用户授权）
+---
 
-当前阶段已**完全离线完成**。按照用户指示，已在真实 API 调用前停下，未发起任何真实 Qwen 或 DeepSeek 请求。
+## 最小真实 Live Smoke 实验结果（2026-09-27）
 
-若后续获得用户明确授权，最小真实实验计划如下：
-1. **测试范围**：选取 2 个具有代表性的冻结测试用例（如 `case_1_completely_correct` 与 `case_4_numerical_error`），绝不全量调用。
-2. **预计真实调用数**：
-   - `case_1`：Qwen 1 次，DeepSeek 0 次（预期 PASS）。
-   - `case_4`：Qwen 1 次，DeepSeek 1 次（预期 REVIEW 升轨定向复核）。
-   - **两用例总计真实调用**：Qwen 2 次，DeepSeek 1 次。
-3. **安全门禁**：
-   - 每次调用先落盘 receipt，物理遥测实时记录至 `output/llm-reasoning-ab/consistency/physical_requests.jsonl`。
-   - 任何非 200 或 Schema 异常立即终止，绝不自动重试。
-   - 绝不触碰生产 Router、Dialogue 配置或 TTS 模块。
+在获得用户明确授权后，执行了针对 2 个冻结用例的最小受控真实请求（Live Smoke），总物理请求严格限制为 3 次，无任何自动重试。结果归档于 `output/llm-reasoning-ab/consistency/live-smoke-20260927/`：
+
+### 1. 逐用例执行明细
+
+#### Case 1: `case_1_completely_correct`（完全正确负样本）
+- **Tier 1 (Qwen3.7-Flash)**：
+  - HTTP 状态：`200`（耗时 0.915s，0 重试）
+  - 初筛结论：`status = "PASS"`，`suspicious_turn_ids = []`，`reasons = []`
+  - Token 用量：输入 964，输出 28，Reasoning 未启用，缓存命中 0
+  - 估算成本：¥0.001020
+  - Schema 校验：有效（Pydantic 严格校验通过）
+- **Tier 2 (DeepSeek-Flash)**：
+  - **0 次调用（直接跳过，DeepSeek 规避达成 100%）**
+- **最终一致性结果**：4 轮发言全部判定为 `supported`，无事实错误。
+
+#### Case 4: `case_4_numerical_error`（数字错误正样本）
+- **Tier 1 (Qwen3.7-Flash)**：
+  - HTTP 状态：`200`（耗时 2.498s，0 重试）
+  - 初筛结论：`status = "REVIEW"`，`suspicious_turn_ids = [4]`（精准锁定 turn 4，无多余嫌疑轮次）
+  - 初筛理由：指出 turn 4 虚构了 1985 年权威调研、98.5% 富豪及 400 页阅读量等原文不存在的数值与归属
+  - Token 用量：输入 934，输出 128，缓存命中 0
+  - 估算成本：¥0.001190
+- **Tier 2 (DeepSeek-Flash，定向深度复核)**：
+  - HTTP 状态：`200`（耗时 1.510s，0 重试）
+  - 发送轮次：**仅 1 轮**（`turn_4`，严禁发送完整 episode）
+  - 发送 Claims：仅与 turn 4 关联的 2 条引据（`0001:0001:arguments:1` 与 `0001:0001:evidence:0`）
+  - 复核裁决：`verdict = "contradicted"`
+  - 复核理由：“原文仅称芒格表示杰出的人几乎都坚持每日深度阅读；发言中的‘1985年权威调研’‘98.5%’‘每天400页以上’‘杰出富豪’等具体数字与出处均无原文依据，属数字与归属错误。”
+  - Token 用量：输入 781（缓存命中 128），输出 213，**Reasoning Tokens 118**（对比 Baseline 2,500+ 大幅缩减）
+  - 估算成本：¥0.001508
+  - Schema 校验：有效（ConsistencyReview 严格校验通过）
+- **最终一致性结果**：第 0、2 轮保持 `supported`，第 4 轮判定为 `contradicted`，成功检出数字与归属事实错误。
+
+### 2. Live Smoke 统计与指标汇总
+
+| 指标项 | 本次 Live Smoke 实际观测值 | 说明 |
+| :--- | :---: | :--- |
+| **Qwen3.7-Flash 物理请求数** | **2** | Case 1 与 Case 4 初筛各 1 次，HTTP 200 |
+| **DeepSeek-Flash 物理请求数** | **1** | 仅 Case 4 升轨复核 1 次，HTTP 200 |
+| **总真实物理请求数** | **3** | 严格达到上限，0 次自动重试，0 失败 |
+| **实际升轨复核率 (Escalation Rate)** | **50.0%** (1/2) | Case 1 PASS，Case 4 REVIEW |
+| **DeepSeek 调用规避率 (Avoided %)** | **50.0%** (1/2) | Case 1 完全免除 DeepSeek 调用 |
+| **真阳性 (TP)** | 1 | Case 4 成功检出 |
+| **真阴性 (TN)** | 1 | Case 1 成功放行 |
+| **假阳性 (FP)** | 0 | 无无病呻吟的误报 |
+| **假阴性 (FN)** | **0** | **零漏报！未漏过数字错误** |
+| **Live 样本精确率 (Precision)** | 100.0% | 仅限本次 2 个真实样本 |
+| **Live 样本召回率 (Recall)** | 100.0% | 仅限本次 2 个真实样本 |
+| **总耗时 (请求间隔总和)** | 4.923s | Qwen 0.915s + 2.498s，DeepSeek 1.510s |
+| **总估算成本 (CNY)** | **¥0.003718** | Case 1 ¥0.001020 + Case 4 ¥0.002698 |
+
+### 3. 证据链与边界声明（防过度外推）
+
+- **独立物理遥测证据**：见 `output/llm-reasoning-ab/consistency/live-smoke-20260927/physical_requests.jsonl`，包含 3 条完整脱敏记录（http_status 200、attempt 0、latency、endpoint、tokens）。
+- **独立单次收据**：见 `twotier-case_1_completely_correct.json` 与 `twotier-case_4_numerical_error.json`。
+- **严禁过度外推**：
+  > [!IMPORTANT]
+  > 本次 Live Smoke 仅针对 2 个精心构造的极限/典型用例（`case_1` 与 `case_4`）进行了最小可行性概念验证。**严禁将本次 2 个样本的评测结果外推为“两级阶梯真实全量召回率达到 100%”或“生产成本必定下降 77.5%”**。离线基准评测（10 个用例）与 Live Smoke 评测（2 个用例）必须严格分开记录。
+- **生产隔离性**：生产 `model_routing.py`、生产 Dialogue 配置、TTS 模块完全保持冻结，未作任何侵入式修改。
+
