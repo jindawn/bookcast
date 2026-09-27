@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "scope": "frozen segment 0001; historical A and one new physical request each for B/C",
+  "fixture": "tests/fixtures/phase19_3b_dialogue.json",
+  "baseline_input_hash": "c8290791a1f613c067dda206cb800f538c64c5bf4960cd5531c07439e9498a8b",
+  "A": {
+    "status": "historical_completed",
+    "source": "historical E2E frozen; no new request",
+    "input_tokens": 1666,
+    "output_tokens": 1614,
+    "reasoning_tokens": 1281,
+    "reasoning_ratio": 0.7937,
+    "latency_seconds": 7.495,
+    "latency_basis": "historical Attempt journal interval",
+    "estimated_cost_cny": 0.008122,
+    "schema_valid": true,
+    "metrics": {
+      "generated_chars": 133,
+      "turn_count": 5,
+      "claim_coverage": 0.75,
+      "unsupported_claim_ids": [],
+      "unsupported_numeric_turns": [],
+      "repetition": 0.0,
+      "speaker_structure_valid": true,
+      "length_ratio_to_segment": 1.1083
+    },
+    "quality_gate": {
+      "status": "pending_semantic_and_listening_review",
+      "reasons": []
+    }
+  },
+  "B": {
+    "status": "http_200",
+    "source": "one controlled physical request, no retry",
+    "candidate": "reduced",
+    "input_hash": "c8290791a1f613c067dda206cb800f538c64c5bf4960cd5531c07439e9498a8b",
+    "http_status": 200,
+    "error_kind": null,
+    "upstream_code": null,
+    "upstream_message": null,
+    "request_id": null,
+    "input_tokens": 1641,
+    "output_tokens": 646,
+    "reasoning_tokens": null,
+    "reasoning_ratio": null,
+    "reasoning_reduction_pct": null,
+    "latency_seconds": 3.051,
+    "latency_reduction_pct": 59.29,
+    "latency_comparison_limit": "A uses journal interval; B/C use local request interval",
+    "estimated_cost_cny": 0.004225,
+    "cost_reduction_pct": 47.98,
+    "schema_valid": true,
+    "metrics": {
+      "generated_chars": 365,
+      "turn_count": 6,
+      "claim_coverage": 1.0,
+      "unsupported_claim_ids": [],
+      "unsupported_numeric_turns": [],
+      "repetition": 0.0,
+      "speaker_structure_valid": true,
+      "length_ratio_to_segment": 3.0417
+    },
+    "quality_gate": {
+      "status": "failed",
+      "reasons": [
+        "length"
+      ]
+    }
+  },
+  "C": {
+    "status": "http_200",
+    "source": "one controlled physical request, no retry",
+    "candidate": "focused",
+    "input_hash": "4adb04cece4c666736c9d150ac489e0f75410253b7ffa329be464842d2d9f305",
+    "http_status": 200,
+    "error_kind": null,
+    "upstream_code": null,
+    "upstream_message": null,
+    "request_id": null,
+    "input_tokens": 1590,
+    "output_tokens": 1077,
+    "reasoning_tokens": 707,
+    "reasoning_ratio": 0.6565,
+    "reasoning_reduction_pct": 44.81,
+    "latency_seconds": 4.722,
+    "latency_reduction_pct": 37.0,
+    "latency_comparison_limit": "A uses journal interval; B/C use local request interval",
+    "estimated_cost_cny": 0.004894,
+    "cost_reduction_pct": 39.74,
+    "schema_valid": true,
+    "metrics": {
+      "generated_chars": 173,
+      "turn_count": 4,
+      "claim_coverage": 0.75,
+      "unsupported_claim_ids": [],
+      "unsupported_numeric_turns": [],
+      "repetition": 0.0,
+      "speaker_structure_valid": true,
+      "length_ratio_to_segment": 1.4417
+    },
+    "quality_gate": {
+      "status": "failed",
+      "reasons": [
+        "length"
+      ]
+    }
+  }
+}

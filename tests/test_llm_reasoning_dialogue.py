@@ -87,6 +87,28 @@ def test_upstream_echoed_prompt_is_omitted_from_diagnostics():
     assert prompt[12:52] not in json.dumps(observed)
 
 
+def test_controlled_candidate_sends_one_official_wire_request(tmp_path, monkeypatch):
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'offline-test-only')
+    captured = []
+    item = fixture()['dialogue'][0]
+
+    def respond(self, route, payload):
+        captured.append((route, payload))
+        return json.dumps({'model': 'deepseek-flash', 'choices': [
+            {'finish_reason': 'stop', 'message': {'content': json.dumps(item['baseline_output'])}}],
+            'usage': {'prompt_tokens': 100, 'completion_tokens': 50,
+                      'completion_tokens_details': {'reasoning_tokens': 0}}}).encode()
+
+    monkeypatch.setattr(CompatibleLLMProvider, '_request', respond)
+    row = run_diagnostic('reduced', tmp_path)
+    assert row['status'] == 'http_200' and row['schema_valid'] is True
+    assert len(captured) == 1 and captured[0][0] == 'chat/completions'
+    assert captured[0][1]['thinking'] == {'type': 'disabled'}
+    assert captured[0][1]['response_format'] == {'type': 'json_object'}
+    assert captured[0][1]['messages'][-1]['content'] == item['baseline_prompt']
+    assert 'max_tokens' not in captured[0][1]
+
+
 def test_frozen_prompts_match_existing_manifest_without_rebuilding_pipeline():
     frozen = fixture()
     assert frozen['source_sha256'] == 'b30a16bd39cf8924da501dfa005be4bc9eea549045f08dd597669bde152dde94'
