@@ -2,7 +2,7 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-19",
-  "current_task": "Phase19.3B Dialogue HTTP400离线审计已完成；上游响应详情未保存，根因待证据",
+  "current_task": "Phase19.3B Baseline A诊断传输失败；等待网络条件与再次诊断授权",
   "task_status": "blocked",
   "branch": "codex/phase19-clean-history",
   "last_verified_commit": "fe9139ac6653cbefff44e881829aea5297e7d927",
@@ -102,7 +102,7 @@
     "DeepSeek schema_error 诊断：本地两份《狂人日记》EPUB Job 均在 analysis:0004:0001 失败；收到响应及 usage，但历史原始响应和校验异常未保存，当前环境无 DeepSeek key，不能还原历史具体坏字段。已在适配器强化 DeepSeek JSON schema 指令，保留严格校验；Attempt/events 保存安全错误类型/字段/原因，显式 retry 回归保留前章。",
     "核对data/web/jobs六份Web记录：三份SUCCEEDED正常，三份《狂人日记》FAILED_PERMANENT均有合法submission/manifest/schema v3与有效源路径；旧Web进程因新增Attempt诊断字段触发extra_forbidden，误报记录损坏。新代码保留诊断到events，停止在manifest v3写入新字段；未修改任何任务数据。",
     "核对20分钟《狂人日记》Web Job 的原始settings和manifest snapshot均为deepseek→kokoro，TTS attempts/audio均为0；页面显示的48秒mock-tts来自另一份PDF Mock已完成任务。修复前端选中任务缺席时错误展示首条任务，真实TTS链禁止Mock混入，TTS缓存换Provider后失效，完成与只读状态需验证真实来源。",
-    "读取3a591bfd Web Job 最近真实失败事件：analysis:0003:0001 的 DeepSeek ValidationError core_ideas too_long，前一次 evidence too_long；两者均超出 EvidenceAnalysis 每类最多6项。DeepSeek JSON mode 仅保证JSON语法。适配器明确列表上限，并在此类错误时同一Provider最多一次独立记账纠错调用；保留严格校验和已完成章节缓存。离线相关147 passed/1 deselected；本进程无DeepSeek key，尚未真实复验第3、4章。",
+    "读取3a591bfd Web Job 最近真实失败事件：analysis:0003:0001 的 DeepSeek ValidationError core_ideas too_long，前一次 evidence too_long；两者均超出 EvidenceAnalysis 每类最多6项。DeepSeek JSON mode 仅保证JSON语法。适配器明确列表上限，并在此类错误时同一Provider最多一次独立记账纠错调用；保留严格校验和已完成章节缓存。离线相关148 passed/1 deselected；本进程无DeepSeek key，尚未真实复验第3、4章。",
     "真实 DeepSeek 凭证环境验证《狂人日记》现存任务：第3章首块（analysis:0003:0001）成功通过；次块（analysis:0003:0002）初次调用因 evidence 超限触发重试，重试时 DeepSeek 修复 evidence 但 core_ideas 随机超限（7项），因适配器未做安全截断导致二次调用失败。在适配器补齐纠错轮次对未被针对警告的次级数组属性的有界安全截断（上限6项），保留严格域校验与首轮失败审计。真实复验第3章两块与综合、第4章一块与综合全部成功，连续两章通过后安全中断；相关测试 148 passed、1 deselected。",
     "真实 DeepSeek content synthesis 跨块 claim_ids 归约 business_error 修复：第30章归约因外推claim_ids超出allowed集合报business_error，在content层通过resolve_synthesis清洗有效子集，保持严格业务不变式且已有157步指纹不变。回归测试通过，真实API复验synthesis/chapters/0030/00-0001及后续00-0002均成功，累计完成159步后安全暂停。",
     "真实 DeepSeek chapter analysis 通用有界 schema 纠错与第 43～45 章有界验证：消除此前仅对 too_long 特判纠错的架构缺陷，实现通用 schema 纠错提示引导与有界单次模型 repair；增加可选数组 null 安全归一化与单元素提升。真实 API 复验第 43、44、45 连续三章（共 11 个 steps 全部成功，含第 45 章实测命中 schema 漂移并经单次纠错自动恢复成功），累计完成 246 步有界验证通过。",
@@ -144,12 +144,13 @@
     "安全审计：定位 scripts/run_tts_ab.py:44 疑似真实 Gemini 凭证，确认进入本地8d6303d/9f3cfba提交但不在查询时 origin/main 可见历史；移除字面值回退并改为环境变量预检；未调用真实API、未push、未重写历史。",
     "从最新origin/main新建codex/phase19-clean-history；以旧main已净化最终跟踪树重放48文件，树完全相同，旧main保留；旧Gemini值不在新分支可达810个blob，Phase19专项196 passed，全量离线713 passed/1 skipped/7 deselected/10 subtests，无真实API或push。",
     "Phase19.3B Dialogue单次请求检查点：历史A未重调；B thinking off和C精简Prompt各1次物理请求、0重试，均HTTP400 input_error且usage为空；安全receipt/遥测及统一指标已归档，专项96 passed，未做TTS/E2E/Consistency。",
-    "Phase19.3B HTTP400纯离线审计：原E2E与B/C由同一CompatibleLLMProvider构造wire；A→B仅thinking字段，A→C仅user instruction；端点、模型、schema JSON模式及其余参数相同。确认两次上游body/code/message均未保存，新增离线wire契约回归；相关Provider/Dialogue测试145 passed，无真实API。"
+    "Phase19.3B HTTP400纯离线审计：原E2E与B/C由同一CompatibleLLMProvider构造wire；A→B仅thinking字段，A→C仅user instruction；端点、模型、schema JSON模式及其余参数相同。确认两次上游body/code/message均未保存，新增离线wire契约回归；相关Provider/Dialogue测试145 passed，无真实API。",
+    "Phase19.3B DeepSeek非2xx安全错误观察及冻结Baseline A独立单请求诊断；诊断未收到HTTP响应，C/B未运行。"
   ],
   "in_progress": [],
   "next_actions": [
-    "不要重跑B/C。若能取得两次旧请求的可信脱敏上游code/type/message，先离线定位；当前用户确认无其他日志。任何新的诊断请求需单独授权、带安全错误观察点和独立收据。",
-    "Phase19.3B Consistency仍未开始；先解决Dialogue HTTP400并获得可比较候选，生产配置/TTS不变。",
+    "先只读确认执行环境到DeepSeek的网络通路；本轮Baseline A已尝试一次，不得删除收据或自动重试，任何再次真实请求需用户明确授权。",
+    "若将来Baseline A收到200，按授权仅执行Candidate C一次；若收到400，根据安全上游code/message分析兼容性；B/Consistency/TTS/E2E保持暂停。",
     "仅完成冻结段0001的Dialogue B/C各一次真实DeepSeek请求并报告；当前额度低，完成即交接，禁止Consistency/TTS/E2E。",
     "收集用户对 Phase 19.3A TTS A/B 盲听评价表（evaluation/tts_ab_blind_score.json）的人工打分与质性反馈。",
     "根据听感盲测与成本效益评估，确定默认 TTS 策略（标准层 vs 高画质层）。",
@@ -383,7 +384,7 @@
       "command": ".venv/bin/pytest -q tests/test_content.py tests/test_job_recovery.py tests/test_generation.py tests/test_providers.py -k 'not test_cli_modes_invalid_config_and_acquire_bridge'; .venv/bin/python -m compileall -q src tests scripts; python3 scripts/validate_project.py; git diff --check",
       "status": "passed",
       "scope": "commit",
-      "summary": "147 passed、1 deselected；真实失败形态evidence/core_ideas超6项纠错、同Provider至多两次、OpenAI不变、malformed拒绝、已完成章节恢复均覆盖。validator/compileall/diff check通过；无DeepSeek key，未进行真实API调用。",
+      "summary": "148 passed、1 deselected；真实失败形态evidence/core_ideas超6项纠错、同Provider至多两次、OpenAI不变、malformed拒绝、已完成章节恢复均覆盖。validator/compileall/diff check通过；无DeepSeek key，未进行真实API调用。",
       "checked_at": "2026-09-24T19:51:45Z"
     },
     {
@@ -953,6 +954,14 @@
       "scope": "commit",
       "summary": "功能提交fe9139ac6653cbefff44e881829aea5297e7d927上Dialogue/Provider专项145 passed、validator/compileall/提交diff check通过；纯离线审计，确切上游400原因因body/code/message未保存而未知。",
       "checked_at": "2026-09-27T01:09:22Z"
+    },
+    {
+      "name": "phase19-3b-safe-error-observation",
+      "command": ".venv/bin/python -m pytest -q tests/test_llm_reasoning_dialogue.py tests/test_generation.py tests/test_providers.py tests/test_cost_telemetry.py; python3 scripts/validate_project.py; .venv/bin/python -m compileall src tests scripts -q; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "148 passed；validator、compileall、diff check通过。Baseline A一次诊断返回temporary_unavailable、HTTP status null；无C/B请求。",
+      "checked_at": "2026-09-27T01:15:23Z"
     }
   ],
   "known_failures": [
@@ -975,10 +984,11 @@
     "Phase18 清洁运行请求数/Token 降幅仅按已有真实任务 manifest 和离线 Mock 投影；新 DeepSeek 长书未调用，播客质量、真实花费及总 token < 历史调试账单 1/3 的目标尚未验证。",
     "疑似真实 Gemini 凭证仍存在于不可改写的旧本地 Git 提交；在线有效性未知，需轮换/停用并审查提供方用量，含旧提交不可直接推送。",
     "Phase19.3B Dialogue B/C仅各一次请求均HTTP400，无法计算reasoning/latency/cost降幅或质量差异；上游原始错误正文未保存，具体拒绝原因未知，禁止本轮重试。",
-    "Phase19.3B两次HTTP400仅有内部input_error；上游code/message/body在classify_http后丢弃，具体服务端拒绝原因不可从现存数据恢复。"
+    "Phase19.3B两次HTTP400仅有内部input_error；上游code/message/body在classify_http后丢弃，具体服务端拒绝原因不可从现存数据恢复。",
+    "Phase19.3B冻结Baseline A本轮诊断未收到HTTP响应（temporary_unavailable、status null）；无法判断当前DeepSeek服务上的200/400或先前B/C 400根因。"
   ],
   "blockers": [
-    "B/C上游HTTP400 response body、error code和message均未持久化；适配器只留下内部input_error，用户无额外控制台/代理日志。无法纯离线确定确切根因或证明修复，禁止复发真实请求。"
+    "冻结Baseline A单次诊断已尝试，但未收到HTTP响应（temporary_unavailable、http_status null）；无法判断上游200/400或定位此前400根因。不能自动重试，需确认网络条件并取得新的真实诊断授权。"
   ],
   "important_files": [
     {
@@ -1440,7 +1450,15 @@
     {
       "path": "docs/experiments/phase19-3b-http400-audit.md",
       "purpose": "历史成功与B/C失败的离线wire字段差异、响应证据缺口和不重跑判断"
+    },
+    {
+      "path": "docs/experiments/phase19-3b-baseline-diagnostic.md",
+      "purpose": "Baseline A单次无HTTP响应诊断与条件门禁记录"
+    },
+    {
+      "path": "scripts/llm_reasoning_diagnostic.py",
+      "purpose": "冻结段0001的独立单物理请求诊断入口和防重复receipt"
     }
   ],
-  "updated_at": "2026-09-27T01:09:22Z"
+  "updated_at": "2026-09-27T01:15:23Z"
 }

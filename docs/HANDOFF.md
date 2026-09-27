@@ -1,3 +1,23 @@
+# Phase 19.3B Baseline A 单次诊断与安全错误观察（2026-09-27）
+
+## Completed
+
+在正式Compatible适配器上为DeepSeek非2xx加有界、脱敏的错误观察点，保留原`error_kind`和生产请求构造。单次诊断脚本先写独立receipt，并只调用冻结段0001的正式Adapter一次。相关专项148 passed，validator、compileall与diff check通过。诊断证据见 [phase19-3b-baseline-diagnostic.md](experiments/phase19-3b-baseline-diagnostic.md)。未修改生产Router/TTS。
+
+## Not Completed / Current Result
+
+Baseline A诊断尝试未收到HTTP响应：内部`temporary_unavailable`、`http_status=null`、usage与上游code/message/request_id均未知。故A当前既不能确认为200，也不能确认为400；没有证据确认response_format、model或payload schema有问题。按照条件门禁，没有运行C；B/Consistency亦未运行。不能把这次传输失败当成DeepSeek拒绝payload。
+
+## Last Stable Commit / Exact Next Step
+
+本轮安全观察功能提交见Git日志；交接快照按D-006不自引用。先检查本机执行环境至DeepSeek的网络可达性。此轮已消耗一次Baseline诊断尝试且留下收据，不要自动重发或删除收据；如需再次真实诊断须由用户明确授权。若未来A收到200，才可按用户授权门禁考虑C一次；A若400则停止并根据安全上游错误分析。不得push。
+
+## Files To Read / Commands To Continue
+
+`docs/experiments/phase19-3b-baseline-diagnostic.md`、`src/bookcast/adapters/compatible.py`、`scripts/llm_reasoning_diagnostic.py`、`tests/test_llm_reasoning_dialogue.py`、`docs/STATE.json`。离线命令：`.venv/bin/python -m pytest -q tests/test_llm_reasoning_dialogue.py tests/test_generation.py tests/test_providers.py tests/test_cost_telemetry.py`；`python3 scripts/validate_project.py`；`.venv/bin/python -m compileall src tests scripts -q`；`git diff --check`。
+
+---
+
 # Phase 19.3B Dialogue HTTP400 纯离线审计（2026-09-27）
 
 ## Completed

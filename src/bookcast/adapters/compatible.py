@@ -20,6 +20,53 @@ QUOTA_CODES = {"insufficient_quota", "quota_exceeded", "quota_exhausted", "credi
                "organization_spend_limit_exceeded", "project_spend_limit_exceeded", "organization_usage_limit_exceeded"}
 
 
+def _safe_upstream_text(value: object, *, limit: int = 320, prompt: str = '') -> str | None:
+    """Keep a small diagnostic phrase, never an echoed prompt or credential."""
+    if not isinstance(value, str):
+        return None
+    value = value[:2048]
+    if len(prompt) >= 24 and any(prompt[index:index + 24] in value
+                                 for index in range(0, len(prompt) - 23, 12)):
+        return '[upstream text omitted: echoed request]'
+    for env_name in ('DEEPSEEK_API_KEY',):
+        secret = os.environ.get(env_name)
+        if secret:
+            value = value.replace(secret, '[REDACTED]')
+    value = re.sub(r'(?i)\bBearer\s+[^\s,;"\']+', 'Bearer [REDACTED]', value)
+    value = re.sub(r'(?i)\b(?:sk-[A-Za-z0-9_-]{8,}|AIza[A-Za-z0-9_-]{12,})\b', '[REDACTED]', value)
+    value = re.sub(r'(?i)\b(?:api[_-]?key|token|authorization)\s*[:=]\s*[^\s,;]+', '[REDACTED]', value)
+    value = ''.join(ch if 32 <= ord(ch) <= 126 else ' ' for ch in value)
+    value = re.sub(r'\s+', ' ', value).strip()
+    return value[:limit] if value else None
+
+
+def _deepseek_error_observation(status: int, body: bytes, headers: object, payload: dict | None) -> dict:
+    prompt = ' '.join(str(message.get('content', '')) for message in (payload or {}).get('messages', [])
+                      if isinstance(message, dict))
+    try:
+        parsed = json.loads(body)
+        failure = parsed.get('error', {}) if isinstance(parsed, dict) else {}
+        if not isinstance(failure, dict):
+            failure = {}
+    except (ValueError, UnicodeDecodeError):
+        failure = {}
+    def get_header(name: str) -> object:
+        if not hasattr(headers, 'items'):
+            return None
+        return next((value for key, value in headers.items() if str(key).lower() == name), None)
+    code = _safe_upstream_text(failure.get('code') or failure.get('type'), limit=80, prompt=prompt)
+    message = _safe_upstream_text(failure.get('message'), prompt=prompt)
+    request_id = _safe_upstream_text(get_header('x-request-id') or get_header('request-id')
+                                     or failure.get('request_id'), limit=128)
+    trace_id = _safe_upstream_text(get_header('x-trace-id') or failure.get('trace_id'), limit=128)
+    content_type = _safe_upstream_text(get_header('content-type'), limit=80)
+    # The summary is reconstructed from selected fields, never the raw body.
+    summary = json.dumps({'code': code, 'message': message}, ensure_ascii=True, separators=(',', ':'))[:2048]
+    return {'http_status': status, 'upstream_code': code, 'upstream_message': message,
+            'safe_reason': message or code, 'request_id': request_id, 'trace_id': trace_id,
+            'content_type': content_type, 'body_summary': summary}
+
+
 def schema_failure(exc: Exception) -> ProviderError:
     """Keep only Pydantic field names and error codes, never response values."""
     if isinstance(exc, ValidationError):
@@ -61,6 +108,7 @@ class CompatibleBase:
         self.spec, self.name, self.model = spec, spec.name, spec.model
         self.last_status = ProviderStatus(provider=self.name, model=self.model)
         self.context: ProviderRequestContext | None = None
+        self.last_http_error_observation: dict | None = None
 
     def set_context(self, context: ProviderRequestContext | None) -> None:
         self.context = context
@@ -89,6 +137,7 @@ class CompatibleBase:
                     pass
 
     def _request(self, route: str, payload: dict | None = None) -> bytes:
+        self.last_http_error_observation = None
         started = utc_now()
         t0 = time.perf_counter()
         url = self.spec.base_url.rstrip("/") + "/" + route
@@ -99,7 +148,7 @@ class CompatibleBase:
         clean_endpoint = parsed_url._replace(netloc=clean_netloc, query="", fragment="").geturl()
 
         def _log_physical(http_status: int | None, result: str, *, failure: ProviderError | None = None, usage_avail: bool = False):
-            self._record_physical(self.context, {
+            record = {
                 'job_id': self.context.job_id if self.context else None,
                 'output_id': self.context.output_id if self.context else None,
                 'logical_chunk_id': self.context.logical_chunk_id if self.context else None,
@@ -118,7 +167,11 @@ class CompatibleBase:
                 'usage_available': usage_avail,
                 'billing_evidence': f"{self.spec.type}_http",
                 'error_kind': failure.kind.value if failure else None,
-            })
+            }
+            if self.last_http_error_observation:
+                for field in ('safe_reason', 'upstream_code', 'upstream_message', 'request_id', 'trace_id', 'content_type'):
+                    record[field] = self.last_http_error_observation[field]
+            self._record_physical(self.context, record)
 
         try:
             headers = {"Content-Type": "application/json"}
@@ -144,7 +197,10 @@ class CompatibleBase:
             _log_physical(200, "succeeded", usage_avail=usage_avail)
             return result
         except error.HTTPError as exc:
-            failure = classify_http(exc.code, exc.read(64 * 1024))
+            body = exc.read(64 * 1024)
+            failure = classify_http(exc.code, body)
+            if urlsplit(self.spec.base_url).hostname == 'api.deepseek.com':
+                self.last_http_error_observation = _deepseek_error_observation(exc.code, body, exc.headers, payload)
             _log_physical(exc.code, "failed", failure=failure)
             self.last_status = ProviderStatus.from_error(self.name, self.model, failure)
             raise failure from None

@@ -756,3 +756,5 @@
 
 - 2026-09-27 Phase19.3B HTTP400离线审计：保存E2E ProviderSpec与runner同端点/模型/超时/默认生成策略；当前`_chat` AST和E2E代码一致。正式Adapter离线拦截显示A→B只增thinking disabled，A→C只改user instruction；共享的schema JSON模式等请求体字段相同。B/C原始上游HTTP body/code/message并未持久化，内部仅留input_error；用户确认无其他脱敏日志，故确切根因未知，没有凭据进行修复或重跑。新增wire合同离线回归，相关Provider/Dialogue 145 passed；无真实API、无TTS/Consistency/生产变更。
 - 2026-09-27 HTTP400离线审计功能提交 `fe9139ac6653cbefff44e881829aea5297e7d927` 上复测Dialogue/Provider专项145 passed，validator/compileall/提交差异检查通过；无真实API、未改生产wire，交接快照不自引用且未push。
+
+- 2026-09-27T01:15:23Z Phase19.3B：DeepSeek非2xx安全上游观察与单请求诊断收据完成；148项专项通过。冻结Baseline A尝试未收到HTTP响应（temporary_unavailable、status null、约0.016秒），无usage/上游错误详情；未运行C/B，未push。

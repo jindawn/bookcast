@@ -1,10 +1,12 @@
 """No paid calls: frozen identity, experiment guardrails and quality metrics."""
 import json
+import io
 from pathlib import Path
+from urllib import error as urlerr
 
 import pytest
 
-from bookcast.adapters.compatible import CompatibleLLMProvider
+from bookcast.adapters.compatible import CompatibleLLMProvider, _deepseek_error_observation
 from bookcast.content_models import SegmentScript
 from bookcast.generation import GenerationConfig
 from bookcast.provider_config import ProviderSpec
@@ -13,6 +15,76 @@ from scripts.llm_reasoning_dialogue import (
     FIXTURE, baseline_report, candidate_prompt, candidate_totals, fixture, form_metrics,
     quality_gate, run_live,
 )
+from scripts.llm_reasoning_diagnostic import run as run_diagnostic
+
+
+def test_deepseek_http_error_observation_is_bounded_and_redacted(tmp_path, monkeypatch):
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'diagnostic-secret-123456')
+    prompt = 'this is a private user prompt that must never enter diagnostics'
+    body = json.dumps({'error': {'code': 'invalid_request_error',
+                                 'message': 'Bad schema; Bearer diagnostic-secret-123456 token=diagnostic-secret-123456',
+                                 'request_id': 'body-id'}}).encode()
+
+    class Transport:
+        def open(self, req, timeout):
+            raise urlerr.HTTPError(req.full_url, 400, 'Bad Request',
+                                   {'Content-Type': 'application/json', 'X-Request-Id': 'request-id-1',
+                                    'Authorization': 'diagnostic-secret-123456'}, io.BytesIO(body))
+
+    monkeypatch.setattr('bookcast.adapters.compatible.request.build_opener', lambda *a: Transport())
+    spec = ProviderSpec(name='deepseek', kind='llm', type='openai-compatible', model='deepseek-flash',
+                        base_url='https://api.deepseek.com', api_key_env='DEEPSEEK_API_KEY')
+    provider = CompatibleLLMProvider(spec)
+    from bookcast.provider_api import ProviderRequestContext, ProviderError, ErrorKind
+    provider.set_context(ProviderRequestContext(job_id=None, output_id=None, logical_chunk_id='test',
+                                                provider='deepseek', model='deepseek-flash',
+                                                telemetry_path=tmp_path / 'physical.jsonl'))
+    with pytest.raises(ProviderError) as caught:
+        provider._chat(prompt, SegmentScript.model_json_schema())
+    assert caught.value.kind == ErrorKind.INPUT
+    observation = provider.last_http_error_observation
+    assert observation['http_status'] == 400
+    assert observation['upstream_code'] == 'invalid_request_error'
+    assert observation['request_id'] == 'request-id-1'
+    assert observation['content_type'] == 'application/json'
+    assert len(observation['body_summary']) <= 2048
+    persisted = (tmp_path / 'physical.jsonl').read_text()
+    assert 'diagnostic-secret-123456' not in persisted + json.dumps(observation)
+    assert prompt not in persisted + json.dumps(observation)
+    assert 'Authorization' not in persisted
+    telemetry = json.loads(persisted)
+    assert telemetry['error_kind'] == 'input_error'
+    assert 'body_summary' not in telemetry
+    assert telemetry['upstream_code'] == 'invalid_request_error'
+
+
+def test_diagnostic_is_single_request_and_never_reuses_receipt(tmp_path, monkeypatch):
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'offline-test-only')
+    calls = []
+
+    def fail_once(self, prompt, schema):
+        calls.append((prompt, schema))
+        from bookcast.provider_api import ProviderError, ErrorKind
+        self.last_http_error_observation = {'http_status': 400, 'upstream_code': 'model_not_found',
+                                            'upstream_message': 'unknown model'}
+        raise ProviderError(ErrorKind.INPUT)
+
+    monkeypatch.setattr(CompatibleLLMProvider, '_chat', fail_once)
+    row = run_diagnostic('baseline', tmp_path)
+    assert row['status'] == 'http_error' and len(calls) == 1
+    assert row['input_hash'] == fixture()['dialogue'][0]['baseline_input_hash']
+    with pytest.raises(RuntimeError, match='already exists'):
+        run_diagnostic('baseline', tmp_path)
+    assert len(calls) == 1
+
+
+def test_upstream_echoed_prompt_is_omitted_from_diagnostics():
+    prompt = 'private content before the sensitive middle passage and after it'
+    body = json.dumps({'error': {'code': 'bad_prompt',
+                                 'message': 'Rejected: ' + prompt[12:52]}}).encode()
+    observed = _deepseek_error_observation(400, body, {}, {'messages': [{'role': 'user', 'content': prompt}]})
+    assert observed['upstream_message'] == '[upstream text omitted: echoed request]'
+    assert prompt[12:52] not in json.dumps(observed)
 
 
 def test_frozen_prompts_match_existing_manifest_without_rebuilding_pipeline():
