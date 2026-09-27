@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-19",
-  "current_task": "Phase19.3B Consistency 最小 Live Smoke 完成（3次物理请求全部成功，0重试），实验停机待决",
+  "current_task": "Phase 19.3B Consistency Live Validation Set 完成（FN=0，通过6项Gate标记为 PRODUCTION_CANDIDATE），生产Router保持冻结",
   "task_status": "completed",
   "branch": "codex/phase19-clean-history",
-  "last_verified_commit": "e5ad6205ea721810f2bff9f02d919916b2e1fbbb",
+  "last_verified_commit": "97ce2f986407ca816eb2ff08287af275a1b20ab3",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -150,11 +150,12 @@
     "Phase19.3B Dialogue冻结段0001：历史A复用，B/C各一次HTTP200、schema有效、零重试；两者长度门禁失败，统一指标报告已保存。",
     "Phase19.3B Dialogue Candidate D仅一次HTTP200请求：122字/5轮、Claim coverage100%、schema和交替通过；reasoning4630/成本¥0.020496超过A，停止调参。",
     "Phase19.3B Consistency 离线两级阶梯核验框架与10类确定性测试集实现完成：10类确定性fixture建立并验证，llm_reasoning_consistency.py实现Qwen3.7-Flash初筛与DeepSeek定向深度复核两级流控与指标计算，专项13 passed，离线全量733 passed，离线评测DeepSeek调用减少30%、成本降77.5%、召回率100%，无真实网络调用。",
-    "Phase19.3B Consistency 最小受控 Live Smoke 完成：经用户明确授权，对冻结测试集 case_1（完全正确）与 case_4（数字错误）执行真实请求，总计 3 次物理请求全部成功（HTTP 200，0 重试，0 失败）。Case 1 Tier 1 Qwen3.7-Flash 耗时 0.915s、成本 ¥0.001020，返回 PASS 且 0 次 DeepSeek 调用（规避率 100%）；Case 4 Tier 1 Qwen 耗时 2.498s 返回 REVIEW 并精准锁定 turn 4，随后 Tier 2 DeepSeek 仅定向复核 turn 4（耗时 1.510s、Reasoning 118 tokens、成本 ¥0.001508，未发送整篇），准确裁决 contradicted 并确认事实错误。2 样本统计：升轨率 50%，DeepSeek 规避率 50%，TP=1, TN=1, FP=0, FN=0，总估算成本 ¥0.003718。脱敏遥测与收据落盘于 output/llm-reasoning-ab/consistency/live-smoke-20260927/。未进入下一批测试，生产 Router 与 TTS 保持不变，未 push。"
+    "Phase19.3B Consistency 最小受控 Live Smoke 完成：经用户明确授权，对冻结测试集 case_1（完全正确）与 case_4（数字错误）执行真实请求，总计 3 次物理请求全部成功（HTTP 200，0 重试，0 失败）。Case 1 Tier 1 Qwen3.7-Flash 耗时 0.915s、成本 ¥0.001020，返回 PASS 且 0 次 DeepSeek 调用（规避率 100%）；Case 4 Tier 1 Qwen 耗时 2.498s 返回 REVIEW 并精准锁定 turn 4，随后 Tier 2 DeepSeek 仅定向复核 turn 4（耗时 1.510s、Reasoning 118 tokens、成本 ¥0.001508，未发送整篇），准确裁决 contradicted 并确认事实错误。2 样本统计：升轨率 50%，DeepSeek 规避率 50%，TP=1, TN=1, FP=0, FN=0，总估算成本 ¥0.003718。脱敏遥测与收据落盘于 output/llm-reasoning-ab/consistency/live-smoke-20260927/。未进入下一批测试，生产 Router 与 TTS 保持不变，未 push。",
+    "Phase 19.3B Consistency Live Validation Set 验证完成：执行 6 个受控测试用例（负样本 case_1 复用、case_10 PASS；正样本 case_3 幻觉、case_5 归因、case_6 限定词、case_7 矛盾全部 REVIEW 升轨），新增 9 次物理请求（Qwen 5 次，DeepSeek 4 次，0 重试，0 失败），TP=4, TN=2, FP=0, FN=0（检出召回率 100%，特异度 100%，错误轮次定位精确度 100%），DeepSeek 定向复核平均 Reasoning 降至 191 tokens（降幅 92.4%），新增耗时 17.888s、成本 ¥0.011522；6 项生产候选 Gate 全部通过，架构状态标记为 PRODUCTION_CANDIDATE，生产 Router/配置与 TTS 保持完全冻结不变，未 push。"
   ],
   "in_progress": [],
   "next_actions": [
-    "维护者审阅 Phase 19.3B Consistency 最小 Live Smoke 结果（Case 1 PASS 免除 DeepSeek，Case 4 精准锁定并检出数字错误）；当前保持严格停机，任何进一步真实测试或策略选择需重新授权。",
+    "维护者审阅 Phase 19.3B Consistency Live Validation 评测与 PRODUCTION_CANDIDATE 状态；当前保持严格停机，任何进一步真实测试或生产路由集成需重新授权。",
     "维护者先审阅D的高reasoning/成本和文本质量；任何新Dialogue策略或真实调用需要另行授权，不重跑B/C/D。",
     "生产配置、Dialogue生产配置与TTS保持完全冻结不变，不直接修改生产Router。",
     "先只读核对当前环境代理/网络配置或获取本次400的脱敏中间层/服务端诊断；再次真实请求须用户重新授权，不得自动重试。",
@@ -168,6 +169,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "phase-19-3b-consistency-live-validation",
+      "command": ".venv/bin/python scripts/llm_reasoning_consistency.py --candidate twotier --live --fixtures case_1_completely_correct,case_10_hypothetical_boundary,case_3_obvious_hallucination,case_5_incorrect_attribution,case_6_missing_critical_qualifier,case_7_obvious_contradiction --output output/llm-reasoning-ab/consistency/live-validation-20260927 --max-calls 9 --max-qwen-calls 5 --max-deepseek-calls 4",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "Phase 19.3B Consistency Live Validation Set 真实验收：完成 6 个典型用例受控评测；9 次新增物理请求全部成功（HTTP 200，0 重试，0 失败），case_1 真实复用。Qwen Tier 1 准确放行 2 个负样本（case_1, case_10 PASS，DeepSeek 规避率 100%），并精准将 4 类正样本送入 REVIEW（嫌疑定位精确度 100%）；DeepSeek Tier 2 定向复核 4 次全部准确裁决 contradicted（平均 Reasoning 191 tokens，降幅 92.4%）。检出指标 TP=4, TN=2, FP=0, FN=0，Precision=100%, Recall=100%；新增耗时 17.888s、成本 ¥0.011522；6 项生产候选 Gate 全部通过，标记为 PRODUCTION_CANDIDATE，生产配置保持冻结。",
+      "checked_at": "2026-09-27T02:34:15Z"
+    },
     {
       "name": "phase-19-3b-consistency-live-smoke",
       "command": ".venv/bin/python scripts/llm_reasoning_consistency.py --candidate twotier --live --fixtures case_1_completely_correct,case_4_numerical_error --output output/llm-reasoning-ab/consistency/live-smoke-20260927",

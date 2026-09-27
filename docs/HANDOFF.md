@@ -1,3 +1,48 @@
+# Phase 19.3B Consistency Live Validation Set 完成与生产候选 Gate 评估（2026-09-27）
+
+## Completed
+
+在用户明确授权下，完成 Phase 19.3B Consistency 优化实验的 6 用例 Live Validation Set，目标验证 Tier 1 初筛是否会对不同类型事实风险发生漏检（Zero False Negatives）。**新增物理请求严格限制为 9 次，0 次重试，0 失败**：
+1. **测试用例与请求流控**：
+   - 负样本 2 个：`case_1_completely_correct`（直接复用 Live Smoke 真实结果，0 次新请求）；`case_10_hypothetical_boundary`（思想实验/假说边界，1 次 Qwen 物理请求，0.911s，返回 PASS，0 次 DeepSeek 调用）。
+   - 正样本 4 个：`case_3_obvious_hallucination`（伪科学幻觉）、`case_5_incorrect_attribution`（张冠李戴）、`case_6_missing_critical_qualifier`（否定限定丢失）、`case_7_obvious_contradiction`（公然反向矛盾）。4 个用例全部在 Tier 1 返回 REVIEW 并精准锁定可疑轮次（定位准确率 100%），随后升轨 Tier 2 DeepSeek 针对单一嫌疑轮次进行定向复核。
+2. **物理调用与成本遥测**：
+   - 新增 Qwen3.7-Flash 请求：5 次，全 HTTP 200，平均耗时 2.18s，新增成本 ¥0.005065。
+   - 新增 DeepSeek-Flash 定向复核请求：4 次，全 HTTP 200，平均耗时 1.75s，新增成本 ¥0.006457。
+   - 总新增物理请求：**9 次**（Qwen 5 次 + DeepSeek 4 次，严格达标，0 重试）。
+   - DeepSeek 推理开销：平均 Reasoning Tokens **191.25 tokens**（相较 Baseline 2500+ 下降 **92.4%**）。
+   - 6 用例全生命周期成本：**¥0.012542**（平均单篇约 ¥0.00209）。
+3. **事实风险检测质量（混淆矩阵）**：
+   - **TP = 4, TN = 2, FP = 0, FN = 0**
+   - **Precision = 100.0%, Recall = 100.0%（零漏检！）**
+   - **可疑轮次定位精确度 = 100.0%**（4/4 精确命中目标轮次，无多余或遗漏轮次）。
+   - **负样本特异度 = 100.0%**（2/2 负样本全部 PASS，DeepSeek 规避率 100%）。
+4. **生产候选 Gate (Production Candidate Gate) 判定**：
+   - 6 项门禁全部严格通过：新增正样本 FN=0、4类典型风险全进 REVIEW、DeepSeek 未受裁剪负面影响且裁决 100% 准确、负样本无误报、Schema 100% 有效、物理遥测与收据完整。
+   - 方案状态正式标记为：`PRODUCTION_CANDIDATE`。
+   - **生产配置不变式**：维持生产隔离原则，**未修改生产 Router，未标记为 PRODUCTION_ENABLED，生产默认模型/配置与 TTS 模块完全保持原有配置不变**。
+
+## Not Completed / Production Boundary
+
+- 两级阶梯（Candidate C）当前仅作为已通过验证的**独立生产候选资产（PRODUCTION_CANDIDATE）**，**尚未合入生产生产路由（NOT PRODUCTION_ENABLED）**。
+- 未执行其他未授权用例，未执行全书长篇 E2E，TTS 模块完全保持冻结。
+
+## Last Stable Commit / Exact Next Step
+
+已验证功能提交 `97ce2f986407ca816eb2ff08287af275a1b20ab3`：9 次新增物理请求全部成功且 0 重试，离线全量 116 项回归通过，validator、compileall、diff check 全过。交接快照自身按 D-006 不自引用。
+当前实验已严格停机，等待维护者审阅 Live Validation Set 的 0 FN 表现、精确定位与生产候选状态，再决定是否授权合入生产 Router。未获授权前不发起新请求，不修改生产配置，不 push。
+
+## Files To Read / Commands To Continue
+
+`docs/experiments/phase19-3b-consistency.md`、`output/llm-reasoning-ab/consistency/live-validation-20260927/physical_requests.jsonl`、`output/llm-reasoning-ab/consistency/live-validation-20260927/live_validation-metrics.json`、`scripts/llm_reasoning_consistency.py`、`tests/fixtures/phase19_3b_consistency.json`、`docs/STATE.json`。
+离线复验命令：
+`GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest -p no:cacheprovider -q tests/test_llm_reasoning_consistency.py tests/test_llm_reasoning_dialogue.py tests/test_generation.py tests/test_cost_telemetry.py`；
+`GIT_CONFIG_GLOBAL=/dev/null python3 scripts/validate_project.py`；
+`GIT_CONFIG_GLOBAL=/dev/null git diff --check`。
+**严禁自行添加 `--live` 发起真实 API 请求。**
+
+---
+
 # Phase 19.3B Consistency 最小 Live Smoke 完成（2026-09-27）
 
 ## Completed
