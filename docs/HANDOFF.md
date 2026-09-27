@@ -1,3 +1,37 @@
+# Phase 19.3B Dialogue 单次请求检查点（2026-09-26）
+
+## Completed
+
+- 本轮只使用冻结段 `0001`。A 沿用历史真实 E2E，0 新请求：input 1666、output 1614、reasoning 1281，历史 Attempt 日志间隔约7.495秒，同价快照估算0.008122元，133字/5轮，Claim coverage 75%，旧一致性复核2 supported、1 unverifiable。
+- B（DeepSeek Flash thinking off）与 C（同模型默认thinking、仅精简instruction）各**恰好1次**物理请求、0重试；均 HTTP 400 `input_error`，没有usage、schema结果或生成文本。安全原始receipt、物理遥测和统一指标已保存于 `docs/experiments/phase19-3b-dialogue-one-shot.json`；本机忽略目录 `output/llm-reasoning-ab/dialogue/` 保留原文件。没有存上游错误正文或Key。
+- 相关专项96 passed，项目validator及diff check通过；本轮额度保护下未重跑完整离线suite。clean branch最近完整离线713 passed。没有TTS、音频、完整E2E、Consistency、自动调参或生产配置改动，也没有push。
+
+## Not Completed
+
+B/C 均未生成，reasoning/latency/cost降幅、事实忠实、对话自然度、三者质量差异和episode/25分钟新投影均**不可计算**。HTTP 400 的短请求耗时不是生成延迟，缺usage也不能视作零收费。具体被拒原因未知；适配器只保留安全分类。单次请求预算已经用完，不得自动重试。
+
+## Last Stable Commit
+
+当前代码基线 `2b786eaec8c1e0a0780a5979de0e99c0a6c761b2`；本检查点功能提交及后续验证以 `git log -1` 和 STATE 的 `last_verified_commit` 为准。保持干净历史分支 `codex/phase19-clean-history`；旧 `main` 含历史凭证，绝不可误推。
+
+## Exact Next Step
+
+先**离线**对照现用 `deepseek-flash` 模型、端点、JSON模式和thinking参数与官方当前文档；检查两条安全物理遥测的共同HTTP400路径。不要读取/打印Key或复发真实请求。任何新API探测须用户另行授权并建立新候选/收据，不能覆盖本轮失败数据。用户明确允许后才考虑可用的Dialogue验证，再进入Consistency。
+
+## Files To Read
+
+`docs/experiments/phase19-3b-dialogue.md`、`docs/experiments/phase19-3b-dialogue-one-shot.json`、`tests/fixtures/phase19_3b_dialogue.json`、`scripts/llm_reasoning_dialogue.py`、`src/bookcast/adapters/compatible.py`、`docs/STATE.json`。原E2E中间资产在忽略目录 `output/e2e/a834c024a7d11624be66f19b/`。原始两份失败receipt及`physical_requests.jsonl`在`output/llm-reasoning-ab/dialogue/`。
+
+## Commands To Continue（只读/离线）
+
+`git status --short --branch`；`.venv/bin/python -m pytest -q tests/test_llm_reasoning_dialogue.py tests/test_generation.py tests/test_cost_telemetry.py`；`python3 scripts/validate_project.py`；`git diff --check`。**不要运行 `--live`、TTS或完整E2E。**
+
+## NEXT PHASE（尚未进入）：Phase 19.3B Consistency Experiment
+
+历史基线：2调用、input3147/output5388/reasoning5066、约24.98秒、估算0.0246元；已有原E2E的脚本、Claims和一致性结果，但尚无独立七类Consistency fixture。Reduced Reasoning 候选原拟同DeepSeek模型降低thinking；本轮Dialogue HTTP400提示必须先离线确认参数/端点兼容性。Two-Tier候选原拟Qwen3.7-Flash先给PASS/REVIEW与可疑turn IDs，只有REVIEW才把可疑轮及对应Claims/evidence送DeepSeek。此阶段未实现、未调用，不能改生产默认。
+
+---
+
 # 2026-09-26 Git Secret History Cleanup：干净分支交接
 
 用户暂停全部 Phase19.3B 实验。已在 `codex/phase19-clean-history` 从最新 `origin/main=7f43ad7` 建立新本地祖先链；旧 `main=7473ff8` 原样保留为恢复点，不能直接推送。未 push、未改写旧历史。详见 [CLEAN_HISTORY_2026-09-26.md](CLEAN_HISTORY_2026-09-26.md)。

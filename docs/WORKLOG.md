@@ -750,3 +750,5 @@
 - 2026-09-26 凭证移除功能提交 `eb9b4605d613311b405ea15b70de06bde8cff57e` 上复测受影响模块71 passed，validator/compileall/提交差异检查通过；交接快照不自引用，未push。
 
 - 2026-09-26 Git Secret History Cleanup：只读查询确认origin/main=7f43ad7，从其创建codex/phase19-clean-history；重放旧main已净化最终跟踪树，48文件树完全一致，新功能提交18d86c2，旧main保留。旧含值提交不是新HEAD祖先，旧Gemini值在新历史810个可达blob精确扫描为0；跨Provider形似候选均为测试/示例。专项196 passed，默认完整离线713 passed/1 skipped/7 deselected/10 subtests；无真实API、无push。
+
+- 2026-09-26 Phase19.3B Dialogue单次实验：冻结段0001历史A不重调（input1666/output1614/reasoning1281，旧Attempt约7.495s，估算0.008122元，133字/5轮，Claim coverage75%）。B thinking off与C精简instruction各发1次物理DeepSeek请求、0重试，均HTTP400 `input_error`，无usage/输出；失败安全receipt及物理遥测归档 `docs/experiments/phase19-3b-dialogue-one-shot.json`。因此reasoning/成本/生成延迟降幅和内容质量不可评估。专项96 passed，validator/diff check通过；无TTS/E2E/Consistency、无push。

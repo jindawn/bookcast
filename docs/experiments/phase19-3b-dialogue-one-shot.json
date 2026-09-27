@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "scope": "frozen segment 0001 only; one physical request per new candidate",
+  "fixture": "tests/fixtures/phase19_3b_dialogue.json",
+  "baseline_input_hash": "c8290791a1f613c067dda206cb800f538c64c5bf4960cd5531c07439e9498a8b",
+  "model": "deepseek-flash",
+  "candidates": {
+    "A": {
+      "source": "historical measured E2E; no new request",
+      "status": "completed",
+      "input_tokens": 1666,
+      "output_tokens": 1614,
+      "reasoning_tokens": 1281,
+      "reasoning_ratio": 0.7937,
+      "latency_seconds": 7.495,
+      "latency_basis": "historical attempt RUNNING-to-SUCCEEDED journal interval; not physical HTTP latency",
+      "estimated_cost_cny": 0.008122,
+      "actual_billed_cost_cny": null,
+      "generated_chars": 133,
+      "turn_count": 5,
+      "schema_valid": true,
+      "claim_coverage": 0.75,
+      "unsupported_claim_ids": [],
+      "unsupported_numeric_turns": [],
+      "repetition": 0.0,
+      "quality_gate": {
+        "status": "pending_semantic_and_listening_review",
+        "reasons": []
+      },
+      "historical_consistency_verdict_counts": {
+        "supported": 2,
+        "unverifiable": 1
+      }
+    },
+    "B": {
+      "source": "one new physical request",
+      "candidate": "reduced",
+      "status": "request_failed",
+      "http_status": 400,
+      "error_kind": "input_error",
+      "retryable": false,
+      "physical_request_count": 1,
+      "retry_count": 0,
+      "request_latency_seconds": 0.153,
+      "generation_latency_seconds": null,
+      "input_tokens": null,
+      "output_tokens": null,
+      "reasoning_tokens": null,
+      "reasoning_ratio": null,
+      "estimated_cost_cny": null,
+      "actual_billed_cost_cny": null,
+      "generated_chars": null,
+      "turn_count": null,
+      "schema_valid": null,
+      "claim_coverage": null,
+      "unsupported_claim_ids": null,
+      "unsupported_numeric_turns": null,
+      "repetition": null,
+      "quality_gate": {
+        "status": "failed_request",
+        "content_quality": "not_evaluable"
+      },
+      "prompt_hash": "3155470fd3f10474eb37de006acae197636e418bd4c1f9ae36feb3dc5496294a",
+      "usage_available": false,
+      "safe_original_receipt": {
+        "status": "failed",
+        "candidate": "reduced",
+        "segment_id": "0001",
+        "prompt_hash": "3155470fd3f10474eb37de006acae197636e418bd4c1f9ae36feb3dc5496294a",
+        "error_type": "ProviderError",
+        "latency_seconds": 0.155,
+        "usage": null
+      },
+      "safe_original_physical_request": {
+        "job_id": null,
+        "output_id": null,
+        "logical_chunk_id": "phase19.3b:reduced:0001",
+        "chunk_id": "phase19.3b:reduced:0001",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "endpoint": "https://api.deepseek.com/chat/completions",
+        "physical_attempt_index": 0,
+        "started_at": "2026-09-26T15:03:32.684377+00:00",
+        "finished_at": "2026-09-26T15:03:32.837781+00:00",
+        "latency": 0.153,
+        "http_status": 400,
+        "result": "failed",
+        "retry_reason": null,
+        "retryable": false,
+        "usage_available": false,
+        "billing_evidence": "openai-compatible_http",
+        "error_kind": "input_error"
+      }
+    },
+    "C": {
+      "source": "one new physical request",
+      "candidate": "focused",
+      "status": "request_failed",
+      "http_status": 400,
+      "error_kind": "input_error",
+      "retryable": false,
+      "physical_request_count": 1,
+      "retry_count": 0,
+      "request_latency_seconds": 0.111,
+      "generation_latency_seconds": null,
+      "input_tokens": null,
+      "output_tokens": null,
+      "reasoning_tokens": null,
+      "reasoning_ratio": null,
+      "estimated_cost_cny": null,
+      "actual_billed_cost_cny": null,
+      "generated_chars": null,
+      "turn_count": null,
+      "schema_valid": null,
+      "claim_coverage": null,
+      "unsupported_claim_ids": null,
+      "unsupported_numeric_turns": null,
+      "repetition": null,
+      "quality_gate": {
+        "status": "failed_request",
+        "content_quality": "not_evaluable"
+      },
+      "prompt_hash": "dbd315bb810e743da73636212892e3af6a1d96488bcca855a0b607b96a357cad",
+      "usage_available": false,
+      "safe_original_receipt": {
+        "status": "failed",
+        "candidate": "focused",
+        "segment_id": "0001",
+        "prompt_hash": "dbd315bb810e743da73636212892e3af6a1d96488bcca855a0b607b96a357cad",
+        "error_type": "ProviderError",
+        "latency_seconds": 0.113,
+        "usage": null
+      },
+      "safe_original_physical_request": {
+        "job_id": null,
+        "output_id": null,
+        "logical_chunk_id": "phase19.3b:focused:0001",
+        "chunk_id": "phase19.3b:focused:0001",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "endpoint": "https://api.deepseek.com/chat/completions",
+        "physical_attempt_index": 0,
+        "started_at": "2026-09-26T15:03:52.978245+00:00",
+        "finished_at": "2026-09-26T15:03:53.089207+00:00",
+        "latency": 0.111,
+        "http_status": 400,
+        "result": "failed",
+        "retry_reason": null,
+        "retryable": false,
+        "usage_available": false,
+        "billing_evidence": "openai-compatible_http",
+        "error_kind": "input_error"
+      }
+    }
+  },
+  "comparisons": {
+    "B": {
+      "reasoning_reduction_percent": null,
+      "latency_reduction_percent": null,
+      "estimated_cost_reduction_percent": null,
+      "reason": "HTTP 400 before generation; no usage or candidate output"
+    },
+    "C": {
+      "reasoning_reduction_percent": null,
+      "latency_reduction_percent": null,
+      "estimated_cost_reduction_percent": null,
+      "reason": "HTTP 400 before generation; no usage or candidate output"
+    }
+  }
+}
