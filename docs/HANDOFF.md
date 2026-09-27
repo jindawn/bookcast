@@ -1,4 +1,79 @@
+# Phase 19.3C Shadow Mode Live 验收完成：SHADOW_ACCEPTED（2026-09-27）
+
+## Goal
+
+在真实 BookCast Pipeline 中以 Shadow Mode 运行 Two-Tier Consistency（Qwen Tier1 + DeepSeek Tier2），旁路记录对比结果，验证 shadow_false_negative_candidate=0 且生产裁决不受影响。
+
+## Completed
+
+**执行命令**：`bookcast generate examples/mind_and_judgment.txt --config examples/model-routing-cloud.toml --output-dir output/acceptance-shadow-phase19-3c --mode two_host --minutes 3 --shadow-consistency`
+
+**Job 结果**：
+- Job status: `completed`，39/39 steps all `completed`
+- 最终音频：168.66 秒 MP3（两章双人中文播客，Cherry/Ethan 双音色）
+- Segment 总数：2
+
+**Production Full DeepSeek 一致性**：
+- 调用：2 次，input 3,631 / output 3,350 / reasoning **2,893** tokens，latency 15.167s
+- 两段均裁决 `supported`，全部 checks PASS
+
+**Two-Tier Shadow**：
+- Qwen Tier1 调用：2 次（0001 PASS 0.837s / 0002 PASS 1.346s）
+- REVIEW 数：0（两段均直接 PASS）
+- DeepSeek escalation：0（avoided 100%）
+- Shadow reasoning tokens：0（DeepSeek 未调用）
+- Shadow latency：2.183s（vs production 15.167s，节省 12.984s）
+
+**对比指标**：
+- verdict agreement：100%（2/2）
+- flagged-turn agreement：100%（2/2）
+- reasoning reduction：**100.0%**（2,893 → 0 tokens）
+- shadow_false_negative_candidate：**0**
+- shadow-only warnings：**0**
+
+**可靠性**：
+- 1 次 failed physical request（旧会话 sandbox 无网络残留，resume 后自动重试成功）
+- 0 fallback，0 最终失败
+- telemetry 完整（30 条 physical_requests，llm_usage.json，tts_usage.json，shadow_consistency_comparison.json）
+
+**验收裁决**：✅ `SHADOW_ACCEPTED`
+
+## Not Completed / Production Boundary
+
+- **生产 Router 未修改**：Two-Tier 仍为 `PRODUCTION_CANDIDATE`，未标记 `PRODUCTION_ENABLED`
+- **未进入 Canary**，未 push
+- **成本 unpriced**：DeepSeek V4 Flash 与 Qwen3.7-Flash 计价配置缺失，estimated_cost = null（token 计量准确）
+- **两段均 PASS**：本次样本未触发 Tier2 escalation，Tier2 路径未真实执行（与验收标准不矛盾，FN=0 成立）
+
+## Last Stable Commit / Exact Next Step
+
+已验证功能提交：`efe71bb2b82050187ddc07d81a948a179a596587`  
+（Shadow Mode 实现提交，9 项专项测试通过，全量离线 742 passed）
+
+**下一步（需维护者授权）**：
+1. 维护者审阅 SHADOW_ACCEPTED 结果与 docs/experiments/phase19-3c-shadow.md
+2. 若决定提升为生产：授权将 `consistency_shadow_mode: false` 改为按路由配置，或启用 Two-Tier 为生产路径
+3. 未获授权前：不修改生产 Router，不删除 Full DeepSeek，不进入 Canary，不 push
+
+## Files To Read / Commands To Continue
+
+- `docs/experiments/phase19-3c-shadow.md` — 完整验收报告
+- `output/acceptance-shadow-phase19-3c/4ee2619ca81608020c508633/evaluation/shadow_consistency_comparison.json`
+- `output/acceptance-shadow-phase19-3c/4ee2619ca81608020c508633/usage/physical_requests.jsonl`
+- `src/bookcast/shadow_consistency.py`
+
+离线复验：
+```
+GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest -p no:cacheprovider tests/test_shadow_consistency.py -q
+GIT_CONFIG_GLOBAL=/dev/null python3 scripts/validate_project.py
+```
+
+**严禁未获授权前修改生产配置、进入 Canary、push 或自动触发新 API 请求。**
+
+---
+
 # Phase 19.3C Two-Tier Consistency Shadow Mode 实现完成（2026-09-27）
+
 
 ## Goal
 

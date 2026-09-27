@@ -2,6 +2,19 @@
 
 本文件只追加重要、可验证的开发事实。已写入的历史条目不重写；纠错另加条目。时间使用 UTC，后续条目包含任务、结果、测试与关联提交（若当时已存在）。
 
+## 2026-09-27T03:21:00Z — Phase 19.3C Shadow Mode Live 验收（SHADOW_ACCEPTED）
+
+- **命令**：`bookcast generate examples/mind_and_judgment.txt --config examples/model-routing-cloud.toml --output-dir output/acceptance-shadow-phase19-3c --mode two_host --minutes 3 --shadow-consistency`
+- **Job 结果**：completed，39/39 steps，生成 168.66s MP3，2 segments
+- **Production DeepSeek consistency**：2 次调用，in:3631 out:3350 reasoning:2893 tokens，15.167s，裁决 `supported`（两段）
+- **Shadow Two-Tier**：Qwen Tier1 2 次调用均 PASS（0.837s + 1.346s），0 escalation，DeepSeek avoided 100%，reasoning reduction 100%（2893→0）
+- **对比**：verdict agreement 100%，flagged-turn agreement 100%，FN=0，shadow-only warnings=0
+- **可靠性**：1 次 failed request（旧 sandbox 残留），0 fallback，0 最终失败，telemetry 完整
+- **验收裁决**：`SHADOW_ACCEPTED`（来自 `evaluation/shadow_consistency_comparison.json`）
+- **生产边界**：Router 冻结，未进入 Canary，未 push
+- **验证**：9 项 shadow 专项测试 passed，project validator passed
+- **关联提交**：`efe71bb2b82050187ddc07d81a948a179a596587`（实现提交，本 Live 验收未产生新 commit）
+
 ## 2026-09-27T03:00:00Z — Phase 19.3C Two-Tier Consistency Shadow Mode 实现
 
 - **目标**：将 Phase 19.3B 验证通过的 Two-Tier Consistency（PRODUCTION_CANDIDATE）以 Shadow Mode 方式接入真实 Pipeline，旁路运行，不影响生产裁决与 Job 成败。
