@@ -764,3 +764,5 @@
 - 2026-09-27T01:39:26Z Phase19.3B 冻结段0001：历史A未调用；B thinking off与C精简Prompt各1次正式Adapter请求，均HTTP200、schema有效、零重试。B reasoning usage未知、成本估算降47.98%、长度365字失败；C reasoning 707（比A降44.81%）、成本估算降39.74%、长度173字失败。专项149 passed，validator/compileall/diff通过；功能提交cd8cc544746d50d8c0f3df138007a23f92ccfabf，无Consistency/TTS/E2E/push。
 
 - 2026-09-27T01:47:53Z Phase19.3B Candidate D仅一次真实请求HTTP200/零重试：122字、5轮、交替/schema/coverage/重复率门禁通过；reasoning4630与估算成本¥0.020496均超过历史A，预声明成功条件失败，停止自动调参。151项专项、validator/compileall/diff通过；功能提交14dbe6c8fd1301176fe5214d8660449ff6e8969c，未进入Consistency/TTS/E2E、未push。
+
+- 2026-09-27T02:05:00Z Phase 19.3B Consistency 纯离线两级阶梯核验框架实现与基准评测：建立10类确定性测试集 `tests/fixtures/phase19_3b_consistency.json`，覆盖完全正确、轻微扩写、明显幻觉、数字错误、人物归因错误、丢失限定条件、原文矛盾等7类强制风险及历史0001/0002与假说边界用例；编写 `scripts/llm_reasoning_consistency.py` 实现Qwen3.7-Flash精简初筛（Tier 1）与DeepSeek定向复核（Tier 2）两级流控、结果合并与TP/TN/FP/FN/Recall/Precision指标计算；新增 `tests/test_llm_reasoning_consistency.py` 13项专项通过，全量离线 733 passed、1 skipped、7 deselected、10 subtests 通过（81.75s）。离线评测显示Two-Tier可减少30% DeepSeek调用，成本降低77.5%，召回率100%，假阴性为0。功能提交 c4a57c5ad29e09ca5809ef759798700c8cab3eff。未发起真实API调用，生产Router与TTS保持不变。

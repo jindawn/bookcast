@@ -1,3 +1,32 @@
+# Phase 19.3B Consistency 纯离线两级阶梯核验框架（2026-09-27）
+
+## Completed
+
+实现并锁定了 Phase 19.3B Consistency 优化实验的完整离线框架：
+1. **测试集与 Ground Truth**：在 [phase19_3b_consistency.json](../tests/fixtures/phase19_3b_consistency.json) 建立 10 类确定性测试用例，覆盖 7 类强制核心事实风险（完全正确、轻微无依据扩写、明显幻觉、数字错误、人物归因错误、丢失关键限定条件、与原文明显矛盾）以及历史真实段落 0001、0002 与假说思考实验边界；每个案例均有显式确定性的 `has_error`、`expected_tier1_status`、`flawed_turn_indices` 与 `expected_verdicts`。
+2. **两级阶梯核验（Two-Tier Consistency，Candidate C）**：编写 [llm_reasoning_consistency.py](../scripts/llm_reasoning_consistency.py)，实现 Tier 1 Qwen3.7-Flash 极简初筛契约 `Tier1ScreeningResult(status, suspicious_turn_ids, reasons)`，仅接收发言与精简论据；PASS 时直接放行，0 次 DeepSeek 调用；REVIEW 时升轨定向深度复核，仅将可疑轮次及对应 Claim 发送至 DeepSeek（严禁将整个 episode 再次交给 DeepSeek），并合并最终一致性结论。
+3. **指标评测与离线基准**：实现 TP/TN/FP/FN、精确率、召回率、升轨率、DeepSeek 规避率及基于计价快照的成本测算，结果归档于 [phase19-3b-consistency.md](experiments/phase19-3b-consistency.md) 与忽略目录 [benchmark JSON](../output/llm-reasoning-ab/consistency/offline-consistency-benchmark.json)。基准表明 Two-Tier 可规避 30% DeepSeek 调用，成本降低 77.5%，召回率 100%，假阴性（漏检）为 0。
+4. **安全与验证**：专项测试 [test_llm_reasoning_consistency.py](../tests/test_llm_reasoning_consistency.py) 13 项通过，全量离线 733 passed、1 skipped、7 deselected、10 subtests 全部通过（74.93s）；未发起真实 API 请求，生产 Router、Dialogue 生产配置及 TTS 均完全保持不变。
+
+## Not Completed / Evidence Limits
+
+目前仅完成纯离线架构、测试集、路由流控与基准度量，**尚未发起任何真实 Qwen 或 DeepSeek API 请求**。两级阶梯在真实模型输出下的实际初筛召回率与真实网络延迟仍待真实受控实验验证；当前不得宣称真实降本已在生产验证，也不能修改生产 Router。
+
+## Last Stable Commit / Exact Next Step
+
+已验证功能提交 `c4a57c5ad29e09ca5809ef759798700c8cab3eff`：新增 13 项专项与 10 类测试集，全量离线 733 项 pytest、validator、compileall、diff check 全过。交接快照自身按 D-006 不自引用。下一步等待用户对最小真实实验进行授权：计划选取 `case_1`（完全正确）与 `case_4`（数字错误）进行最小真实调用（预计 Qwen 2 次，DeepSeek 1 次）；未获授权前不发起真实调用，不修改生产配置，不进行 push。
+
+## Files To Read / Commands To Continue
+
+`docs/experiments/phase19-3b-consistency.md`、`scripts/llm_reasoning_consistency.py`、`tests/fixtures/phase19_3b_consistency.json`、`tests/test_llm_reasoning_consistency.py`、`docs/STATE.json`。
+仅离线验证命令：
+`GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest -p no:cacheprovider -q tests/test_llm_reasoning_consistency.py tests/test_llm_reasoning_dialogue.py tests/test_generation.py tests/test_cost_telemetry.py`；
+`GIT_CONFIG_GLOBAL=/dev/null python3 scripts/validate_project.py`；
+`GIT_CONFIG_GLOBAL=/dev/null git diff --check`。
+**严禁自行添加 `--live` 发起真实 API 请求。**
+
+---
+
 # Phase 19.3B Dialogue Candidate D 单次实验（2026-09-27）
 
 ## Completed

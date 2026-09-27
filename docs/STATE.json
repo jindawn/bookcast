@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-19",
-  "current_task": "Phase19.3B Dialogue Candidate D单次实验完成；输出形状通过、reasoning/成本成功条件失败",
+  "current_task": "Phase19.3B Consistency 离线两级阶梯核验框架与10类确定性测试集实现完成，待真实实验授权",
   "task_status": "completed",
   "branch": "codex/phase19-clean-history",
-  "last_verified_commit": "14dbe6c8fd1301176fe5214d8660449ff6e8969c",
+  "last_verified_commit": "c4a57c5ad29e09ca5809ef759798700c8cab3eff",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -148,12 +148,14 @@
     "Phase19.3B DeepSeek非2xx安全错误观察及冻结Baseline A独立单请求诊断；诊断未收到HTTP响应，C/B未运行。",
     "Phase19.3B最小DeepSeek官方Chat Completion仅一次真实请求：HTTP400、无上游详情；Baseline A未执行。",
     "Phase19.3B Dialogue冻结段0001：历史A复用，B/C各一次HTTP200、schema有效、零重试；两者长度门禁失败，统一指标报告已保存。",
-    "Phase19.3B Dialogue Candidate D仅一次HTTP200请求：122字/5轮、Claim coverage100%、schema和交替通过；reasoning4630/成本¥0.020496超过A，停止调参。"
+    "Phase19.3B Dialogue Candidate D仅一次HTTP200请求：122字/5轮、Claim coverage100%、schema和交替通过；reasoning4630/成本¥0.020496超过A，停止调参。",
+    "Phase19.3B Consistency 离线两级阶梯核验框架与10类确定性测试集实现完成：10类确定性fixture建立并验证，llm_reasoning_consistency.py实现Qwen3.7-Flash初筛与DeepSeek定向深度复核两级流控与指标计算，专项13 passed，离线全量733 passed，离线评测DeepSeek调用减少30%、成本降77.5%、召回率100%，无真实网络调用。"
   ],
   "in_progress": [],
   "next_actions": [
+    "等待用户授权 Phase 19.3B Consistency 最小真实实验（建议候选用例 case_1 与 case_4，预计 Qwen 2 次、DeepSeek 1 次）；未获授权前严禁发起真实网络调用。",
     "维护者先审阅D的高reasoning/成本和文本质量；任何新Dialogue策略或真实调用需要另行授权，不重跑B/C/D。",
-    "Phase19.3B Consistency仍未开始，禁止自动进入；生产配置和TTS保持不变。",
+    "生产配置、Dialogue生产配置与TTS保持完全冻结不变，不直接修改生产Router。",
     "先只读核对当前环境代理/网络配置或获取本次400的脱敏中间层/服务端诊断；再次真实请求须用户重新授权，不得自动重试。",
     "收集用户对 Phase 19.3A TTS A/B 盲听评价表（evaluation/tts_ab_blind_score.json）的人工打分与质性反馈。",
     "根据听感盲测与成本效益评估，确定默认 TTS 策略（标准层 vs 高画质层）。",
@@ -165,6 +167,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "phase-19-3b-consistency-offline",
+      "command": "GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest -p no:cacheprovider tests/test_llm_reasoning_consistency.py -q; GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest -p no:cacheprovider -q",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "Phase 19.3B Consistency 纯离线两级阶梯核验框架验证：10类确定性测试集及Ground Truth建立，llm_reasoning_consistency.py实现Tier 1初筛与Tier 2定向复核两级流控与指标计算，专项13 passed，全量默认离线 733 passed、1 skipped、7 deselected、10 subtests 全部通过（81.75s）；未发起真实网络调用，生产Router及TTS完全未变。",
+      "checked_at": "2026-09-27T02:07:45Z"
+    },
     {
       "name": "phase-19-3a-tts-ab-acceptance",
       "command": ".venv/bin/python scripts/run_tts_ab.py",
@@ -1493,7 +1503,23 @@
     {
       "path": "docs/experiments/phase19-3b-dialogue-d.json",
       "purpose": "Candidate D单次请求的机器可读安全指标及A/C对比"
+    },
+    {
+      "path": "docs/experiments/phase19-3b-consistency.md",
+      "purpose": "Phase 19.3B Consistency 纯离线两级阶梯核验框架设计与基准评测报告"
+    },
+    {
+      "path": "scripts/llm_reasoning_consistency.py",
+      "purpose": "Consistency 离线基准评测与受控两级阶梯核验实验 Runner"
+    },
+    {
+      "path": "tests/fixtures/phase19_3b_consistency.json",
+      "purpose": "Consistency 10类确定性测试集与显式Ground Truth"
+    },
+    {
+      "path": "tests/test_llm_reasoning_consistency.py",
+      "purpose": "Consistency 离线契约、两级流控与指标计算专项测试"
     }
   ],
-  "updated_at": "2026-09-27T01:47:53Z"
+  "updated_at": "2026-09-27T02:08:20Z"
 }
