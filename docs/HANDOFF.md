@@ -1,3 +1,23 @@
+# Phase 19.3B Dialogue B/C 单次受控实验（2026-09-27）
+
+## Completed
+
+在 `codex/phase19-clean-history` 上保持冻结段0001。当前进程可读取 `DEEPSEEK_API_KEY`，未输出或保存值。A只使用历史真实E2E数据，未重调；B thinking off和C精简Prompt各通过正式Adapter发出**一次**请求，两次HTTP200、schema有效、物理attempt index 0、零重试。旧HTTP400收据保留。统一指标和人工文本审读见 [phase19-3b-dialogue-controlled.md](experiments/phase19-3b-dialogue-controlled.md) 与 [JSON报告](experiments/phase19-3b-dialogue-controlled.json)。B估算成本比A低47.98%，但reasoning tokens未报告；C reasoning tokens比A低44.81%，估算成本低39.74%，其中C有1024缓存命中。两者都因长度超标未通过确定性质量门禁，未选Winner、未修改生产配置。没有TTS/音频/E2E/Consistency或push。
+
+## Not Completed / Evidence Limits
+
+B reasoning reduction/ratio未知，不能记为零。A延迟是历史Attempt journal区间，B/C是本机请求区间，百分比只作方向性参考。文本人工审读未见明显无依据来源归属，但不等于完整语义或真人试听验收。B显著过长，C略长且结尾追问未得到回应。原B/C HTTP400的上游原因仍未知；本次成功不能证明旧400根因。
+
+## Last Stable Commit / Exact Next Step
+
+已验证功能提交 `cd8cc544746d50d8c0f3df138007a23f92ccfabf`（149项专项、project validator、compileall、diff check）；本交接快照提交按D-006不自引用。先由维护者审阅B/C长度门禁失败及文本质量，再决定是否授权任何新实验。不要重复本轮B/C请求、不要自动进入Consistency或改生产路由。
+
+## Files To Read / Commands To Continue
+
+`docs/experiments/phase19-3b-dialogue-controlled.md`、`docs/experiments/phase19-3b-dialogue-controlled.json`、`scripts/llm_reasoning_diagnostic.py`、`tests/fixtures/phase19_3b_dialogue.json`、`docs/STATE.json`。离线复验：`.venv/bin/python -m pytest -q tests/test_llm_reasoning_dialogue.py tests/test_generation.py tests/test_providers.py tests/test_cost_telemetry.py`；`python3 scripts/validate_project.py`；`.venv/bin/python -m compileall src tests scripts -q`；`git diff --check`。
+
+---
+
 # Phase 19.3B 最小 DeepSeek API 请求诊断（2026-09-27）
 
 使用当前进程密钥对官方`/chat/completions`发出一次最小请求：`deepseek-flash`、单条“只回复：OK”user message，无response_format、thinking、tools或结构化输出。收到HTTP 400，约0.146秒；响应未提供可提取的code、message、request_id或content-type。脱敏收据在忽略目录`output/llm-reasoning-ab/dialogue/diagnostics/minimal-chat-20260927.json`。仅能确认有HTTP响应，不能确定它由DeepSeek源站还是中间代理返回，也不能判断Key/model有效性或此前B/C的400根因。按用户门禁未执行Baseline A；本轮总计一次真实请求、零重试，B/C/Consistency/TTS/E2E均未运行。
