@@ -753,3 +753,5 @@
 
 - 2026-09-26 Phase19.3B Dialogue单次实验：冻结段0001历史A不重调（input1666/output1614/reasoning1281，旧Attempt约7.495s，估算0.008122元，133字/5轮，Claim coverage75%）。B thinking off与C精简instruction各发1次物理DeepSeek请求、0重试，均HTTP400 `input_error`，无usage/输出；失败安全receipt及物理遥测归档 `docs/experiments/phase19-3b-dialogue-one-shot.json`。因此reasoning/成本/生成延迟降幅和内容质量不可评估。专项96 passed，validator/diff check通过；无TTS/E2E/Consistency、无push。
 - 2026-09-27：Dialogue单次B/C失败证据功能提交 `e2c8eac04a5457b3051ca9f4f7baf402fe3b5d44` 上复测专项96 passed、validator/提交差异检查通过；交接快照不自引用，未push、未发额外API请求。
+
+- 2026-09-27 Phase19.3B HTTP400离线审计：保存E2E ProviderSpec与runner同端点/模型/超时/默认生成策略；当前`_chat` AST和E2E代码一致。正式Adapter离线拦截显示A→B只增thinking disabled，A→C只改user instruction；共享的schema JSON模式等请求体字段相同。B/C原始上游HTTP body/code/message并未持久化，内部仅留input_error；用户确认无其他脱敏日志，故确切根因未知，没有凭据进行修复或重跑。新增wire合同离线回归，相关Provider/Dialogue 145 passed；无真实API、无TTS/Consistency/生产变更。

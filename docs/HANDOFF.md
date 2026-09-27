@@ -1,3 +1,23 @@
+# Phase 19.3B Dialogue HTTP400 纯离线审计（2026-09-27）
+
+## Completed
+
+按用户要求没有任何新真实 API 调用。已核对历史成功 E2E 的保存 ProviderSpec、冻结 prompt/schema、B/C 安全 receipt/物理遥测、当前与 E2E 当时 `CompatibleLLMProvider._chat` 实现。字段级证据见 [phase19-3b-http400-audit.md](experiments/phase19-3b-http400-audit.md)：A→B 仅增加 `thinking={type:disabled}`，A→C 仅精简 user instruction；端点、`deepseek-flash` 模型、system schema消息、`json_object`、stream false、120秒超时和其他 body 字段均相同。runner 直接复用正式Adapter，不存在第二套 HTTP payload 组装。新增离线 wire 回归；相关 Dialogue/Provider 测试145 passed，validator/compileall/diff check通过。生产Provider/Router、TTS和Consistency未改。
+
+## Not Completed / Evidence Gap
+
+两次HTTP400的上游 response body、error code、message **未保存**。`classify_http` 读取body仅作分类，之后丢弃；现有安全遥测只保留内部 `input_error`。用户确认无额外控制台或代理脱敏日志。因此**确切根因不能纯离线确认**，也没有可证实的修复；不能说thinking off不支持，不能把C的失败归于Prompt，不能安全重跑B/C。无新实测reasoning/成本/质量数据。
+
+## Last Stable Commit / Exact Next Step
+
+先前已验证功能提交 `e2c8eac04a5457b3051ca9f4f7baf402fe3b5d44`；本次离线审计提交及交接快照在Git/STATE更新，快照不自引用。下一步先尝试找回旧请求的可信**脱敏**上游 code/type/message（当前没有）；或在用户另行授权后，设计独立、有界的诊断请求及安全错误观察点。未取得证据前不修改生产或实验wire、不重跑失败receipt、不进入Consistency。保持 `codex/phase19-clean-history`，不push。
+
+## Files To Read / Commands To Continue
+
+`docs/experiments/phase19-3b-http400-audit.md`、`docs/experiments/phase19-3b-dialogue-one-shot.json`、`scripts/llm_reasoning_dialogue.py`、`src/bookcast/adapters/compatible.py`、`tests/test_llm_reasoning_dialogue.py`、`docs/STATE.json`。离线命令：`.venv/bin/python -m pytest -q tests/test_llm_reasoning_dialogue.py tests/test_generation.py tests/test_providers.py tests/test_cost_telemetry.py`；`python3 scripts/validate_project.py`；`.venv/bin/python -m compileall src tests scripts -q`；`git diff --check`。不要执行`--live`。
+
+---
+
 # Phase 19.3B Dialogue 单次请求检查点（2026-09-26）
 
 ## Completed

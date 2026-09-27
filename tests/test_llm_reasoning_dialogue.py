@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from bookcast.adapters.compatible import CompatibleLLMProvider
 from bookcast.content_models import SegmentScript
 from bookcast.generation import GenerationConfig
 from bookcast.provider_config import ProviderSpec
@@ -91,3 +92,46 @@ def test_candidate_totals_preserve_unknown_usage_and_gate():
     assert totals['reasoning_tokens'] is None and totals['reasoning_ratio'] is None
     assert totals['estimated_cost_cny'] is None
     assert totals['quality_gate'] == 'pending_semantic_and_listening_review'
+
+
+def test_experiment_final_wire_matches_historical_provider_except_intended_variable(tmp_path, monkeypatch):
+    """Capture the official adapter boundary offline; never open a socket."""
+    frozen = fixture()
+    item = frozen['dialogue'][0]
+    historical = next(p for p in frozen['cost_snapshot']['providers'] if p['name'] == 'deepseek')
+    captured = []
+
+    class WireCaptured(Exception):
+        pass
+
+    def capture(self, route, payload=None):
+        captured.append((self.spec, route, payload))
+        raise WireCaptured()
+
+    monkeypatch.setattr(CompatibleLLMProvider, '_request', capture)
+    with pytest.raises(WireCaptured):
+        CompatibleLLMProvider(ProviderSpec(**historical)).for_task(item['task']).generate_structured(
+            item['baseline_prompt'], SegmentScript)
+    baseline_spec, baseline_route, baseline_body = captured.pop()
+    assert baseline_route == 'chat/completions'
+
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'test-only-offline')
+    frozen['dialogue'] = [item]
+    for candidate in ('reduced', 'focused'):
+        with pytest.raises(RuntimeError, match='safe receipt'):
+            run_live(frozen, candidate, tmp_path / candidate)
+        spec, route, body = captured.pop()
+        assert route == baseline_route
+        assert (spec.base_url, spec.model, spec.timeout_seconds) == (
+            baseline_spec.base_url, baseline_spec.model, baseline_spec.timeout_seconds)
+        assert body['model'] == baseline_body['model']
+        assert body['messages'][0] == baseline_body['messages'][0]
+        assert body['response_format'] == baseline_body['response_format'] == {'type': 'json_object'}
+        assert body['stream'] is baseline_body['stream'] is False
+        assert not {'max_tokens', 'tools', 'tool_choice', 'reasoning_effort'} & body.keys()
+        if candidate == 'reduced':
+            assert body == {**baseline_body, 'thinking': {'type': 'disabled'}}
+        else:
+            assert body['messages'][1]['content'] == candidate_prompt(item, 'focused')
+            assert {k: v for k, v in body.items() if k != 'messages'} == {
+                k: v for k, v in baseline_body.items() if k != 'messages'}
