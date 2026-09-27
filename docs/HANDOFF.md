@@ -12,7 +12,7 @@ B/C 均未生成，reasoning/latency/cost降幅、事实忠实、对话自然度
 
 ## Last Stable Commit
 
-当前代码基线 `2b786eaec8c1e0a0780a5979de0e99c0a6c761b2`；本检查点功能提交及后续验证以 `git log -1` 和 STATE 的 `last_verified_commit` 为准。保持干净历史分支 `codex/phase19-clean-history`；旧 `main` 含历史凭证，绝不可误推。
+已验证功能提交 `e2c8eac04a5457b3051ca9f4f7baf402fe3b5d44`；交接快照自身按 D-006 不自引用。保持干净历史分支 `codex/phase19-clean-history`；旧 `main` 含历史凭证，绝不可误推。
 
 ## Exact Next Step
 
