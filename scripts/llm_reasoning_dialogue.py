@@ -34,6 +34,10 @@ FOCUSED = (
     '若 revision 大于0且提供 repair_issues，针对其 turn_index 纠正矛盾或删除无依据推断，'
     '其余内容保持稳定。'
 )
+LENGTH_CONTROL = (
+    ' 本段恰好5轮，发言人依次为主持人、嘉宾、主持人、嘉宾、主持人。'
+    '每轮正文24–30字符，总正文120–150字符（含标点，不计发言人字段）；每轮只讲一个要点。'
+)
 
 
 def fixture() -> dict:
@@ -49,11 +53,11 @@ def fixture() -> dict:
 def candidate_prompt(item: dict, candidate: str) -> str:
     if candidate == 'reduced':
         return item['baseline_prompt']
-    if candidate != 'focused':
+    if candidate not in {'focused', 'length_control'}:
         raise ValueError('unknown candidate')
     value = json.loads(item['baseline_prompt'])
     assert value['instruction'].endswith(COMMON)
-    value['instruction'] = FOCUSED + COMMON
+    value['instruction'] = FOCUSED + (LENGTH_CONTROL if candidate == 'length_control' else '') + COMMON
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 

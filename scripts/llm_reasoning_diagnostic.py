@@ -20,13 +20,22 @@ from scripts.llm_reasoning_dialogue import candidate_prompt, estimate_cost, fixt
 OUTPUT = Path('output/llm-reasoning-ab/dialogue/diagnostics')
 
 
+def validate_dialogue_shape(script: SegmentScript) -> dict:
+    speakers = [turn.speaker for turn in script.turns]
+    chars = sum(len(turn.text) for turn in script.turns)
+    checks = {'schema_valid': True, 'exactly_five_turns': len(script.turns) == 5,
+              'chars_120_to_150': 120 <= chars <= 150,
+              'speaker_alternation': speakers == ['主持人', '嘉宾', '主持人', '嘉宾', '主持人']}
+    return {'passed': all(checks.values()), 'checks': checks}
+
+
 def run(candidate: str, output: Path = OUTPUT) -> dict:
-    if candidate not in {'baseline', 'reduced', 'focused'}:
+    if candidate not in {'baseline', 'reduced', 'focused', 'length_control'}:
         raise ValueError('Unknown diagnostic candidate')
     if not os.environ.get('DEEPSEEK_API_KEY'):
         raise RuntimeError('DEEPSEEK_API_KEY unavailable')
     item = fixture()['dialogue'][0]
-    prompt = item['baseline_prompt'] if candidate != 'focused' else candidate_prompt(item, 'focused')
+    prompt = item['baseline_prompt'] if candidate in {'baseline', 'reduced'} else candidate_prompt(item, candidate)
     schema = SegmentScript.model_json_schema()
     if fingerprint({'prompt': item['baseline_prompt'], 'schema': schema}) != item['baseline_input_hash']:
         raise RuntimeError('Frozen baseline input mismatch')
@@ -63,8 +72,30 @@ def run(candidate: str, output: Path = OUTPUT) -> dict:
             row['quality_gate'] = quality_gate(row['metrics'], baseline)
             row['estimated_cost_cny'] = estimate_cost(provider.last_usage, datetime.now(timezone.utc),
                                                       fixture()['cost_snapshot'])
+            if candidate == 'length_control':
+                shape = validate_dialogue_shape(script)
+                row['deterministic_validator'] = shape
+                reasons = list(row['quality_gate']['reasons'])
+                reasons += [name for name, passed in shape['checks'].items() if not passed]
+                if row['metrics']['claim_coverage'] is None or row['metrics']['claim_coverage'] < .75:
+                    reasons.append('claim_coverage_below_75pct')
+                if row['metrics']['repetition'] != 0:
+                    reasons.append('repetition_nonzero')
+                row['quality_gate'] = {'status': 'failed' if reasons else 'pending_semantic_and_listening_review',
+                                       'reasons': list(dict.fromkeys(reasons))}
+                reasoning = provider.last_usage.reasoning_tokens if provider.last_usage else None
+                success_reasons = list(row['quality_gate']['reasons'])
+                if reasoning is None or reasoning >= 1281:
+                    success_reasons.append('reasoning_not_below_baseline')
+                if row['estimated_cost_cny'] is None or row['estimated_cost_cny'] >= .008122:
+                    success_reasons.append('cost_not_below_baseline')
+                row['success_gate'] = {'passed': not success_reasons, 'reasons': success_reasons}
         except Exception:
             row['schema_valid'] = False
+            if candidate == 'length_control':
+                row['deterministic_validator'] = {'passed': False, 'checks': {'schema_valid': False}}
+                row['quality_gate'] = {'status': 'failed', 'reasons': ['schema_invalid']}
+                row['success_gate'] = {'passed': False, 'reasons': ['schema_invalid']}
     except ProviderError as exc:
         row['status'] = 'http_error' if provider.last_http_error_observation else 'provider_error'
         row['error_kind'] = exc.kind.value
@@ -77,7 +108,7 @@ def run(candidate: str, output: Path = OUTPUT) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--candidate', choices=['baseline', 'reduced', 'focused'], required=True)
+    parser.add_argument('--candidate', choices=['baseline', 'reduced', 'focused', 'length_control'], required=True)
     parser.add_argument('--output', type=Path, default=OUTPUT)
     args = parser.parse_args()
     row = run(args.candidate, args.output)
