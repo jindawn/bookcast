@@ -2,7 +2,28 @@
 
 本文件只追加重要、可验证的开发事实。已写入的历史条目不重写；纠错另加条目。时间使用 UTC，后续条目包含任务、结果、测试与关联提交（若当时已存在）。
 
-## 2026-09-26T14:15:00Z — Phase 19.3A TTS 成本模型纠偏与 A/B 对比数据校准
+## 2026-09-27T03:00:00Z — Phase 19.3C Two-Tier Consistency Shadow Mode 实现
+
+- **目标**：将 Phase 19.3B 验证通过的 Two-Tier Consistency（PRODUCTION_CANDIDATE）以 Shadow Mode 方式接入真实 Pipeline，旁路运行，不影响生产裁决与 Job 成败。
+- **新增文件**：
+  - `src/bookcast/shadow_consistency.py`（~350 行）：`Tier1ScreeningResult` Pydantic 模型、`tier1_screening_prompt()`、`tier2_review_prompt()`、`resolve_shadow_providers()`、`run_shadow_consistency_for_segment()`、`save_shadow_consistency_comparison()`。
+  - `tests/test_shadow_consistency.py`（9 项测试）：默认值、prompt 过滤、turn ID 规范化、metrics、FN 检测、mock E2E 集成、异常容忍、CLI flag。
+- **修改文件**：
+  - `src/bookcast/content_models.py`：`ContentOptions.consistency_shadow_mode: bool = False`
+  - `src/bookcast/provider_config.py`：`LLMRouting.consistency_shadow_mode: bool = False`
+  - `src/bookcast/content.py`：`_run_shadow_consistency()` 方法 + 2 个调用点（初始评审后 & 修复循环后），全异常静默捕获
+  - `src/bookcast/content_mock.py`：`consistency_tier1` op + `consistency` turn_index 读取修复
+  - `src/bookcast/pipeline.py`：`generate()`/`resume_job()` 新增 `consistency_shadow_mode` 参数；Shadow OFF 时仅存 `{'mode', 'minutes'}`（backward compat）
+  - `src/bookcast/cli.py`：`--shadow-consistency / --no-shadow-consistency` flag
+  - `tests/conftest.py`：`test_shadow_consistency` 注册至 `INTEGRATION_MODULES`
+- **测试结果**：
+  - `test_shadow_consistency.py`：9 passed
+  - 全量离线 suite：**742 passed, 1 skipped, 7 deselected, 10 subtests**（74.64s）— 无回归
+- **提交**：`efe71bb2b82050187ddc07d81a948a179a596587`（feat(llm): implement Two-Tier consistency shadow mode in core pipeline）
+- **生产状态**：Router 未修改，`consistency_shadow_mode` 默认 false，两配置层均未开启。
+- **Live 验收**：上一 session 在 sandbox 内因 Qwen API 网络不可达受阻（`http_status: null`，9ms）；需 BypassSandbox + 用户授权后执行。
+
+
 
 - 背景与原因：
   * Phase 19.3A 初始汇报中将 Gemini 3.8 Flash-Lite TTS 误按字符计费（套用 Qwen 计费模型：15 元/百万字），得出“Gemini 便宜 81.24%”、“25分钟仅需 0.10 元”的错误结论。

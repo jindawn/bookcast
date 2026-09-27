@@ -2,10 +2,11 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-19",
-  "current_task": "Phase 19.3B Consistency Live Validation Set 完成（FN=0，通过6项Gate标记为 PRODUCTION_CANDIDATE），生产Router保持冻结",
+  "current_task": "Phase 19.3C Two-Tier Consistency Shadow Mode 实现完成：shadow_consistency.py 新增、pipeline/CLI/mock 集成、9项专项测试通过、生产Router保持冻结、Live验收待授权",
   "task_status": "completed",
   "branch": "codex/phase19-clean-history",
-  "last_verified_commit": "97ce2f986407ca816eb2ff08287af275a1b20ab3",
+  "last_verified_commit": "efe71bb2b82050187ddc07d81a948a179a596587",
+
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -151,10 +152,12 @@
     "Phase19.3B Dialogue Candidate D仅一次HTTP200请求：122字/5轮、Claim coverage100%、schema和交替通过；reasoning4630/成本¥0.020496超过A，停止调参。",
     "Phase19.3B Consistency 离线两级阶梯核验框架与10类确定性测试集实现完成：10类确定性fixture建立并验证，llm_reasoning_consistency.py实现Qwen3.7-Flash初筛与DeepSeek定向深度复核两级流控与指标计算，专项13 passed，离线全量733 passed，离线评测DeepSeek调用减少30%、成本降77.5%、召回率100%，无真实网络调用。",
     "Phase19.3B Consistency 最小受控 Live Smoke 完成：经用户明确授权，对冻结测试集 case_1（完全正确）与 case_4（数字错误）执行真实请求，总计 3 次物理请求全部成功（HTTP 200，0 重试，0 失败）。Case 1 Tier 1 Qwen3.7-Flash 耗时 0.915s、成本 ¥0.001020，返回 PASS 且 0 次 DeepSeek 调用（规避率 100%）；Case 4 Tier 1 Qwen 耗时 2.498s 返回 REVIEW 并精准锁定 turn 4，随后 Tier 2 DeepSeek 仅定向复核 turn 4（耗时 1.510s、Reasoning 118 tokens、成本 ¥0.001508，未发送整篇），准确裁决 contradicted 并确认事实错误。2 样本统计：升轨率 50%，DeepSeek 规避率 50%，TP=1, TN=1, FP=0, FN=0，总估算成本 ¥0.003718。脱敏遥测与收据落盘于 output/llm-reasoning-ab/consistency/live-smoke-20260927/。未进入下一批测试，生产 Router 与 TTS 保持不变，未 push。",
-    "Phase 19.3B Consistency Live Validation Set 验证完成：执行 6 个受控测试用例（负样本 case_1 复用、case_10 PASS；正样本 case_3 幻觉、case_5 归因、case_6 限定词、case_7 矛盾全部 REVIEW 升轨），新增 9 次物理请求（Qwen 5 次，DeepSeek 4 次，0 重试，0 失败），TP=4, TN=2, FP=0, FN=0（检出召回率 100%，特异度 100%，错误轮次定位精确度 100%），DeepSeek 定向复核平均 Reasoning 降至 191 tokens（降幅 92.4%），新增耗时 17.888s、成本 ¥0.011522；6 项生产候选 Gate 全部通过，架构状态标记为 PRODUCTION_CANDIDATE，生产 Router/配置与 TTS 保持完全冻结不变，未 push。"
+    "Phase 19.3B Consistency Live Validation Set 验证完成：执行 6 个受控测试用例（负样本 case_1 复用、case_10 PASS；正样本 case_3 幻觉、case_5 归因、case_6 限定词、case_7 矛盾全部 REVIEW 升轨），新增 9 次物理请求（Qwen 5 次，DeepSeek 4 次，0 重试，0 失败），TP=4, TN=2, FP=0, FN=0（检出召回率 100%，特异度 100%，错误轮次定位精确度 100%），DeepSeek 定向复核平均 Reasoning 降至 191 tokens（降幅 92.4%），新增耗时 17.888s、成本 ¥0.011522；6 项生产候选 Gate 全部通过，架构状态标记为 PRODUCTION_CANDIDATE，生产 Router/配置与 TTS 保持完全冻结不变，未 push。",
+    "Phase 19.3C Two-Tier Consistency Shadow Mode 实现完成：新增 shadow_consistency.py（Tier1 Qwen 初筛 + Tier2 DeepSeek 定向复核 + 对比生产裁决 + 评估报告写盘）、ContentOptions/LLMRouting 配置扩展（默认 false，向后兼容）、ContentFlow._run_shadow_consistency 集成（静默容错）、pipeline/CLI shadow flag 传递、content_mock 新增 consistency_tier1 op、9 项专项测试全部通过；全量离线 742 passed/1 skipped/7 deselected/10 subtests；生产 Router 完全冻结，Live 验收待用户授权。提交 efe71bb2b82050187ddc07d81a948a179a596587。"
   ],
   "in_progress": [],
   "next_actions": [
+    "用户授权后执行 Phase 19.3C Shadow Mode Live 验收（BypassSandbox: true，需 DEEPSEEK_API_KEY + DASHSCOPE_API_KEY，例子文本 examples/mind_and_judgment.txt，--shadow-consistency flag）；验收通过后审查 evaluation/shadow_consistency_comparison.json 的 verdict agreement 与 shadow_false_negative_candidate 字段。",
     "维护者审阅 Phase 19.3B Consistency Live Validation 评测与 PRODUCTION_CANDIDATE 状态；当前保持严格停机，任何进一步真实测试或生产路由集成需重新授权。",
     "维护者先审阅D的高reasoning/成本和文本质量；任何新Dialogue策略或真实调用需要另行授权，不重跑B/C/D。",
     "生产配置、Dialogue生产配置与TTS保持完全冻结不变，不直接修改生产Router。",

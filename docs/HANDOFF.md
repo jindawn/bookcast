@@ -1,3 +1,84 @@
+# Phase 19.3C Two-Tier Consistency Shadow Mode 实现完成（2026-09-27）
+
+## Goal
+
+将 Two-Tier Consistency（Phase 19.3B PRODUCTION_CANDIDATE）接入真实 Bookcast Pipeline 的 **Shadow Mode**，即旁路运行并记录对比结果，不覆盖生产裁决，不影响 Job 成败。
+
+## Completed
+
+1. **Shadow Mode 核心模块** `src/bookcast/shadow_consistency.py`（新增，~350 行）：
+   - `Tier1ScreeningResult` Pydantic 模型（含 `turn_index` 规范化）
+   - `tier1_screening_prompt()` — Qwen 初筛 prompt（仅含 source turns 与引用 claims）
+   - `tier2_review_prompt()` — DeepSeek 定向复核 prompt（仅含 suspicious turns）
+   - `resolve_shadow_providers()` — 从 `RoutedLLMChain.routes` 解析 Tier1=cheap(Qwen) / Tier2=high_quality(DeepSeek)
+   - `run_shadow_consistency_for_segment()` — 完整 Shadow 流：T1 → 升轨 → T2 → 合并 → 对比生产 → 写 `evaluation/shadow/{segment_id}.json`
+   - `save_shadow_consistency_comparison()` — 聚合所有 segment → 写 `evaluation/shadow_consistency_comparison.json`，含接受决策（`shadow_false_negative_candidate == 0` 为 `SHADOW_ACCEPTED`）
+
+2. **配置层扩展**：
+   - `src/bookcast/content_models.py`：`ContentOptions.consistency_shadow_mode: bool = False`
+   - `src/bookcast/provider_config.py`：`LLMRouting.consistency_shadow_mode: bool = False`
+
+3. **Pipeline 集成** `src/bookcast/content.py`：
+   - 新增 `_run_shadow_consistency()` 方法，在初始一致性评审后和每次修复循环后调用
+   - 全部异常静默捕获（try/except），永远不阻断主流水线
+
+4. **Mock 支持** `src/bookcast/content_mock.py`：
+   - 新增 `consistency_tier1` operation（返回带全部 source turn IDs 的 REVIEW）
+   - 修复 `consistency` operation 的 `turn_index` 读取（用 dict payload 显式读取，非 enumerate index）
+
+5. **Pipeline 传递** `src/bookcast/pipeline.py`：
+   - `generate()` 与 `resume_job()` 新增 `consistency_shadow_mode: bool | None` 参数
+   - Shadow OFF 时 `content_options` 仅存 `{'mode': ..., 'minutes': ...}`（完全向后兼容）；Shadow ON 时存完整 `model_dump()`
+
+6. **CLI** `src/bookcast/cli.py`：
+   - `generate` 与 `acquire` 命令新增 `--shadow-consistency / --no-shadow-consistency` flag
+
+7. **测试** `tests/test_shadow_consistency.py`（新增，9 项）：
+   - 默认值、prompt 结构与过滤、turn ID 规范化、metrics 计算、FN 检测、mock E2E 集成、异常容忍、CLI flag
+   - 全部 9 项通过
+
+**提交**: `efe71bb2b82050187ddc07d81a948a179a596587` — `feat(llm): implement Two-Tier consistency shadow mode in core pipeline`
+
+## Not Completed / Production Boundary
+
+- **生产 Router 未修改**：`consistency_shadow_mode` 默认 `false`，两个配置层均未开启。
+- **`PRODUCTION_ENABLED` 未设置**：Two-Tier 仍是 PRODUCTION_CANDIDATE，Shadow Mode 是接受测试层。
+- **Live 验收受阻**：上一 session 尝试运行真实 pipeline 时 Qwen API 在 sandbox 内网络不可达（`http_status: null`，9ms 延迟）。需 `BypassSandbox: true` + 真实凭证才能执行。
+- **Live 验收未获用户明确授权**：任何真实 pipeline 请求均需用户在本 session 重新授权。
+
+## Last Stable Commit / Exact Next Step
+
+已验证功能提交 `efe71bb2b82050187ddc07d81a948a179a596587`：
+- 9 项 shadow 专项测试通过
+- 全量离线 suite 733 passed（Phase 19.3B 基线），当前会话已再次验证通过
+- `python3 scripts/validate_project.py`、`git diff --check` 通过
+
+**下一步**（如用户授权）：
+1. 使用 `BypassSandbox: true` 运行 Shadow Mode Live 验收：
+   ```
+   DEEPSEEK_API_KEY="${ANTHROPIC_AUTH_TOKEN}" .venv/bin/bookcast generate \
+     examples/mind_and_judgment.txt \
+     --config examples/model-routing-cloud.toml \
+     --output-dir output/acceptance-shadow-phase19-3c \
+     --mode two_host --minutes 3 --shadow-consistency
+   ```
+2. 验收通过后，将 Shadow 对比数据纳入生产候选决策。
+
+## Files To Read / Commands To Continue
+
+`src/bookcast/shadow_consistency.py`、`src/bookcast/content.py`、`src/bookcast/pipeline.py`、`src/bookcast/cli.py`、`tests/test_shadow_consistency.py`、`docs/STATE.json`。
+
+离线复验：
+```
+GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest -p no:cacheprovider tests/test_shadow_consistency.py -q
+GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m pytest -p no:cacheprovider -q
+GIT_CONFIG_GLOBAL=/dev/null python3 scripts/validate_project.py
+```
+
+**严禁在未获用户明确授权前发起真实 API 请求、运行 TTS、生成音频或修改生产配置。**
+
+---
+
 # Phase 19.3B Consistency Live Validation Set 完成与生产候选 Gate 评估（2026-09-27）
 
 ## Completed
