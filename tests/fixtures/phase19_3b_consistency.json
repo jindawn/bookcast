@@ -1,0 +1,1693 @@
+{
+  "schema_version": 1,
+  "source_sha256": "b30a16bd39cf8924da501dfa005be4bc9eea549045f08dd597669bde152dde94",
+  "baseline_totals": {
+    "calls": 2,
+    "input_tokens": 3147,
+    "output_tokens": 5388,
+    "reasoning_tokens": 5066,
+    "reasoning_ratio": 0.9402,
+    "latency_seconds": 24.975,
+    "estimated_cost_cny": 0.0246
+  },
+  "cost_snapshot": {
+    "failover_on": [
+      "quota_exhausted",
+      "rate_limit",
+      "temporary_unavailable",
+      "timeout"
+    ],
+    "llm_priority": [
+      "qwen",
+      "deepseek"
+    ],
+    "llm_routing": {
+      "cheap": [
+        "qwen"
+      ],
+      "complex": [
+        "deepseek"
+      ],
+      "general": [
+        "qwen"
+      ],
+      "high_quality": [
+        "deepseek"
+      ],
+      "task_profiles": {
+        "book_synthesis": "complex",
+        "chapter_synthesis": "general",
+        "consistency": "high_quality",
+        "dialogue": "high_quality",
+        "extraction": "cheap",
+        "other": "general"
+      }
+    },
+    "pricing": {
+      "deepseek-chat": {
+        "default": null,
+        "off_peak": {
+          "audio_seconds_per_million": 0.0,
+          "cached_input_per_million": 0.02,
+          "characters_per_million": 0.0,
+          "output_per_million": 4.0,
+          "uncached_input_per_million": 1.0
+        },
+        "peak": {
+          "audio_seconds_per_million": 0.0,
+          "cached_input_per_million": 0.04,
+          "characters_per_million": 0.0,
+          "output_per_million": 8.0,
+          "uncached_input_per_million": 2.0
+        }
+      },
+      "deepseek-flash": {
+        "default": null,
+        "off_peak": {
+          "audio_seconds_per_million": 0.0,
+          "cached_input_per_million": 0.02,
+          "characters_per_million": 0.0,
+          "output_per_million": 4.0,
+          "uncached_input_per_million": 1.0
+        },
+        "peak": {
+          "audio_seconds_per_million": 0.0,
+          "cached_input_per_million": 0.04,
+          "characters_per_million": 0.0,
+          "output_per_million": 8.0,
+          "uncached_input_per_million": 2.0
+        }
+      },
+      "gemini-3.8-flash-lite-tts": {
+        "default": {
+          "audio_seconds_per_million": 250.0,
+          "cached_input_per_million": 0.18,
+          "characters_per_million": 15.0,
+          "output_per_million": 2.88,
+          "uncached_input_per_million": 0.72
+        },
+        "off_peak": null,
+        "peak": null
+      },
+      "qwen3-tts-instruct-flash": {
+        "default": {
+          "audio_seconds_per_million": 0.0,
+          "cached_input_per_million": 0.0,
+          "characters_per_million": 80.0,
+          "output_per_million": 0.0,
+          "uncached_input_per_million": 0.0
+        },
+        "off_peak": null,
+        "peak": null
+      },
+      "qwen3.7-flash": {
+        "default": {
+          "audio_seconds_per_million": 0.0,
+          "cached_input_per_million": 0.2,
+          "characters_per_million": 0.0,
+          "output_per_million": 2.0,
+          "uncached_input_per_million": 1.0
+        },
+        "off_peak": null,
+        "peak": null
+      }
+    },
+    "providers": [
+      {
+        "api_key_env": "DASHSCOPE_API_KEY",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "cloud_tts": null,
+        "generation": {
+          "max_tokens": null,
+          "reasoning_effort": null,
+          "thinking": "disabled"
+        },
+        "kind": "llm",
+        "local_tts": null,
+        "model": "qwen3.7-flash",
+        "name": "qwen",
+        "qwen_cloud_tts": null,
+        "reasoning_policy": null,
+        "timeout_seconds": 120.0,
+        "type": "qwen-llm"
+      },
+      {
+        "api_key_env": "DEEPSEEK_API_KEY",
+        "base_url": "https://api.deepseek.com",
+        "cloud_tts": null,
+        "generation": null,
+        "kind": "llm",
+        "local_tts": null,
+        "model": "deepseek-flash",
+        "name": "deepseek",
+        "qwen_cloud_tts": null,
+        "reasoning_policy": null,
+        "timeout_seconds": 120.0,
+        "type": "openai-compatible"
+      },
+      {
+        "api_key_env": "DASHSCOPE_API_KEY",
+        "base_url": null,
+        "cloud_tts": null,
+        "generation": null,
+        "kind": "tts",
+        "local_tts": null,
+        "model": "qwen3-tts-instruct-flash",
+        "name": "qwen-tts",
+        "qwen_cloud_tts": {
+          "data_tier": "unknown",
+          "guest_style": "富有好奇心的中文播客嘉宾，互动自然，善于提问与思考。",
+          "guest_voice": "Ethan",
+          "host_style": "自然沉稳的中文播客主持人，语速适中，富有亲和力。",
+          "host_voice": "Cherry",
+          "instructions": null,
+          "language_type": "Chinese",
+          "min_request_interval": 0.5,
+          "optimize_instructions": false,
+          "region": null,
+          "sample_rate": 24000,
+          "send_text_to_cloud": true
+        },
+        "reasoning_policy": null,
+        "timeout_seconds": 30.0,
+        "type": "qwen-cloud-tts"
+      },
+      {
+        "api_key_env": "GEMINI_API_KEY",
+        "base_url": null,
+        "cloud_tts": {
+          "data_tier": "unknown",
+          "guest_style": null,
+          "guest_voice": "Puck",
+          "host_style": null,
+          "host_voice": "Kore",
+          "min_request_interval": 25,
+          "mode": "unknown",
+          "send_text_to_cloud": true,
+          "style_instruction": "自然的中文双人读书播客。HostA清晰平稳，HostB好奇、有追问感。严格朗读文本，不增加语气词或删改文字。"
+        },
+        "generation": null,
+        "kind": "tts",
+        "local_tts": null,
+        "model": "gemini-3.8-flash-lite-tts",
+        "name": "gemini-tts",
+        "qwen_cloud_tts": null,
+        "reasoning_policy": null,
+        "timeout_seconds": 120.0,
+        "type": "gemini-tts"
+      }
+    ],
+    "schema_version": 1,
+    "tts_priority": [
+      "qwen-tts",
+      "gemini-tts"
+    ],
+    "tts_routing": {
+      "default_quality": "standard",
+      "high_quality": "gemini-tts",
+      "standard": "qwen-tts"
+    }
+  },
+  "fixtures": [
+    {
+      "id": "case_1_completely_correct",
+      "category": "completely_correct",
+      "description": "完全正确：对话内容忠实表达原文观点与论据，无任何事实偏差或无依据推论",
+      "ground_truth": {
+        "has_error": false,
+        "error_types": [],
+        "flawed_turn_indices": [],
+        "expected_tier1_status": "PASS",
+        "expected_verdicts": {
+          "0": "supported",
+          "1": "supported",
+          "2": "supported",
+          "3": "supported"
+        }
+      },
+      "segment_id": "0002",
+      "script": {
+        "is_mock": false,
+        "segment_id": "0002",
+        "title": "实践反思与认知闭环",
+        "turns": [
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:core_ideas:0",
+              "0002:0001:evidence:0"
+            ],
+            "intent": "transition",
+            "speaker": "主持人",
+            "text": "深度阅读后，关键是把见解放进现实检验。被动吸收不会自动变成智慧。"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:concepts:1"
+            ],
+            "intent": "question",
+            "speaker": "嘉宾",
+            "text": "那怎么检验？是不是得先审视前提假设和边界条件？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:arguments:0",
+              "0002:0001:core_ideas:1",
+              "0002:0001:concepts:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "对，还要通过现实场景反复对照并修正，形成经得起考验的认知闭环。"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:counter_arguments:0"
+            ],
+            "intent": "counterexample",
+            "speaker": "嘉宾",
+            "text": "但有人读了很多书却依然没智慧，不就是只被动接收吗？"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "闭环需主动构建。"
+          }
+        ]
+      },
+      "claims": {
+        "0002:0001:arguments:0": {
+          "category": "arguments",
+          "chapter_id": "0002",
+          "end": 85,
+          "quote": "当我们接触到精辟见解时，应当审视其前提假设与边界条件。",
+          "source_locator": "lines:5-7",
+          "start": 58,
+          "text": "精辟见解必须经过对前提假设与边界条件的审视才能被真正接纳。"
+        },
+        "0002:0001:concepts:0": {
+          "category": "concepts",
+          "chapter_id": "0002",
+          "end": 129,
+          "quote": "通过在现实场景中反复对照并持续修正，我们才能将知识融会贯通，构建起经得起考验的认知闭环。",
+          "source_locator": "lines:5-7",
+          "start": 85,
+          "text": "认知闭环：指通过知识融会贯通并经受住现实考验形成的完整认知体系。"
+        },
+        "0002:0001:concepts:1": {
+          "category": "concepts",
+          "chapter_id": "0002",
+          "end": 85,
+          "quote": "当我们接触到精辟见解时，应当审视其前提假设与边界条件。",
+          "source_locator": "lines:5-7",
+          "start": 58,
+          "text": "前提假设与边界条件：评估见解有效性时需审查的关键要素。"
+        },
+        "0002:0001:core_ideas:0": {
+          "category": "core_ideas",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "被动吸收无法自动转化为真实智慧，有效阅读需结合批判性思考与实践检验。"
+        },
+        "0002:0001:core_ideas:1": {
+          "category": "core_ideas",
+          "chapter_id": "0002",
+          "end": 129,
+          "quote": "通过在现实场景中反复对照并持续修正，我们才能将知识融会贯通，构建起经得起考验的认知闭环。",
+          "source_locator": "lines:5-7",
+          "start": 85,
+          "text": "通过现实场景的反复对照与修正，构建经得起考验的认知闭环。"
+        },
+        "0002:0001:counter_arguments:0": {
+          "category": "counter_arguments",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "仅仅进行被动吸收并不能保证获得真正的智慧。"
+        },
+        "0002:0001:evidence:0": {
+          "category": "evidence",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "单纯的知识接收不等于智慧的形成。"
+        },
+        "0002:0001:evidence:1": {
+          "category": "evidence",
+          "chapter_id": "0002",
+          "end": 58,
+          "quote": "真正有效的阅读离不开批判性思考与实践检验。",
+          "source_locator": "lines:5-7",
+          "start": 37,
+          "text": "批判性思考和实践是有效阅读的必要组成部分。"
+        }
+      }
+    },
+    {
+      "id": "case_2_minor_unsupported_elaboration",
+      "category": "minor_unsupported_elaboration",
+      "description": "轻微无依据扩写：在原文论据基础上额外添加了未经来源证实的细节修饰或外推主张",
+      "ground_truth": {
+        "has_error": true,
+        "error_types": [
+          "unsupported_factual_claim"
+        ],
+        "flawed_turn_indices": [
+          4
+        ],
+        "expected_tier1_status": "REVIEW",
+        "expected_verdicts": {
+          "0": "supported",
+          "2": "supported",
+          "4": "unverifiable"
+        }
+      },
+      "segment_id": "0001",
+      "script": {
+        "is_mock": false,
+        "segment_id": "0001",
+        "title": "深度阅读与思维模型重构",
+        "turns": [
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:0",
+              "0001:0001:concepts:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "阅读能跨越时空，与思想家对话，是拓展认知边界的高效方式。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [],
+            "intent": "question",
+            "speaker": "嘉宾",
+            "text": "但高效等于必然吗？只堆信息，思维模型会变吗？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:1",
+              "0001:0001:concepts:1"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "高质量阅读不止给事实，更帮助重构思维模型，保持理性洞察。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [
+              "0001:0001:arguments:1",
+              "0001:0001:evidence:0",
+              "0001:0001:people:0"
+            ],
+            "intent": "counterexample",
+            "speaker": "嘉宾",
+            "text": "芒格说杰出者几乎都深度阅读，这会不会是幸存者偏差？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:arguments:1",
+              "0001:0001:evidence:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "原文只说“几乎都”，未保证阅读必成杰出；而且作者指出坚持在清晨喝咖啡深度阅读两小时效果最好。"
+          }
+        ]
+      },
+      "claims": {
+        "0001:0001:arguments:0": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "通过阅读可以跨越时空与思想家进行深层对话。"
+        },
+        "0001:0001:arguments:1": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "杰出人士普遍坚持每日深度阅读，以此作为成功要素。"
+        },
+        "0001:0001:concepts:0": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "认知边界：阅读能够扩展个人的认知范围。"
+        },
+        "0001:0001:concepts:1": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "思维模型：高质量阅读有助于构建和重构思维框架。"
+        },
+        "0001:0001:core_ideas:0": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "阅读是拓展认知边界最高效的方式。"
+        },
+        "0001:0001:core_ideas:1": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "高质量阅读的核心价值在于重构思维模型并辅助理性洞察。"
+        },
+        "0001:0001:evidence:0": {
+          "category": "evidence",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格指出杰出的人几乎都坚持每日深度阅读。"
+        },
+        "0001:0001:people:0": {
+          "category": "people",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格（Charlie Munger），被引用为支持深度阅读重要性的观点来源。"
+        }
+      }
+    },
+    {
+      "id": "case_3_obvious_hallucination",
+      "category": "obvious_hallucination",
+      "description": "明显幻觉：对话中完全凭空捏造了与书本内容毫不相干且荒谬伪科学的虚假事实",
+      "ground_truth": {
+        "has_error": true,
+        "error_types": [
+          "hallucination",
+          "unsupported_factual_claim"
+        ],
+        "flawed_turn_indices": [
+          2
+        ],
+        "expected_tier1_status": "REVIEW",
+        "expected_verdicts": {
+          "0": "supported",
+          "2": "contradicted",
+          "4": "supported"
+        }
+      },
+      "segment_id": "0001",
+      "script": {
+        "is_mock": false,
+        "segment_id": "0001",
+        "title": "深度阅读与思维模型重构",
+        "turns": [
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:0",
+              "0001:0001:concepts:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "阅读能跨越时空，与思想家对话，是拓展认知边界的高效方式。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [],
+            "intent": "question",
+            "speaker": "嘉宾",
+            "text": "但高效等于必然吗？只堆信息，思维模型会变吗？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:1",
+              "0001:0001:concepts:1"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "高质量阅读能激活人类大脑皮层的量子纠缠芯片，让我们在睡眠中直接下载外星文明知识库。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [
+              "0001:0001:arguments:1",
+              "0001:0001:evidence:0",
+              "0001:0001:people:0"
+            ],
+            "intent": "counterexample",
+            "speaker": "嘉宾",
+            "text": "芒格说杰出者几乎都深度阅读，这会不会是幸存者偏差？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:arguments:1",
+              "0001:0001:evidence:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "原文只说“几乎都”，未保证阅读必成杰出；重点是深度而非数量。"
+          }
+        ]
+      },
+      "claims": {
+        "0001:0001:arguments:0": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "通过阅读可以跨越时空与思想家进行深层对话。"
+        },
+        "0001:0001:arguments:1": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "杰出人士普遍坚持每日深度阅读，以此作为成功要素。"
+        },
+        "0001:0001:concepts:0": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "认知边界：阅读能够扩展个人的认知范围。"
+        },
+        "0001:0001:concepts:1": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "思维模型：高质量阅读有助于构建和重构思维框架。"
+        },
+        "0001:0001:core_ideas:0": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "阅读是拓展认知边界最高效的方式。"
+        },
+        "0001:0001:core_ideas:1": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "高质量阅读的核心价值在于重构思维模型并辅助理性洞察。"
+        },
+        "0001:0001:evidence:0": {
+          "category": "evidence",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格指出杰出的人几乎都坚持每日深度阅读。"
+        },
+        "0001:0001:people:0": {
+          "category": "people",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格（Charlie Munger），被引用为支持深度阅读重要性的观点来源。"
+        }
+      }
+    },
+    {
+      "id": "case_4_numerical_error",
+      "category": "numerical_error",
+      "description": "数字错误：对话中虚构了原文完全不存在的年份、百分比或统计数字",
+      "ground_truth": {
+        "has_error": true,
+        "error_types": [
+          "numerical_error",
+          "unsupported_factual_claim"
+        ],
+        "flawed_turn_indices": [
+          4
+        ],
+        "expected_tier1_status": "REVIEW",
+        "expected_verdicts": {
+          "0": "supported",
+          "2": "supported",
+          "4": "contradicted"
+        }
+      },
+      "segment_id": "0001",
+      "script": {
+        "is_mock": false,
+        "segment_id": "0001",
+        "title": "深度阅读与思维模型重构",
+        "turns": [
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:0",
+              "0001:0001:concepts:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "阅读能跨越时空，与思想家对话，是拓展认知边界的高效方式。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [],
+            "intent": "question",
+            "speaker": "嘉宾",
+            "text": "但高效等于必然吗？只堆信息，思维模型会变吗？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:1",
+              "0001:0001:concepts:1"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "高质量阅读不止给事实，更帮助重构思维模型，保持理性洞察。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [
+              "0001:0001:arguments:1",
+              "0001:0001:evidence:0",
+              "0001:0001:people:0"
+            ],
+            "intent": "counterexample",
+            "speaker": "嘉宾",
+            "text": "芒格说杰出者几乎都深度阅读，这会不会是幸存者偏差？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:arguments:1",
+              "0001:0001:evidence:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "正如查理·芒格在1985年权威调研中所言，世界上恰好有98.5%的杰出富豪每天严格阅读400页以上。"
+          }
+        ]
+      },
+      "claims": {
+        "0001:0001:arguments:0": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "通过阅读可以跨越时空与思想家进行深层对话。"
+        },
+        "0001:0001:arguments:1": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "杰出人士普遍坚持每日深度阅读，以此作为成功要素。"
+        },
+        "0001:0001:concepts:0": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "认知边界：阅读能够扩展个人的认知范围。"
+        },
+        "0001:0001:concepts:1": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "思维模型：高质量阅读有助于构建和重构思维框架。"
+        },
+        "0001:0001:core_ideas:0": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "阅读是拓展认知边界最高效的方式。"
+        },
+        "0001:0001:core_ideas:1": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "高质量阅读的核心价值在于重构思维模型并辅助理性洞察。"
+        },
+        "0001:0001:evidence:0": {
+          "category": "evidence",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格指出杰出的人几乎都坚持每日深度阅读。"
+        },
+        "0001:0001:people:0": {
+          "category": "people",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格（Charlie Munger），被引用为支持深度阅读重要性的观点来源。"
+        }
+      }
+    },
+    {
+      "id": "case_5_incorrect_attribution",
+      "category": "incorrect_attribution",
+      "description": "人物归因错误：将查理·芒格的明确名言错误扣在爱因斯坦头上",
+      "ground_truth": {
+        "has_error": true,
+        "error_types": [
+          "incorrect_attribution"
+        ],
+        "flawed_turn_indices": [
+          4
+        ],
+        "expected_tier1_status": "REVIEW",
+        "expected_verdicts": {
+          "0": "supported",
+          "2": "supported",
+          "4": "contradicted"
+        }
+      },
+      "segment_id": "0001",
+      "script": {
+        "is_mock": false,
+        "segment_id": "0001",
+        "title": "深度阅读与思维模型重构",
+        "turns": [
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:0",
+              "0001:0001:concepts:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "阅读能跨越时空，与思想家对话，是拓展认知边界的高效方式。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [],
+            "intent": "question",
+            "speaker": "嘉宾",
+            "text": "但高效等于必然吗？只堆信息，思维模型会变吗？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:1",
+              "0001:0001:concepts:1"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "高质量阅读不止给事实，更帮助重构思维模型，保持理性洞察。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [],
+            "intent": "counterexample",
+            "speaker": "嘉宾",
+            "text": "那其他科学界名人怎么看阅读的习惯？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:arguments:1",
+              "0001:0001:evidence:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "正如阿尔伯特·爱因斯坦所言，杰出的人几乎没有不坚持每日深度阅读的。"
+          }
+        ]
+      },
+      "claims": {
+        "0001:0001:arguments:0": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "通过阅读可以跨越时空与思想家进行深层对话。"
+        },
+        "0001:0001:arguments:1": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "杰出人士普遍坚持每日深度阅读，以此作为成功要素。"
+        },
+        "0001:0001:concepts:0": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "认知边界：阅读能够扩展个人的认知范围。"
+        },
+        "0001:0001:concepts:1": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "思维模型：高质量阅读有助于构建和重构思维框架。"
+        },
+        "0001:0001:core_ideas:0": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "阅读是拓展认知边界最高效的方式。"
+        },
+        "0001:0001:core_ideas:1": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "高质量阅读的核心价值在于重构思维模型并辅助理性洞察。"
+        },
+        "0001:0001:evidence:0": {
+          "category": "evidence",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格指出杰出的人几乎都坚持每日深度阅读。"
+        },
+        "0001:0001:people:0": {
+          "category": "people",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格（Charlie Munger），被引用为支持深度阅读重要性的观点来源。"
+        }
+      }
+    },
+    {
+      "id": "case_6_missing_critical_qualifier",
+      "category": "missing_critical_qualifier",
+      "description": "丢失关键限定条件：把原文的否定条件'并不能自动'丢失并颠倒因果，宣称被动吸收就能自动变成智慧",
+      "ground_truth": {
+        "has_error": true,
+        "error_types": [
+          "missing_critical_qualifier",
+          "contradiction"
+        ],
+        "flawed_turn_indices": [
+          0
+        ],
+        "expected_tier1_status": "REVIEW",
+        "expected_verdicts": {
+          "0": "contradicted",
+          "1": "supported",
+          "2": "supported",
+          "3": "supported"
+        }
+      },
+      "segment_id": "0002",
+      "script": {
+        "is_mock": false,
+        "segment_id": "0002",
+        "title": "实践反思与认知闭环",
+        "turns": [
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:core_ideas:0",
+              "0002:0001:evidence:0"
+            ],
+            "intent": "transition",
+            "speaker": "主持人",
+            "text": "深度阅读的关键就在于，只要我们被动吸收书中的见解，就能自动转变成真实智慧，完全不需要实践检验。"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:concepts:1"
+            ],
+            "intent": "question",
+            "speaker": "嘉宾",
+            "text": "那怎么检验？是不是得先审视前提假设和边界条件？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:arguments:0",
+              "0002:0001:core_ideas:1",
+              "0002:0001:concepts:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "对，还要通过现实场景反复对照并修正，形成经得起考验的认知闭环。"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:counter_arguments:0"
+            ],
+            "intent": "counterexample",
+            "speaker": "嘉宾",
+            "text": "但有人读了很多书却依然没智慧，不就是只被动接收吗？"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "闭环需主动构建。"
+          }
+        ]
+      },
+      "claims": {
+        "0002:0001:arguments:0": {
+          "category": "arguments",
+          "chapter_id": "0002",
+          "end": 85,
+          "quote": "当我们接触到精辟见解时，应当审视其前提假设与边界条件。",
+          "source_locator": "lines:5-7",
+          "start": 58,
+          "text": "精辟见解必须经过对前提假设与边界条件的审视才能被真正接纳。"
+        },
+        "0002:0001:concepts:0": {
+          "category": "concepts",
+          "chapter_id": "0002",
+          "end": 129,
+          "quote": "通过在现实场景中反复对照并持续修正，我们才能将知识融会贯通，构建起经得起考验的认知闭环。",
+          "source_locator": "lines:5-7",
+          "start": 85,
+          "text": "认知闭环：指通过知识融会贯通并经受住现实考验形成的完整认知体系。"
+        },
+        "0002:0001:concepts:1": {
+          "category": "concepts",
+          "chapter_id": "0002",
+          "end": 85,
+          "quote": "当我们接触到精辟见解时，应当审视其前提假设与边界条件。",
+          "source_locator": "lines:5-7",
+          "start": 58,
+          "text": "前提假设与边界条件：评估见解有效性时需审查的关键要素。"
+        },
+        "0002:0001:core_ideas:0": {
+          "category": "core_ideas",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "被动吸收无法自动转化为真实智慧，有效阅读需结合批判性思考与实践检验。"
+        },
+        "0002:0001:core_ideas:1": {
+          "category": "core_ideas",
+          "chapter_id": "0002",
+          "end": 129,
+          "quote": "通过在现实场景中反复对照并持续修正，我们才能将知识融会贯通，构建起经得起考验的认知闭环。",
+          "source_locator": "lines:5-7",
+          "start": 85,
+          "text": "通过现实场景的反复对照与修正，构建经得起考验的认知闭环。"
+        },
+        "0002:0001:counter_arguments:0": {
+          "category": "counter_arguments",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "仅仅进行被动吸收并不能保证获得真正的智慧。"
+        },
+        "0002:0001:evidence:0": {
+          "category": "evidence",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "单纯的知识接收不等于智慧的形成。"
+        },
+        "0002:0001:evidence:1": {
+          "category": "evidence",
+          "chapter_id": "0002",
+          "end": 58,
+          "quote": "真正有效的阅读离不开批判性思考与实践检验。",
+          "source_locator": "lines:5-7",
+          "start": 37,
+          "text": "批判性思考和实践是有效阅读的必要组成部分。"
+        }
+      }
+    },
+    {
+      "id": "case_7_obvious_contradiction",
+      "category": "obvious_contradiction",
+      "description": "与原文明显矛盾：发言内容直接与原文核心论点截然相反，公然唱反调",
+      "ground_truth": {
+        "has_error": true,
+        "error_types": [
+          "contradiction"
+        ],
+        "flawed_turn_indices": [
+          0
+        ],
+        "expected_tier1_status": "REVIEW",
+        "expected_verdicts": {
+          "0": "contradicted",
+          "2": "supported",
+          "4": "supported"
+        }
+      },
+      "segment_id": "0001",
+      "script": {
+        "is_mock": false,
+        "segment_id": "0001",
+        "title": "深度阅读与思维模型重构",
+        "turns": [
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:0",
+              "0001:0001:concepts:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "作者在书中严厉抨击阅读，认为阅读是人类最被动、最低效的自欺欺人行为，根本无法拓展任何认知边界，只会加深时空隔阂。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [],
+            "intent": "question",
+            "speaker": "嘉宾",
+            "text": "但高效等于必然吗？只堆信息，思维模型会变吗？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:1",
+              "0001:0001:concepts:1"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "高质量阅读不止给事实，更帮助重构思维模型，保持理性洞察。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [
+              "0001:0001:arguments:1",
+              "0001:0001:evidence:0",
+              "0001:0001:people:0"
+            ],
+            "intent": "counterexample",
+            "speaker": "嘉宾",
+            "text": "芒格说杰出者几乎都深度阅读，这会不会是幸存者偏差？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:arguments:1",
+              "0001:0001:evidence:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "原文只说“几乎都”，未保证阅读必成杰出；重点是深度而非数量。"
+          }
+        ]
+      },
+      "claims": {
+        "0001:0001:arguments:0": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "通过阅读可以跨越时空与思想家进行深层对话。"
+        },
+        "0001:0001:arguments:1": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "杰出人士普遍坚持每日深度阅读，以此作为成功要素。"
+        },
+        "0001:0001:concepts:0": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "认知边界：阅读能够扩展个人的认知范围。"
+        },
+        "0001:0001:concepts:1": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "思维模型：高质量阅读有助于构建和重构思维框架。"
+        },
+        "0001:0001:core_ideas:0": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "阅读是拓展认知边界最高效的方式。"
+        },
+        "0001:0001:core_ideas:1": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "高质量阅读的核心价值在于重构思维模型并辅助理性洞察。"
+        },
+        "0001:0001:evidence:0": {
+          "category": "evidence",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格指出杰出的人几乎都坚持每日深度阅读。"
+        },
+        "0001:0001:people:0": {
+          "category": "people",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格（Charlie Munger），被引用为支持深度阅读重要性的观点来源。"
+        }
+      }
+    },
+    {
+      "id": "case_8_historical_segment_0001",
+      "category": "historical_segment_0001",
+      "description": "历史真实段落0001：包含两轮supported及一轮未在原文找到明确佐证的unverifiable（'重点在深度而非数量'）",
+      "ground_truth": {
+        "has_error": true,
+        "error_types": [
+          "unsupported_factual_claim"
+        ],
+        "flawed_turn_indices": [
+          4
+        ],
+        "expected_tier1_status": "REVIEW",
+        "expected_verdicts": {
+          "0": "supported",
+          "2": "supported",
+          "4": "unverifiable"
+        }
+      },
+      "segment_id": "0001",
+      "script": {
+        "is_mock": false,
+        "segment_id": "0001",
+        "title": "深度阅读与思维模型重构",
+        "turns": [
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:0",
+              "0001:0001:concepts:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "阅读能跨越时空，与思想家对话，是拓展认知边界的高效方式。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [],
+            "intent": "question",
+            "speaker": "嘉宾",
+            "text": "但高效等于必然吗？只堆信息，思维模型会变吗？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:core_ideas:1",
+              "0001:0001:concepts:1"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "高质量阅读不止给事实，更帮助重构思维模型，保持理性洞察。"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [
+              "0001:0001:arguments:1",
+              "0001:0001:evidence:0",
+              "0001:0001:people:0"
+            ],
+            "intent": "counterexample",
+            "speaker": "嘉宾",
+            "text": "芒格说杰出者几乎都深度阅读，这会不会是幸存者偏差？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0001:0001:arguments:1",
+              "0001:0001:evidence:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "原文只说“几乎都”，未保证阅读必成杰出；重点是深度而非数量。"
+          }
+        ]
+      },
+      "claims": {
+        "0001:0001:arguments:0": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "通过阅读可以跨越时空与思想家进行深层对话。"
+        },
+        "0001:0001:arguments:1": {
+          "category": "arguments",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "杰出人士普遍坚持每日深度阅读，以此作为成功要素。"
+        },
+        "0001:0001:concepts:0": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "认知边界：阅读能够扩展个人的认知范围。"
+        },
+        "0001:0001:concepts:1": {
+          "category": "concepts",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "思维模型：高质量阅读有助于构建和重构思维框架。"
+        },
+        "0001:0001:core_ideas:0": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 63,
+          "quote": "阅读是拓展认知边界最高效的方式。通过阅读，读者得以跨越时空的隔阂，与思想家进行深层次的对话。",
+          "source_locator": "lines:1-4",
+          "start": 17,
+          "text": "阅读是拓展认知边界最高效的方式。"
+        },
+        "0001:0001:core_ideas:1": {
+          "category": "core_ideas",
+          "chapter_id": "0001",
+          "end": 137,
+          "quote": "高质量的阅读不仅带来事实信息，更在于帮助我们重构思维模型，在纷繁复杂的环境中保持理性洞察。",
+          "source_locator": "lines:1-4",
+          "start": 92,
+          "text": "高质量阅读的核心价值在于重构思维模型并辅助理性洞察。"
+        },
+        "0001:0001:evidence:0": {
+          "category": "evidence",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格指出杰出的人几乎都坚持每日深度阅读。"
+        },
+        "0001:0001:people:0": {
+          "category": "people",
+          "chapter_id": "0001",
+          "end": 92,
+          "quote": "正如查理·芒格所言，杰出的人几乎没有不坚持每日深度阅读的。",
+          "source_locator": "lines:1-4",
+          "start": 63,
+          "text": "查理·芒格（Charlie Munger），被引用为支持深度阅读重要性的观点来源。"
+        }
+      }
+    },
+    {
+      "id": "case_9_historical_segment_0002",
+      "category": "historical_segment_0002",
+      "description": "历史真实段落0002：4轮attribution=source发言全部经历史复核判定为supported，完美符合原文",
+      "ground_truth": {
+        "has_error": false,
+        "error_types": [],
+        "flawed_turn_indices": [],
+        "expected_tier1_status": "PASS",
+        "expected_verdicts": {
+          "0": "supported",
+          "1": "supported",
+          "2": "supported",
+          "3": "supported"
+        }
+      },
+      "segment_id": "0002",
+      "script": {
+        "is_mock": false,
+        "segment_id": "0002",
+        "title": "实践反思与认知闭环",
+        "turns": [
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:core_ideas:0",
+              "0002:0001:evidence:0"
+            ],
+            "intent": "transition",
+            "speaker": "主持人",
+            "text": "深度阅读后，关键是把见解放进现实检验。被动吸收不会自动变成智慧。"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:concepts:1"
+            ],
+            "intent": "question",
+            "speaker": "嘉宾",
+            "text": "那怎么检验？是不是得先审视前提假设和边界条件？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:arguments:0",
+              "0002:0001:core_ideas:1",
+              "0002:0001:concepts:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "对，还要通过现实场景反复对照并修正，形成经得起考验的认知闭环。"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:counter_arguments:0"
+            ],
+            "intent": "counterexample",
+            "speaker": "嘉宾",
+            "text": "但有人读了很多书却依然没智慧，不就是只被动接收吗？"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "闭环需主动构建。"
+          }
+        ]
+      },
+      "claims": {
+        "0002:0001:arguments:0": {
+          "category": "arguments",
+          "chapter_id": "0002",
+          "end": 85,
+          "quote": "当我们接触到精辟见解时，应当审视其前提假设与边界条件。",
+          "source_locator": "lines:5-7",
+          "start": 58,
+          "text": "精辟见解必须经过对前提假设与边界条件的审视才能被真正接纳。"
+        },
+        "0002:0001:concepts:0": {
+          "category": "concepts",
+          "chapter_id": "0002",
+          "end": 129,
+          "quote": "通过在现实场景中反复对照并持续修正，我们才能将知识融会贯通，构建起经得起考验的认知闭环。",
+          "source_locator": "lines:5-7",
+          "start": 85,
+          "text": "认知闭环：指通过知识融会贯通并经受住现实考验形成的完整认知体系。"
+        },
+        "0002:0001:concepts:1": {
+          "category": "concepts",
+          "chapter_id": "0002",
+          "end": 85,
+          "quote": "当我们接触到精辟见解时，应当审视其前提假设与边界条件。",
+          "source_locator": "lines:5-7",
+          "start": 58,
+          "text": "前提假设与边界条件：评估见解有效性时需审查的关键要素。"
+        },
+        "0002:0001:core_ideas:0": {
+          "category": "core_ideas",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "被动吸收无法自动转化为真实智慧，有效阅读需结合批判性思考与实践检验。"
+        },
+        "0002:0001:core_ideas:1": {
+          "category": "core_ideas",
+          "chapter_id": "0002",
+          "end": 129,
+          "quote": "通过在现实场景中反复对照并持续修正，我们才能将知识融会贯通，构建起经得起考验的认知闭环。",
+          "source_locator": "lines:5-7",
+          "start": 85,
+          "text": "通过现实场景的反复对照与修正，构建经得起考验的认知闭环。"
+        },
+        "0002:0001:counter_arguments:0": {
+          "category": "counter_arguments",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "仅仅进行被动吸收并不能保证获得真正的智慧。"
+        },
+        "0002:0001:evidence:0": {
+          "category": "evidence",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "单纯的知识接收不等于智慧的形成。"
+        },
+        "0002:0001:evidence:1": {
+          "category": "evidence",
+          "chapter_id": "0002",
+          "end": 58,
+          "quote": "真正有效的阅读离不开批判性思考与实践检验。",
+          "source_locator": "lines:5-7",
+          "start": 37,
+          "text": "批判性思考和实践是有效阅读的必要组成部分。"
+        }
+      }
+    },
+    {
+      "id": "case_10_hypothetical_boundary",
+      "category": "hypothetical_boundary",
+      "description": "边界案例：嘉宾发言明确标注为hypothetical思想实验假说，不属于需要与原文严格对照的source主张",
+      "ground_truth": {
+        "has_error": false,
+        "error_types": [],
+        "flawed_turn_indices": [],
+        "expected_tier1_status": "PASS",
+        "expected_verdicts": {
+          "0": "supported",
+          "2": "supported",
+          "3": "supported"
+        }
+      },
+      "segment_id": "0002",
+      "script": {
+        "is_mock": false,
+        "segment_id": "0002",
+        "title": "实践反思与认知闭环",
+        "turns": [
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:core_ideas:0",
+              "0002:0001:evidence:0"
+            ],
+            "intent": "transition",
+            "speaker": "主持人",
+            "text": "深度阅读后，关键是把见解放进现实检验。被动吸收不会自动变成智慧。"
+          },
+          {
+            "attribution": "hypothetical",
+            "claim_ids": [],
+            "intent": "question",
+            "speaker": "嘉宾",
+            "text": "比如说我们设想一个思想实验：如果一个人读完了图书馆全部书籍却闭门不出，他算不算获得了智慧？"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:arguments:0",
+              "0002:0001:core_ideas:1",
+              "0002:0001:concepts:0"
+            ],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "对，还要通过现实场景反复对照并修正，形成经得起考验的认知闭环。"
+          },
+          {
+            "attribution": "source",
+            "claim_ids": [
+              "0002:0001:counter_arguments:0"
+            ],
+            "intent": "counterexample",
+            "speaker": "嘉宾",
+            "text": "但有人读了很多书却依然没智慧，不就是只被动接收吗？"
+          },
+          {
+            "attribution": "discussion",
+            "claim_ids": [],
+            "intent": "explain",
+            "speaker": "主持人",
+            "text": "闭环需主动构建。"
+          }
+        ]
+      },
+      "claims": {
+        "0002:0001:arguments:0": {
+          "category": "arguments",
+          "chapter_id": "0002",
+          "end": 85,
+          "quote": "当我们接触到精辟见解时，应当审视其前提假设与边界条件。",
+          "source_locator": "lines:5-7",
+          "start": 58,
+          "text": "精辟见解必须经过对前提假设与边界条件的审视才能被真正接纳。"
+        },
+        "0002:0001:concepts:0": {
+          "category": "concepts",
+          "chapter_id": "0002",
+          "end": 129,
+          "quote": "通过在现实场景中反复对照并持续修正，我们才能将知识融会贯通，构建起经得起考验的认知闭环。",
+          "source_locator": "lines:5-7",
+          "start": 85,
+          "text": "认知闭环：指通过知识融会贯通并经受住现实考验形成的完整认知体系。"
+        },
+        "0002:0001:concepts:1": {
+          "category": "concepts",
+          "chapter_id": "0002",
+          "end": 85,
+          "quote": "当我们接触到精辟见解时，应当审视其前提假设与边界条件。",
+          "source_locator": "lines:5-7",
+          "start": 58,
+          "text": "前提假设与边界条件：评估见解有效性时需审查的关键要素。"
+        },
+        "0002:0001:core_ideas:0": {
+          "category": "core_ideas",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "被动吸收无法自动转化为真实智慧，有效阅读需结合批判性思考与实践检验。"
+        },
+        "0002:0001:core_ideas:1": {
+          "category": "core_ideas",
+          "chapter_id": "0002",
+          "end": 129,
+          "quote": "通过在现实场景中反复对照并持续修正，我们才能将知识融会贯通，构建起经得起考验的认知闭环。",
+          "source_locator": "lines:5-7",
+          "start": 85,
+          "text": "通过现实场景的反复对照与修正，构建经得起考验的认知闭环。"
+        },
+        "0002:0001:counter_arguments:0": {
+          "category": "counter_arguments",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "仅仅进行被动吸收并不能保证获得真正的智慧。"
+        },
+        "0002:0001:evidence:0": {
+          "category": "evidence",
+          "chapter_id": "0002",
+          "end": 37,
+          "quote": "单纯的被动吸收并不能自动转变成真实智慧。",
+          "source_locator": "lines:5-7",
+          "start": 17,
+          "text": "单纯的知识接收不等于智慧的形成。"
+        },
+        "0002:0001:evidence:1": {
+          "category": "evidence",
+          "chapter_id": "0002",
+          "end": 58,
+          "quote": "真正有效的阅读离不开批判性思考与实践检验。",
+          "source_locator": "lines:5-7",
+          "start": 37,
+          "text": "批判性思考和实践是有效阅读的必要组成部分。"
+        }
+      }
+    }
+  ]
+}
