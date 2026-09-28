@@ -54,14 +54,17 @@ class ProviderChain:
 
     def execute(self, *, task: str, kind: str, prompt_version: str, input_hash: str,
                 invoke: Callable, persist: Callable, observe: Callable[[AIAttempt], None],
-                context: ProviderRequestContext | None = None) -> dict[str, str]:
+                context: ProviderRequestContext | None = None,
+                schema_corrections: int = 1) -> dict[str, str]:
+        if schema_corrections not in (0, 1):
+            raise ValueError('Only zero or one structured correction is supported')
         order = list(range(self.index, len(self.providers))) + list(range(self.index))
         last_error = ProviderError(ErrorKind.UNAVAILABLE)
         for index in order:
             if index in self.disabled:
                 continue
             provider = provider_for_task(self.providers[index], task)
-            for correction in range(2):
+            for correction in range(schema_corrections + 1):
                 attempt = AIAttempt(id=uuid4().hex, task=task, kind=kind, provider=provider.name,
                                     model=provider.model, prompt_version=prompt_version, input_hash=input_hash,
                                     provider_config_hash=provider_config_hash(provider),
@@ -91,7 +94,8 @@ class ProviderChain:
                     if invoked and not isinstance(exc, (KeyboardInterrupt, SystemExit)):
                         failure = ProviderError(ErrorKind.BUSINESS)
                     prepare = getattr(provider, 'prepare_schema_retry', None)
-                    correct = correction == 0 and not invoked and callable(prepare) and prepare(failure)
+                    correct = (correction < schema_corrections and not invoked
+                               and callable(prepare) and prepare(failure))
                     attempt.status = "failed_retryable" if failure.retryable or correct else "failed_permanent"
                     attempt.error, attempt.retryable, attempt.timestamp = failure.kind.value, failure.retryable or correct, utc_now()
                     attempt.error_type = failure.error_type or type(exc).__name__

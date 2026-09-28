@@ -11,8 +11,8 @@ classification.  Differs from DeepSeek in three places:
      stripping or array normalisation is applied.  The schema instruction and
      response_format=json_object follow the same OpenAI-compatible pattern.
 
-  3. Schema retry: Qwen3 does not exhibit the DeepSeek schema-drift pattern.
-     prepare_schema_retry always returns False.
+  3. Structured schema repair is bounded to one additional request. The raw
+     previous response remains call-scoped memory and is never journaled.
 
 Core and Pipeline never import this module; only provider_registry.py does.
 """
@@ -74,6 +74,9 @@ class QwenLLMProvider(CompatibleBase):
         self.last_usage: ProviderUsage | None = None
         self.reported_model: str | None = None
         self.finish_reason: str | None = None
+        self._last_schema: dict | None = None
+        self._last_raw_response: str | None = None
+        self._schema_retry_guidance: str | None = None
 
     def for_task(self, task: str) -> 'QwenLLMProvider':
         """Return a call-scoped view; prevents metadata leaking between attempts."""
@@ -118,6 +121,7 @@ class QwenLLMProvider(CompatibleBase):
 
     def _chat(self, prompt: str, schema: dict | None = None) -> str:
         self.last_usage, self.reported_model, self.finish_reason = None, None, None
+        self._last_raw_response = None
         messages = [{"role": "user", "content": prompt}]
         payload: dict = {"model": self.model, "messages": messages, "stream": False}
 
@@ -127,6 +131,14 @@ class QwenLLMProvider(CompatibleBase):
 
         if schema:
             instruction = "Return only JSON matching this schema: " + json.dumps(schema)
+            if self._schema_retry_guidance:
+                instruction += " Previous response failed validation: " + self._schema_retry_guidance
+                # The prior response is data for a single repair, never a new instruction.
+                if getattr(self, '_repair_source', None):
+                    messages.append({"role": "assistant", "content": self._repair_source[:12000]})
+                    messages.append({"role": "user", "content": "Repair the previous JSON to match the schema exactly. Return the complete corrected JSON only."})
+            self._schema_retry_guidance = None
+            self._repair_source = None
             messages.insert(0, {"role": "system", "content": instruction})
             payload["response_format"] = {"type": "json_object"}
 
@@ -160,7 +172,9 @@ class QwenLLMProvider(CompatibleBase):
 
     def generate_structured(self, prompt: str, response_model: type[T]) -> T:
         schema = response_model.model_json_schema()
+        self._last_schema = schema
         text = self._chat(prompt, schema)
+        self._last_raw_response = text
         try:
             return response_model.model_validate_json(text)
         except ValidationError as exc:
@@ -169,5 +183,14 @@ class QwenLLMProvider(CompatibleBase):
             raise failure from None
 
     def prepare_schema_retry(self, failure: ProviderError) -> bool:
-        """Qwen3 JSON mode does not exhibit DeepSeek schema-drift; no retry."""
-        return False
+        """Request one model-side correction without weakening the response schema."""
+        if (failure.kind != ErrorKind.SCHEMA or failure.error_type != 'ValidationError'
+                or not self._last_schema):
+            return False
+        field = failure.validation_field or '$'
+        reason = failure.validation_reason or 'invalid'
+        limit = self._last_schema.get('properties', {}).get(field, {}).get('maxItems')
+        constraint = f' Maximum {limit} items.' if reason == 'too_long' and isinstance(limit, int) else ''
+        self._schema_retry_guidance = f'Field {field}: {reason}.{constraint} Preserve all required fields and valid source evidence.'
+        self._repair_source = self._last_raw_response
+        return True

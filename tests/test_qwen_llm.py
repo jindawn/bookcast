@@ -13,7 +13,7 @@ Verified properties:
   - ProviderUsage is populated from response usage fields
   - reported_model is parsed correctly
   - HTTP errors map to the correct ErrorKind
-  - prepare_schema_retry always returns False
+  - prepare_schema_retry is bounded and only handles validated structured failures
   - DeepSeek adapter unaffected: enable_thinking not present, thinking dict present
   - Config validation: qwen-llm accepts generation/reasoning_policy, requires base_url
   - R1 routing selects qwen-llm provider by task intent
@@ -260,10 +260,10 @@ class TestErrorClassification:
 
 
 # ---------------------------------------------------------------------------
-# 5. prepare_schema_retry always False
+# 5. prepare_schema_retry requires a prior structured validation failure
 # ---------------------------------------------------------------------------
 
-def test_prepare_schema_retry_always_returns_false():
+def test_prepare_schema_retry_requires_prior_structured_response():
     provider = QwenLLMProvider(qwen_spec())
     for failure in [
         ProviderError(ErrorKind.SCHEMA, error_type="ValidationError",

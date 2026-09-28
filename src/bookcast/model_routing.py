@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 from .models import AIAttempt
-from .provider_api import FAILOVER_ERRORS, Provider
+from .provider_api import FAILOVER_ERRORS, ErrorKind, Provider, ProviderError
 from .provider_chain import ProviderChain
 from .provider_config import LLMRouting, TTSRouting
 from .storage import fingerprint
@@ -51,9 +51,22 @@ class RoutedLLMChain(ProviderChain):
         if kind != 'llm':
             raise ValueError('LLM routing cannot execute TTS calls')
         chain = self.routes[self._profile_for_task(task)]
-        return chain.execute(task=task, kind=kind, prompt_version=prompt_version,
-                             input_hash=input_hash, invoke=invoke, persist=persist, observe=observe,
-                             context=context)
+        arguments = dict(task=task, kind=kind, prompt_version=prompt_version,
+                         input_hash=input_hash, invoke=invoke, persist=persist, observe=observe,
+                         context=context)
+        try:
+            return chain.execute(**arguments)
+        except ProviderError as failure:
+            # A schema failure is not an availability failover. Only this task
+            # may escalate after Qwen's one journaled correction has failed.
+            high = self.routes.get('high_quality')
+            if (failure.kind != ErrorKind.SCHEMA or len(chain.providers) != 1
+                    or chain.providers[0].name != 'qwen' or high is None
+                    or len(high.providers) != 1 or high.providers[0].name != 'deepseek'):
+                raise
+            isolated = ProviderChain(high.providers, failover_on=self.failover_on)
+            isolated.statuses = self.statuses
+            return isolated.execute(**arguments, schema_corrections=0)
 
 
 class RoutedTTSChain(ProviderChain):

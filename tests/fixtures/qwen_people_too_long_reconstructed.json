@@ -1,0 +1,25 @@
+{
+  "provenance": "reconstructed_from_persisted_validation_metadata; original response was not saved",
+  "observed_task": "analysis:0003:0005",
+  "observed_provider": "qwen",
+  "observed_error_type": "ValidationError",
+  "observed_validation_field": "people",
+  "observed_validation_reason": "too_long",
+  "response": {
+    "chapter_id": "0003",
+    "chunk_id": "0005",
+    "core_ideas": [{"text": "脱敏示例", "evidence_id": "e0001"}],
+    "arguments": [], "evidence": [], "examples": [],
+    "people": [
+      {"text": "人物一", "evidence_id": "e0001"},
+      {"text": "人物二", "evidence_id": "e0001"},
+      {"text": "人物三", "evidence_id": "e0001"},
+      {"text": "人物四", "evidence_id": "e0001"},
+      {"text": "人物五", "evidence_id": "e0001"},
+      {"text": "人物六", "evidence_id": "e0001"},
+      {"text": "人物七", "evidence_id": "e0001"}
+    ],
+    "concepts": [], "counter_arguments": [], "connections": [], "key_passages": [],
+    "is_mock": false
+  }
+}
