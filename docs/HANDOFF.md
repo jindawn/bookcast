@@ -1,3 +1,11 @@
+# Phase 19.3D Positive-Path Live Canary：POSITIVE_PATH_ACCEPTED（2026-09-28）
+
+冻结 `case_4_numerical_error` 只运行一次生产一致性路径：Qwen Tier1 REVIEW 第4轮 → targeted DeepSeek 一次判 `contradicted` → 标准生产 `ConsistencyReview` 保留风险；独立 Full audit 同样判第4轮风险，potential FN=0。3/3 物理请求 HTTP200，0 重试/回退；生产 ¥0.0045、Full 反事实 ¥0.0090、双跑 ¥0.0135。详情及产物见 [phase19-3d-canary.md](experiments/phase19-3d-canary.md) 与 `output/acceptance-canary-phase19-3d-positive`。装配器已修正缺来源副本导致的本地 cost_summary 校验缺口；没有再次真实调用。Canary 专项16 passed、compileall/validator/diff通过。默认 `full` 不变。
+
+当前状态 **CANARY_ACCEPTED / POSITIVE_PATH_ACCEPTED**；本轮授权已用完，不运行更多真实请求、不进入下一阶段、不 push。下次先只读检查本报告、STATE 与本地遥测；任何 Phase19 后续工作须单独授权。未跟踪 `examples/mind_and_judgment.txt` 保留，不提交。最近已验证生产测试提交 `c44bc0badc96e7557a5e46f752136534d10ba604`；本次 checkpoint 按 D-006 不自引用。
+
+---
+
 # Phase 19.3D Live Canary：CANARY_ACCEPTED（2026-09-28）
 
 用户授权的唯一 3 分钟 Job 已完成：`output/acceptance-canary-phase19-3d/4ee2619ca81608020c508633`；Job ID `e85c2a6dfcbc4e9c9fb122a662fec49d`，36 completed / 2 skipped，音频 179.72 秒、2 段，质量门通过。Two-Tier Qwen Tier1 2/2 PASS、targeted DeepSeek 0；Full audit 2/2 supported，verdict/flagged-turn 全一致，potential FN=0。物理请求 26/26 HTTP 200，Provider/transport/基础设施重试均为 0，fallback 0。生产一致性 ¥0.0024，Full 反事实 ¥0.0817，节省 97.06%；审计额外 ¥0.0817，整 Job ¥0.2227，计价无重复。Qwen reasoning 未报告，不能声称总体 reasoning 降幅。详情和限制见 [phase19-3d-canary.md](experiments/phase19-3d-canary.md)。

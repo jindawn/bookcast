@@ -2,7 +2,7 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-19",
-  "current_task": "Phase19.3D Live Canary CANARY_ACCEPTED / LIVE_RUN_ONCE",
+  "current_task": "Phase19.3D Positive-Path Live Canary POSITIVE_PATH_ACCEPTED",
   "task_status": "completed",
   "branch": "codex/phase19-clean-history",
   "last_verified_commit": "c44bc0badc96e7557a5e46f752136534d10ba604",
@@ -157,11 +157,12 @@
     "Phase19.3D STEP0 pricing telemetry：Job保存的ProvidersConfig经现有calculate_cost_summary接入llm_usage；97项pricing/usage与44项routing/shadow专项通过，Canary未开始。",
     "Phase19.3D STEP1–3 Two-Tier production与Full audit sidecar代码完成并提交a4316ae；默认Full保持、Canary审计隔离、价格复用统一成本路径；Canary专项16 passed，相关回归221 passed；Live未运行，严格Ready Gate未通过。",
     "Phase19.3D最后离线Gate通过：旧Dialogue D测试用冻结19.3B请求时间与价格快照固定计价时点，原Gate/生产代码不变；提交c44bc0b上完整离线pytest759 passed、1 skipped、7 deselected、10 subtests passed，Canary16 passed、pricing105 passed，compileall/validator/diff通过。状态CANARY_IMPLEMENTED/LIVE_READY/LIVE_NOT_RUN。",
-    "Phase19.3D 唯一3分钟Live Canary已完成并验收：2段Two-Tier Qwen Tier1均PASS，Full audit均supported，potential FN=0；26物理请求全HTTP200、0重试/回退；一致性生产¥0.0024、Full反事实¥0.0817、节省97.06%，整Job¥0.2227；默认full保持。"
+    "Phase19.3D 唯一3分钟Live Canary已完成并验收：2段Two-Tier Qwen Tier1均PASS，Full audit均supported，potential FN=0；26物理请求全HTTP200、0重试/回退；一致性生产¥0.0024、Full反事实¥0.0817、节省97.06%，整Job¥0.2227；默认full保持。",
+    "Phase19.3D Positive-Path Live Canary：冻结case_4只调用生产Two-Tier Qwen1/targeted DeepSeek1/Full audit1；第4轮REVIEW并被Tier2及Full判contradicted，production合并保留风险，potential FN=0；3次物理请求HTTP200、0重试，LLM成本¥0.0135无重复计费。"
   ],
   "in_progress": [],
   "next_actions": [
-    "Phase19.3D Live Canary 已仅运行一次并 CANARY_ACCEPTED；维护者只读审查 docs/experiments/phase19-3d-canary.md 与本地遥测，后续正样本Live、19.3E或RC均须另行授权，不自动运行、不push。",
+    "Phase19.3D Positive-Path Live Canary 已 POSITIVE_PATH_ACCEPTED；只读审查 docs/experiments/phase19-3d-canary.md 与本地遥测；后续阶段需另行授权，不自动真实调用或push。",
     "历史19.3C Shadow Tier1反事实精确成本缺cache-hit/逐请求时点；不要猜算或改写历史数据。",
     "保留未跟踪examples/mind_and_judgment.txt，不删除、移动或提交。",
     "维护者审阅 Phase 19.3B Consistency Live Validation 评测与 PRODUCTION_CANDIDATE 状态；当前保持严格停机，任何进一步真实测试或生产路由集成需重新授权。",
@@ -178,6 +179,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "phase19-3d-positive-path-live-canary",
+      "command": ".venv/bin/python scripts/live_phase19_3d_positive_path.py (run exactly once); .venv/bin/python -m pytest -p no:cacheprovider tests/test_canary_consistency.py -q; .venv/bin/python -m compileall -q scripts/live_phase19_3d_positive_path.py; python3 scripts/validate_project.py; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "Frozen case_4 through production ContentFlow: Tier1 REVIEW [4], Tier2 and audit contradicted [4], FN=0; three HTTP200 requests, zero retries; LLM pricing views ¥0.0135; Canary tests 16 passed.",
+      "checked_at": "2026-09-28T06:42:10Z"
+    },
     {
       "name": "phase19-3d-live-canary-single-job",
       "command": ".venv/bin/bookcast generate examples/mind_and_judgment.txt --config examples/model-routing-cloud.toml --output-dir output/acceptance-canary-phase19-3d --mode two_host --minutes 3 --consistency-mode two-tier --consistency-canary-audit",
@@ -1601,5 +1610,5 @@
       "purpose": "Phase19.3D Canary实现和离线Gate/Live未运行记录"
     }
   ],
-  "updated_at": "2026-09-28T06:17:27Z"
+  "updated_at": "2026-09-28T06:42:10Z"
 }

@@ -1,3 +1,21 @@
+# Phase 19.3D Positive-Path Live Canary：POSITIVE_PATH_ACCEPTED（2026-09-28）
+
+冻结输入 `tests/fixtures/phase19_3b_consistency.json` 的 `case_4_numerical_error`（fixture SHA-256 `1b73c0f4ade9b30b927c42b218193103d040aa4b2fef5488206f0e596f219940`）只执行了一次。最小装配器 `scripts/live_phase19_3d_positive_path.py` 直接调用生产 `_Runner` 与 `ContentFlow._consistency_review` / `_run_canary_audit`，没有生成 Dialogue、TTS、音频或完整 Job；没有修改 fixture、Prompt、模型、路由或默认 `consistency_mode=full`。产物：`output/acceptance-canary-phase19-3d-positive`。该目录存在时装配器拒绝再次运行。
+
+Qwen Tier1 返回 **REVIEW**，只定位第 4 轮；targeted DeepSeek Tier2 恰好调用 1 次，payload 仅含第 4 轮及其引用的 Claims/Evidence，没有完整 episode。Tier2 schema 有效，返回第 4 轮 `contradicted`。合并后的标准 `ConsistencyReview` 为 0/2 `supported`、4 `contradicted`，事实风险未丢失。Full DeepSeek audit 独立调用 1 次，也将第 4 轮判为 `contradicted`；两侧 verdict 与 flagged-turn 均一致，`potential_false_negative=false`，audit-only/two-tier-only warnings 均为 0。Audit 未覆盖生产 verdict。
+
+| 路径 | 请求 | 输入 token | 输出 token | reasoning token | 延迟 | CNY |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Qwen Tier1 | 1 | 957 | 128 | 未报告 | 2.772s | 0.0012 |
+| targeted DeepSeek Tier2 | 1 | 781 | 369 | 286 | 2.393s | 0.0033 |
+| Full DeepSeek audit | 1 | 1624 | 1065 | 924 | 6.000s | 0.0090 |
+
+生产一致性成本 ¥0.0045；Full 反事实 ¥0.0090，节省 ¥0.0045（50%）；实际双跑 ¥0.0135。3 条物理遥测均为 HTTP 200 / succeeded，attempt index 均为 0，provider/transport/基础设施重试及 fallback 均为 0。`llm_usage.json` 的 3 次请求、0 unknown usage、¥0.0135 与 `cost_summary.json` 的 3 次 LLM、¥0.0135 及 Canary comparison 一致；physical telemetry 未参与第二次计费。`cost_summary.total.status=partial` 仅因为本 harness 按要求没有 TTS，LLM pricing 是完整的。
+
+首次运行后发现 harness 未保存供成本摘要校验的冻结来源副本：三次请求与 `llm_usage.json` 均完整，但 `cost_summary.json` 因来源哈希无法验证而未写入。没有再次调用 Provider；离线复制原 fixture 字节到输出目录的 `source/input.txt`，核对 SHA-256 与 manifest 相同，再通过现有 `refresh_cost_summary` 生成摘要。已修正 harness 的初始装配顺序，生产实现未改。Canary 专项离线测试 **16 passed**，compileall、项目校验与 diff check 通过。结论 **POSITIVE_PATH_ACCEPTED**；后续阶段需另行授权，不 push。
+
+---
+
 # Phase 19.3D Live Canary：CANARY_ACCEPTED（2026-09-28）
 
 仅执行一次授权的 3 分钟 Job，Job ID `e85c2a6dfcbc4e9c9fb122a662fec49d`，产物目录 `output/acceptance-canary-phase19-3d/4ee2619ca81608020c508633`。`manifest.status=completed` / `state=SUCCEEDED`，36 个步骤完成、2 个旧 Full consistency 步骤因不在当前计划中跳过（合计 38）；质量报告 `checks_passed`，0 blocking issue。最终音频 `output/acceptance-canary-phase19-3d/4ee2619ca81608020c508633/podcast.mp3`，导出时长 179.72 秒；共 2 段。生产模式明确为 `two_tier`，Full DeepSeek 仅作独立 audit；默认模式仍为 `full`，回退可对**新 Job**省略 Canary 选项，不能覆盖既有 Job 模式。
