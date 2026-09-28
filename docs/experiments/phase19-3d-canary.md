@@ -1,3 +1,21 @@
+# Phase 19.3D Live Canary：CANARY_ACCEPTED（2026-09-28）
+
+仅执行一次授权的 3 分钟 Job，Job ID `e85c2a6dfcbc4e9c9fb122a662fec49d`，产物目录 `output/acceptance-canary-phase19-3d/4ee2619ca81608020c508633`。`manifest.status=completed` / `state=SUCCEEDED`，36 个步骤完成、2 个旧 Full consistency 步骤因不在当前计划中跳过（合计 38）；质量报告 `checks_passed`，0 blocking issue。最终音频 `output/acceptance-canary-phase19-3d/4ee2619ca81608020c508633/podcast.mp3`，导出时长 179.72 秒；共 2 段。生产模式明确为 `two_tier`，Full DeepSeek 仅作独立 audit；默认模式仍为 `full`，回退可对**新 Job**省略 Canary 选项，不能覆盖既有 Job 模式。
+
+| 一致性路径 | 请求 | 输入 token | 输出 token | reasoning token | 延迟 | 成本 CNY |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Qwen Tier1（生产） | 2 | 2291 | 56 | 未报告 | 1.677s | 0.0024 |
+| targeted DeepSeek（生产） | 0 | 0 | 0 | 0 | 0s | 0 |
+| Full DeepSeek（audit） | 2 | 3481 | 9405 | 8928 | 44.969s | 0.0817 |
+
+两段 Tier1 均 PASS，REVIEW 0、可疑轮次 0，targeted DeepSeek 调用规避 2/2（100%）。两段 Full audit 均为 `supported`，标记风险轮次 0；逐段 verdict agreement 与 flagged-turn agreement 都为 2/2。`potential_false_negative=0`；audit-only warnings 0、two-tier-only warnings 0，audit 成功完成。因为本次均为 PASS，真实 Tier2 升轨路径未由这次 Live Job 覆盖；已有离线/先前受控实验覆盖，不能由本 Job 推断正样本召回。Qwen 未报告 reasoning token，总体 reasoning 降幅不能可靠计算；Full audit 报告的 DeepSeek reasoning 8928 token 在生产一致性路径中降为 0，即 DeepSeek reasoning 规避 100%。
+
+一致性生产 Two-Tier 成本 ¥0.0024；Full audit 成本 ¥0.0817；Canary 双跑实际一致性实验成本 ¥0.0841。仅用 Full 生产的反事实成本 ¥0.0817，仅用 Two-Tier 生产的反事实成本 ¥0.0024；差额 ¥0.0793，节省 97.06%。整 Job LLM ¥0.1568、TTS ¥0.0659、合计 ¥0.2227；双跑审计已包含在 LLM 与整 Job 成本内，未再次加总。价格来自 Job 固化的 `ProvidersConfig.pricing`、`llm_usage.json` 与 `cost_summary.json`；11 次 LLM 用量全部有计价，physical telemetry 只核验请求/延迟，不重复计费。
+
+26 条物理请求全部 HTTP 200 且 `succeeded`：Qwen LLM 6、DeepSeek LLM 5、Qwen TTS 15；`physical_attempt_index` 全为 0，`retry_reason` 全为空。Provider retry 0、transport retry 0、sandbox/infrastructure recovery 0、fallback 0。Audit 无错误，未触发 repair，生产质量门与 Job 状态正常。验收 Gate 八项均通过，决定 **CANARY_ACCEPTED**。本次不改默认配置、不进入后续阶段、不 push。
+
+---
+
 # Phase 19.3D STEP 1–3：Canary 离线实现与最终 Gate
 
 功能 checkpoint：`a4316ae2efa3e741447cbd184141ae78c723b6b4`；最终离线 Gate 测试 checkpoint：`c44bc0badc96e7557a5e46f752136534d10ba604`。没有真实 API、Live Canary、真实 TTS 或 push。默认生产一致性仍为 `full`；旧 Job 未存模式字段时也读取为 `full`。**当前状态：CANARY_IMPLEMENTED / LIVE_READY / LIVE_NOT_RUN。**

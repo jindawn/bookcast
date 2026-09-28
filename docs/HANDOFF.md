@@ -1,3 +1,11 @@
+# Phase 19.3D Live Canary：CANARY_ACCEPTED（2026-09-28）
+
+用户授权的唯一 3 分钟 Job 已完成：`output/acceptance-canary-phase19-3d/4ee2619ca81608020c508633`；Job ID `e85c2a6dfcbc4e9c9fb122a662fec49d`，36 completed / 2 skipped，音频 179.72 秒、2 段，质量门通过。Two-Tier Qwen Tier1 2/2 PASS、targeted DeepSeek 0；Full audit 2/2 supported，verdict/flagged-turn 全一致，potential FN=0。物理请求 26/26 HTTP 200，Provider/transport/基础设施重试均为 0，fallback 0。生产一致性 ¥0.0024，Full 反事实 ¥0.0817，节省 97.06%；审计额外 ¥0.0817，整 Job ¥0.2227，计价无重复。Qwen reasoning 未报告，不能声称总体 reasoning 降幅。详情和限制见 [phase19-3d-canary.md](experiments/phase19-3d-canary.md)。
+
+当前状态 **CANARY_IMPLEMENTED / CANARY_ACCEPTED / LIVE_RUN_ONCE**；默认 `consistency_mode=full`。已完成本轮授权，不再发真实请求；Tier2 未在此 PASS-only 样本中升轨，后续正样本 Live 验证需另行授权。保留未跟踪 `examples/mind_and_judgment.txt`，不推送、不进入 Phase19.3E/RC。最近已验证离线功能提交 `c44bc0badc96e7557a5e46f752136534d10ba604`；本 docs checkpoint 按 D-006 不自引用。下一步维护者只读审查本报告与本地遥测，再决定后续范围。
+
+---
+
 # Phase 19.3D 最终离线 Gate：CANARY_IMPLEMENTED / LIVE_READY / LIVE_NOT_RUN（2026-09-28）
 
 旧 Dialogue D 测试依赖当前峰/离峰时钟，已仅在测试中固定到仓库 Phase 19.3B 历史请求时间，并核验该时间与冻结价格快照复算的 A 基线成本一致。未改生产代码、原始成功 Gate 或 D 的历史失败结论。独立测试提交 `c44bc0badc96e7557a5e46f752136534d10ba604` 上完整离线pytest **759 passed / 1 skipped / 7 deselected / 10 subtests，0 failed**；Dialogue 27 passed、pricing/cost/usage 105 passed、Canary 16 passed；compileall、validate_project、diff check通过。默认 `consistency_mode=full`，没有真实网络请求、TTS Live、Live Canary 或 push。
