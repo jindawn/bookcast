@@ -2,11 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-19",
-  "current_task": "Phase 19.3C Two-Tier Consistency Shadow Mode Live 验收完成：SHADOW_ACCEPTED，verdict agreement 100%，FN=0，DeepSeek calls avoided 100%，reasoning reduction 100%，168.66秒音频，2 segments，生产Router保持冻结",
+  "current_task": "Phase19.3D STEP 0 pricing telemetry接线完成；Canary implementation NOT STARTED",
   "task_status": "completed",
   "branch": "codex/phase19-clean-history",
-  "last_verified_commit": "efe71bb2b82050187ddc07d81a948a179a596587",
-
+  "last_verified_commit": "0cc5a45435389376a0c49911ba12cc6c7b0b2bbc",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -154,11 +153,14 @@
     "Phase19.3B Consistency 最小受控 Live Smoke 完成：经用户明确授权，对冻结测试集 case_1（完全正确）与 case_4（数字错误）执行真实请求，总计 3 次物理请求全部成功（HTTP 200，0 重试，0 失败）。Case 1 Tier 1 Qwen3.7-Flash 耗时 0.915s、成本 ¥0.001020，返回 PASS 且 0 次 DeepSeek 调用（规避率 100%）；Case 4 Tier 1 Qwen 耗时 2.498s 返回 REVIEW 并精准锁定 turn 4，随后 Tier 2 DeepSeek 仅定向复核 turn 4（耗时 1.510s、Reasoning 118 tokens、成本 ¥0.001508，未发送整篇），准确裁决 contradicted 并确认事实错误。2 样本统计：升轨率 50%，DeepSeek 规避率 50%，TP=1, TN=1, FP=0, FN=0，总估算成本 ¥0.003718。脱敏遥测与收据落盘于 output/llm-reasoning-ab/consistency/live-smoke-20260927/。未进入下一批测试，生产 Router 与 TTS 保持不变，未 push。",
     "Phase 19.3B Consistency Live Validation Set 验证完成：执行 6 个受控测试用例（负样本 case_1 复用、case_10 PASS；正样本 case_3 幻觉、case_5 归因、case_6 限定词、case_7 矛盾全部 REVIEW 升轨），新增 9 次物理请求（Qwen 5 次，DeepSeek 4 次，0 重试，0 失败），TP=4, TN=2, FP=0, FN=0（检出召回率 100%，特异度 100%，错误轮次定位精确度 100%），DeepSeek 定向复核平均 Reasoning 降至 191 tokens（降幅 92.4%），新增耗时 17.888s、成本 ¥0.011522；6 项生产候选 Gate 全部通过，架构状态标记为 PRODUCTION_CANDIDATE，生产 Router/配置与 TTS 保持完全冻结不变，未 push。",
     "Phase 19.3C Two-Tier Consistency Shadow Mode 实现完成：新增 shadow_consistency.py（Tier1 Qwen 初筛 + Tier2 DeepSeek 定向复核 + 对比生产裁决 + 评估报告写盘）、ContentOptions/LLMRouting 配置扩展（默认 false，向后兼容）、ContentFlow._run_shadow_consistency 集成（静默容错）、pipeline/CLI shadow flag 传递、content_mock 新增 consistency_tier1 op、9 项专项测试全部通过；全量离线 742 passed/1 skipped/7 deselected/10 subtests；生产 Router 完全冻结，Live 验收待用户授权。提交 efe71bb2b82050187ddc07d81a948a179a596587。",
-    "Phase 19.3C Shadow Mode Live 验收完成（SHADOW_ACCEPTED）：使用 examples/mind_and_judgment.txt、model-routing-cloud.toml、--mode two_host --minutes 3 --shadow-consistency 执行真实 3 分钟 Job；Job 完整成功（39/39 steps completed），生成 168.66 秒 MP3；production Full DeepSeek 一致性 2 次调用（in:3631 out:3350 reason:2893 tokens，15.167s）；Shadow Two-Tier Qwen Tier1 2 次调用均 PASS，DeepSeek escalation=0（avoided 100%），reasoning reduction 100%；verdict agreement 100%，FN=0，shadow-only warnings=0，telemetry 完整。acceptance_decision=SHADOW_ACCEPTED。生产 Router 保持完全冻结，未进入 Canary，未 push。详见 docs/experiments/phase19-3c-shadow.md。"
+    "Phase 19.3C Shadow Mode Live 验收完成（SHADOW_ACCEPTED）：使用 examples/mind_and_judgment.txt、model-routing-cloud.toml、--mode two_host --minutes 3 --shadow-consistency 执行真实 3 分钟 Job；Job 完整成功（39/39 steps completed），生成 168.66 秒 MP3；production Full DeepSeek 一致性 2 次调用（in:3631 out:3350 reason:2893 tokens，15.167s）；Shadow Two-Tier Qwen Tier1 2 次调用均 PASS，DeepSeek escalation=0（avoided 100%），reasoning reduction 100%；verdict agreement 100%，FN=0，shadow-only warnings=0，telemetry 完整。acceptance_decision=SHADOW_ACCEPTED。生产 Router 保持完全冻结，未进入 Canary，未 push。详见 docs/experiments/phase19-3c-shadow.md。",
+    "Phase19.3D STEP0 pricing telemetry：Job保存的ProvidersConfig经现有calculate_cost_summary接入llm_usage；97项pricing/usage与44项routing/shadow专项通过，Canary未开始。"
   ],
   "in_progress": [],
   "next_actions": [
-    "维护者审阅 Phase 19.3C SHADOW_ACCEPTED 结果，决定是否授权将 Two-Tier 从 PRODUCTION_CANDIDATE 提升为 PRODUCTION_ENABLED；未获授权前不修改生产 Router，不删除 Full DeepSeek，不进入 Canary，不 push。",
+    "Phase19.3D Canary implementation NOT STARTED；仅在新授权下规划/实现consistency_mode、canary_consistency.py、ContentFlow与CLI集成，禁止本轮继续。",
+    "历史19.3C Shadow Tier1反事实精确成本缺cache-hit/逐请求时点；不要猜算或改写历史数据。",
+    "保留未跟踪examples/mind_and_judgment.txt，不删除、移动或提交。",
     "维护者审阅 Phase 19.3B Consistency Live Validation 评测与 PRODUCTION_CANDIDATE 状态；当前保持严格停机，任何进一步真实测试或生产路由集成需重新授权。",
     "维护者先审阅D的高reasoning/成本和文本质量；任何新Dialogue策略或真实调用需要另行授权，不重跑B/C/D。",
     "生产配置、Dialogue生产配置与TTS保持完全冻结不变，不直接修改生产Router。",
@@ -1012,6 +1014,14 @@
       "scope": "commit",
       "summary": "功能提交14dbe6c上151 passed、validator/compileall/diff通过；D仅一次HTTP200，零重试，成功门禁因reasoning与成本失败。",
       "checked_at": "2026-09-27T01:47:53Z"
+    },
+    {
+      "name": "phase19-3d-step0-pricing",
+      "command": "python3 -m compileall src scripts; python3 scripts/validate_project.py; git diff --check; .venv/bin/python -m pytest -q tests/test_cost_integration.py tests/test_cost_telemetry.py tests/test_generation.py; .venv/bin/python -m pytest -q tests/test_model_routing.py tests/test_shadow_consistency.py",
+      "status": "passed",
+      "scope": "commit",
+      "summary": "功能提交0cc5a45上pricing/usage专项97 passed，routing/shadow专项44 passed，compileall、validator、diff check通过。没有真实API/Canary/TTS。",
+      "checked_at": "2026-09-28T00:12:51Z"
     }
   ],
   "known_failures": [
@@ -1038,7 +1048,8 @@
     "Phase19.3B冻结Baseline A本轮诊断未收到HTTP响应（temporary_unavailable、status null）；无法判断当前DeepSeek服务上的200/400或先前B/C 400根因。",
     "2026-09-27最小DeepSeek请求HTTP400但无code/message/request_id/content-type，无法确定是DeepSeek源站还是代理返回；本轮无Baseline A请求。",
     "Phase19.3B新B/C各一次HTTP200且schema有效，但两者长度门禁失败；B reasoning tokens未报告，C成本降幅受1024缓存命中影响，A/B/C延迟计时口径不同。",
-    "Phase19.3B Candidate D虽然122字/5轮且schema/Claim coverage/重复率达标，但reasoning4630和估算成本¥0.020496超过A；预声明成功门禁失败，不自动调Prompt。"
+    "Phase19.3B Candidate D虽然122字/5轮且schema/Claim coverage/重复率达标，但reasoning4630和估算成本¥0.020496超过A；预声明成功门禁失败，不自动调Prompt。",
+    "历史Phase19.3C Job有1条Qwen extraction用量缺失，Qwen/全LLM总估算仍未知；Shadow Tier1缺cache-hit/逐请求时点，反事实成本不可精确离线复原。"
   ],
   "blockers": [],
   "important_files": [
@@ -1543,5 +1554,5 @@
       "purpose": "Consistency 离线契约、两级流控与指标计算专项测试"
     }
   ],
-  "updated_at": "2026-09-27T02:18:45Z"
+  "updated_at": "2026-09-28T00:12:51Z"
 }

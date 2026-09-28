@@ -1,3 +1,19 @@
+# Phase 19.3D STEP 0 pricing telemetry 接管检查点（2026-09-28）
+
+**Phase 19.3D STEP 0 pricing = completed. Phase 19.3D Canary implementation = NOT STARTED.**
+
+接管时HEAD为 `cb45b98`，无AGY留下的已跟踪工作树改动；只有未跟踪 `examples/mind_and_judgment.txt`，原样保留且未提交。因此可见的19.3D实现进度为0；已有19.3C Shadow Mode仍为 `SHADOW_ACCEPTED`，默认生产裁决未变。
+
+Pipeline现在从当前Job的`manifest.cost_snapshot`恢复`ProvidersConfig`，把保存的配置与定价策略交给`usage_snapshot`。该视图复用现有`calculate_cost_summary`的分阶段成本，不再有第二套定价公式；每行保留配置中的pricing及estimated_cost。缺失快照/价格/用量时仍为null；legacy无配置路径保持不变。未改Router、Dialogue、Consistency、TTS。
+
+离线专项 `tests/test_cost_integration.py tests/test_cost_telemetry.py tests/test_generation.py` 97 passed，Pipeline routing/shadow专项44 passed；compileall、project validator、diff check通过。已验证功能提交 `0cc5a45435389376a0c49911ba12cc6c7b0b2bbc`。本交接提交按D-006不自引用。
+
+19.3C历史Job仅**只读**重算，未改历史文件：DeepSeek LLM已知估算成本¥0.0753，其中Full DeepSeek Consistency两调用¥0.0168；Qwen LLM已知部分¥0.0107，但一条extraction缺usage，完整Qwen总额未知，因此整份`llm_usage`总额仍应为null。Shadow Tier1保存了input/output totals但缺cache-hit用量与逐请求定价时点，Two-Tier反事实精确成本不可可靠复原；不填猜测值。原`llm_usage.json`历史文件仍保留原样。
+
+下一步仅在新授权下设计19.3D的consistency_mode、Canary脚本、ContentFlow/CLI集成及隔离验证；本轮这些全部未开始。禁止Live Canary、真实API、TTS、完整E2E和push。未跟踪样本文件不得删除、移动或提交。
+
+---
+
 # Phase 19.3C Shadow Mode Live 验收完成：SHADOW_ACCEPTED（2026-09-27）
 
 ## Goal
