@@ -1,3 +1,12 @@
+# Phase 19.3D STEP 1–3 设计交接（2026-09-28）
+
+- STEP 0 pricing = **COMPLETED**（功能提交 `0cc5a45`，文档交接 `d457726`）。
+- STEP 1–3 design = **REVIEWED / READY_TO_IMPLEMENT**；实施方案见 [phase19-3d-implementation-plan.md](experiments/phase19-3d-implementation-plan.md)。
+- STEP 1–3 implementation = **NOT STARTED**；Live Canary = **NOT RUN**。未修改 `src/`，未运行测试或真实 API。
+- 下一步按方案顺序，从 `ContentOptions` 模式及 legacy manifest 兼容开始；保持 Full 默认，避免新旧 Shadow/Canary 方向混淆。未跟踪 `examples/mind_and_judgment.txt` 原样保留。最近已存在的 Git 提交为 `d457726`；本次 docs-only 提交按 D-006 不自引用。
+
+---
+
 # Phase 19.3D STEP 0 pricing telemetry 接管检查点（2026-09-28）
 
 **Phase 19.3D STEP 0 pricing = completed. Phase 19.3D Canary implementation = NOT STARTED.**
