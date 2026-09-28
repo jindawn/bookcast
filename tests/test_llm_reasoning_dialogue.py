@@ -1,6 +1,7 @@
 """No paid calls: frozen identity, experiment guardrails and quality metrics."""
 import json
 import io
+from datetime import datetime
 from pathlib import Path
 from urllib import error as urlerr
 
@@ -130,8 +131,22 @@ def test_d_changes_only_focused_instruction_and_validates_shape():
 
 def test_d_success_gate_requires_usage_and_one_receipt(tmp_path, monkeypatch):
     from bookcast.generation import ProviderUsage
+    from scripts.llm_reasoning_dialogue import estimate_cost
     monkeypatch.setenv('DEEPSEEK_API_KEY', 'offline-test-only')
-    item = fixture()['dialogue'][0]
+    frozen = fixture()
+    item = frozen['dialogue'][0]
+    historical = json.loads((FIXTURE.parents[2] / 'docs/experiments/phase19-3b-dialogue-one-shot.json').read_text())
+    historical_at = datetime.fromisoformat(
+        historical['candidates']['B']['safe_original_physical_request']['started_at'])
+    assert estimate_cost(ProviderUsage.model_validate(item['baseline_usage']), historical_at,
+                         frozen['cost_snapshot']) == historical['candidates']['A']['estimated_cost_cny']
+
+    class HistoricalClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return historical_at.astimezone(tz) if tz is not None else historical_at.replace(tzinfo=None)
+
+    monkeypatch.setattr('scripts.llm_reasoning_diagnostic.datetime', HistoricalClock)
     calls = []
 
     def complete_once(self, prompt, schema):
