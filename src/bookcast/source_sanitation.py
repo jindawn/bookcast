@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from .models import SourceFilterRecord
 
 
-SOURCE_FILTER_VERSION = 'epub-source-filter-v1'
+SOURCE_FILTER_VERSION = 'epub-source-filter-v2'
 _CONTACT = re.compile(r'微信号|微信公众号|公众号|QQ(?:号|群)?|加小编', re.I)
 _URL = re.compile(r'https?://|www\.|[a-z0-9.-]+\.(?:com|cn|net|org)\b', re.I)
 _PRODUCTION = re.compile(r'^(?:打字|录入|校对|电子书制作)\s*[:：]\s*\S.{0,78}$')
@@ -82,6 +82,23 @@ def structural_rule(name: str, properties: list[str], soup: BeautifulSoup) -> tu
     links = soup.find_all('a', href=True)
     if (len(links) >= 5 and re.match(r'^(?:table of contents|目录)(?:\b|\s)', text, re.I)):
         return 'table_of_contents', 'linked_contents_page'
+    # Export provenance with a title heading is front matter, not a short prose chapter.
+    if (soup.find(['h1', 'h2', 'h3']) and not soup.find('p')
+            and re.search(r'(?:从[^。]{1,60}导出|exported from)', text, re.I)):
+        return 'cover', 'export_title_page'
+    # Some EPUB exporters place a link-dense work index in the linear spine
+    # without marking it as nav/toc. Require multiple links to other documents
+    # and no prose paragraphs; short prose alone is never a removal signal.
+    internal = [a for a in links if re.search(r'\.(?:xhtml|html)(?:[#?].*)?$', str(a.get('href') or ''), re.I)]
+    linked_chars = sum(len(_compact(a.get_text(' ', strip=True))) for a in links)
+    if (not soup.find('p') and len(links) >= 5 and len(internal) >= 2
+            and linked_chars * 3 >= len(text)):
+        return 'table_of_contents', 'linked_spine_index'
+    heading = soup.find(['h1', 'h2', 'h3'])
+    if (heading and re.search(r'about this digital edition|关于(?:本|此)电子版',
+                              _compact(heading.get_text(' ', strip=True)), re.I)
+            and re.search(r'\b(?:wikisource|e-book|ebook|license|licence)\b|维基文库|授权', text, re.I)):
+        return 'publisher_notice', 'digital_edition_notice'
     return None
 
 

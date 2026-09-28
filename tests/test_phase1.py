@@ -75,6 +75,48 @@ class Phase1Tests(unittest.TestCase):
         self.assertIn("第一段。", parsed.chapters[0].text)
         self.assertNotIn("bad", parsed.chapters[0].text)
 
+    def test_epub_export_front_matter_index_and_edition_notice_are_not_chapters(self):
+        # A real EPUB container shaped like the failing Wikisource export, with
+        # invented text so the user's uploaded book is never committed.
+        path = self.root / 'export.epub'
+        book = epub.EpubBook()
+        book.set_identifier('export-front-matter-regression')
+        book.set_title('示例短篇集')
+        book.set_language('zh')
+        pages = [
+            ('title.xhtml', '<h2>示例短篇集</h2><h3>以2026年9月28日从开放书库导出</h3>'),
+            ('c0_work.xhtml', '<section>示例短篇集 作者：某人 '
+             '<a href="https://example.org/author">作者</a>'
+             '<a href="https://example.org/info">资料</a>'
+             '<a href="https://example.org/data">数据</a>'
+             '<a href="chapter.xhtml">第一篇</a>'
+             '<a href="poem.xhtml">第二篇</a></section>'),
+            ('chapter.xhtml', '<h1>第一篇</h1><p>这是有意义的短正文，不能仅按字数删除。</p>'),
+            ('poem.xhtml', '<h1>第二篇</h1><div>山高月小。</div>'),
+            ('about.xhtml', '<h1>About this digital edition</h1>'
+             '<p>This e-book comes from an open library. License and attribution information.</p>'),
+        ]
+        spine = []
+        for name, body in pages:
+            item = epub.EpubHtml(title=name, file_name=name, lang='zh')
+            item.set_content(f'<html><body>{body}</body></html>')
+            book.add_item(item)
+            spine.append(item)
+        book.spine = spine
+        book.add_item(epub.EpubNcx())
+        book.add_item(epub.EpubNav())
+        epub.write_epub(str(path), book)
+
+        parsed = parse_epub(path, self.metadata(path, 'epub'))
+        self.assertEqual([c.source_locator for c in parsed.chapters],
+                         ['epub:chapter.xhtml', 'epub:poem.xhtml'])
+        self.assertEqual(parsed.metadata.chapter_ids, ['0001', '0002'])
+        self.assertIn('山高月小', parsed.chapters[1].text)
+        rules = {r.unit: r.matched_rule for r in parsed.source_filter if r.removed}
+        self.assertEqual(rules['epub:title.xhtml'], 'export_title_page')
+        self.assertEqual(rules['epub:c0_work.xhtml'], 'linked_spine_index')
+        self.assertEqual(rules['epub:about.xhtml'], 'digital_edition_notice')
+
     def test_epub_source_filter_removes_real_style_promotions_before_mock_analysis(self):
         source = self.root / 'promoted.epub'
         book = epub.EpubBook()
@@ -149,7 +191,7 @@ class Phase1Tests(unittest.TestCase):
                 self.assertNotIn('ireadweek', artifact.read_text())
         self.assertTrue((job / 'podcast.mp3').is_file())
         old_parse = json.loads((job / 'manifest.json').read_text())['steps']['parse']['fingerprint']
-        with patch('bookcast.source_sanitation.SOURCE_FILTER_VERSION', 'epub-source-filter-v2'):
+        with patch('bookcast.source_sanitation.SOURCE_FILTER_VERSION', 'epub-source-filter-v3'):
             Pipeline(MockLLMProvider(), MockTTSProvider(), self.root / 'output').resume_job(job)
         new_parse = json.loads((job / 'manifest.json').read_text())['steps']['parse']['fingerprint']
         self.assertNotEqual(old_parse, new_parse)
