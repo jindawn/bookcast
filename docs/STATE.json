@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-19",
-  "current_task": "Phase19 Final RC: COMPLETE — PHASE_19_COMPLETE / RC_READY",
+  "current_task": "Web 传习录 EPUB front matter schema_error root cause proven offline",
   "task_status": "completed",
   "branch": "codex/phase19-clean-history",
-  "last_verified_commit": "d1220f78c7f4045dcb480618dff3c1b13dd55c81",
+  "last_verified_commit": "d058d6aa5b306c8f7b7e3347d312d6e583f90a7a",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -159,10 +159,12 @@
     "Phase19.3D最后离线Gate通过：旧Dialogue D测试用冻结19.3B请求时间与价格快照固定计价时点，原Gate/生产代码不变；提交c44bc0b上完整离线pytest759 passed、1 skipped、7 deselected、10 subtests passed，Canary16 passed、pricing105 passed，compileall/validator/diff通过。状态CANARY_IMPLEMENTED/LIVE_READY/LIVE_NOT_RUN。",
     "Phase19.3D 唯一3分钟Live Canary已完成并验收：2段Two-Tier Qwen Tier1均PASS，Full audit均supported，potential FN=0；26物理请求全HTTP200、0重试/回退；一致性生产¥0.0024、Full反事实¥0.0817、节省97.06%，整Job¥0.2227；默认full保持。",
     "Phase19.3D Positive-Path Live Canary：冻结case_4只调用生产Two-Tier Qwen1/targeted DeepSeek1/Full audit1；第4轮REVIEW并被Tier2及Full判contradicted，production合并保留风险，potential FN=0；3次物理请求HTTP200、0重试，LLM成本¥0.0135无重复计费。",
-    "Phase19 Final RC：新Job默认consistency_mode=two_tier；legacy manifest缺字段默认full；existing Job resume/retry继承已固化模式；--consistency-mode full一键回滚；canary audit默认false；Full DeepSeek实现永久保留；Two-Tier recovery幂等（merge artifact write-if-changed，不依赖mtime）；旧recovery/failure/routing测试显式固定full保留原测试语义；Full pytest 763 passed/1 skipped/7 deselected/0 failed；Targeted tests 243 passed；compileall/validate_project/diff check PASS；functional checkpoint d1220f78。"
+    "Phase19 Final RC：新Job默认consistency_mode=two_tier；legacy manifest缺字段默认full；existing Job resume/retry继承已固化模式；--consistency-mode full一键回滚；canary audit默认false；Full DeepSeek实现永久保留；Two-Tier recovery幂等（merge artifact write-if-changed，不依赖mtime）；旧recovery/failure/routing测试显式固定full保留原测试语义；Full pytest 763 passed/1 skipped/7 deselected/0 failed；Targeted tests 243 passed；compileall/validate_project/diff check PASS；functional checkpoint d1220f78。",
+    "Web《传习录》schema_error离线根因：失败analysis:0001:0001确为22字导出标题页；Qwen HTTP200后EvidenceAnalysis.core_ideas too_short。通用EPUB结构过滤使原始上传只读重解析为3正文chapter，真实EPUB容器回归保留合法短正文；完整离线pytest764 passed/1 skipped/0 failed。"
   ],
   "in_progress": [],
   "next_actions": [
+    "Web《传习录》旧失败Job未经retry；只读审查 docs/experiments/chuanxilu-epub-schema-error.md。原始Qwen响应未保存，修正后真实生成需用户另行授权，不能自动重跑当前Job。",
     "Phase19.3D Positive-Path Live Canary 已 POSITIVE_PATH_ACCEPTED；只读审查 docs/experiments/phase19-3d-canary.md 与本地遥测；后续阶段需另行授权，不自动真实调用或push。",
     "历史19.3C Shadow Tier1反事实精确成本缺cache-hit/逐请求时点；不要猜算或改写历史数据。",
     "保留未跟踪examples/mind_and_judgment.txt，不删除、移动或提交。",
@@ -180,6 +182,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "chuanxilu-epub-front-matter-regression",
+      "command": ".venv/bin/python -m pytest -p no:cacheprovider tests/test_phase1.py -q; python3 -m compileall -q src scripts; python3 scripts/validate_project.py; git diff --check; .venv/bin/python -m pytest -p no:cacheprovider -q --tb=line",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "原始EPUB只读重解析为3正文chapter；Phase1 12 passed；full offline 764 passed/1 skipped/7 deselected/0 failed/10 subtests。无API或Job retry。",
+      "checked_at": "2026-09-28T11:08:10Z"
+    },
     {
       "name": "phase19-final-rc-gate",
       "command": ".venv/bin/python -m pytest -p no:cacheprovider -q; .venv/bin/python -m pytest -p no:cacheprovider tests/test_canary_consistency.py tests/test_job_recovery.py tests/test_generation.py tests/test_job_cli.py tests/test_model_routing.py tests/test_providers.py tests/test_skill.py tests/test_web.py -v; .venv/bin/python -m pytest -p no:cacheprovider tests/test_cost_calculator.py tests/test_cost_regression.py tests/test_cost_isolation.py tests/test_cost_integration.py tests/test_cost_telemetry.py -q; python3 -m compileall src scripts -q; python3 scripts/validate_project.py; git diff --check",
@@ -1621,7 +1631,11 @@
     {
       "path": "docs/experiments/phase19-final-rc.md",
       "purpose": "Phase19 Final RC策略、兼容边界、离线Gate、真实成本证据与用户实测命令"
+    },
+    {
+      "path": "docs/experiments/chuanxilu-epub-schema-error.md",
+      "purpose": "传习录Web失败Job的spine证据、core_ideas too_short根因边界与EPUB过滤离线回归"
     }
   ],
-  "updated_at": "2026-09-28T11:01:15Z"
+  "updated_at": "2026-09-28T11:08:40Z"
 }

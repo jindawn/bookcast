@@ -1,3 +1,11 @@
+# Web《传习录》EPUB schema_error 离线调查（2026-09-28）
+
+已定位原失败 Job 的 `analysis:0001:0001`：该章实际上是 22 字的 EPUB 导出标题页，Qwen3.7-Flash 请求 HTTP 200 后 `EvidenceAnalysis.core_ideas` 校验 `too_short`。另有 48 字链接索引和 1,105 字数字版本说明也被误收录；原始模型正文未保存，不能推断完整 JSON 或保证修复后真实生成必成功。已在 EPUB source sanitation 加组合结构规则并提升版本，原始上传仅只读重解析为 3 个真实正文单元；合成真实 EPUB 容器回归覆盖短正文保留。详情、文件、限制和测试见 [调查报告](experiments/chuanxilu-epub-schema-error.md)。
+
+Phase1 targeted 12 passed；完整离线 pytest 764 passed/1 skipped/0 failed；compileall、validator、diff check通过。旧失败 Job、原 EPUB、Provider routing 均未修改；没有真实 API、generate/retry、TTS 或 push。下一步由维护者审查报告；任何修复后的真实 Job 验证需另行授权。`examples/mind_and_judgment.txt` 继续保留未跟踪。最近已验证功能提交为 `d058d6aa5b306c8f7b7e3347d312d6e583f90a7a`；本次文档提交按 D-006 不自引用。
+
+---
+
 # Phase 19 Final RC：PHASE_19_COMPLETE / RC_READY（2026-09-28）
 
 最终可交接报告见 [phase19-final-rc.md](experiments/phase19-final-rc.md)；真正用户实测命令已列于该报告，尚未执行。

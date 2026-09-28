@@ -839,3 +839,7 @@
 - 2026-09-28T06:42:10Z Phase19.3D Positive-Path Live Canary：冻结case_4仅一次，经生产_Runner/ContentFlow路径完成Qwen Tier1 REVIEW[4]、targeted DeepSeek Tier2 contradicted[4]、标准ConsistencyReview合并保留风险，Full audit同判风险，potential FN=0。3次物理请求全HTTP200，0重试/回退；生产¥0.0045、Full反事实¥0.0090、实际双跑¥0.0135，LLM usage/cost汇总一致无双计。harness首次缺冻结来源副本致成本摘要身份校验失败；仅离线补同SHA字节并刷新现有成本摘要，未再次调用，已修正harness。Canary专项16 passed、静态/项目校验通过。POSITIVE_PATH_ACCEPTED；默认full不变，不push。产物 `output/acceptance-canary-phase19-3d-positive`。
 
 - 2026-09-28T11:01:15Z 补齐 `docs/experiments/phase19-final-rc.md`：记录新Job Two-Tier默认、legacy/full回滚、Dialogue历史Baseline、19.3B/C/D真实验收、单样本成本边界、763 passed完整离线Gate及未执行的5分钟用户实测命令。功能checkpoint d1220f78、原交接checkpoint 835bef95；未调用真实API、未push。
+
+- 2026-09-28T11:08:10Z Web《传习录》EPUB schema_error离线调查：原上传SHA与失败Job源SHA一致；旧parser把22字导出标题页、48字链接索引、1105字数字版说明收作0001/0002/0006。失败task analysis:0001:0001，Qwen HTTP200，安全错误元数据 ValidationError/core_ideas/too_short，原始响应未保存。通用结构规则过滤后，原EPUB只读重解析剩3正文章；真实EPUB容器回归保留合法短篇。Phase1 12 passed、全量离线764 passed/1 skipped/0 failed；无真实API、Job retry、push。报告 docs/experiments/chuanxilu-epub-schema-error.md。
+
+- 2026-09-28T11:08:40Z EPUB 前置页过滤功能提交 `d058d6aa5b306c8f7b7e3347d312d6e583f90a7a` 上 Phase1 专项复测12 passed、项目校验与 diff check 通过；`STATE.last_verified_commit` 记该已验证提交。旧失败Web Job未恢复或重试。
