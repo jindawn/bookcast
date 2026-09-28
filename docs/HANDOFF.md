@@ -1098,3 +1098,12 @@ Phase 17 可选本地 OCR 工程验收完成，V1 原生解析和后续 Content/
 ## Git 与不要重复做的事情
 
 本阶段接手时 `main`/`origin/main` 同为 `da4ca8e465dfa5037f6c451b2348d689aa5d1638`；Phase16 旧交接的“尚未推送”已过期。最新已验证功能提交为 `3ff4eb360e4fcf9ecfffd7cafa280be4246a769c`（`feat: add opt-in local OCR extraction for PDFs and EPUBs`）；交接快照自身的 HEAD 必须用 `git log -1` 查询，STATE 不自引用。Phase17 未主动 push，远端 CI 不可冒充本地验证。不要重复生成已有 DeepSeek/Gemini/Kokoro/Qwen 任务，不要下载大型模型，不要为了 OCR 改写内容或语音 Provider。
+# Web Qwen structured-output recovery（2026-09-28）
+
+已验证功能 checkpoint：`cc664f76c5249efdbab0abfb4260221c033127a3`。当前目标：仅修复正文任务的结构化响应失败；禁止自动重跑现有 Web Job。最新失败任务为 `analysis:0003:0005`（Qwen `qwen3.7-flash`，HTTP 200）；预期 `EvidenceAnalysis`，实际持久化的 Pydantic 错误元数据为 `ValidationError / people / too_long`，该字段最多 6 项。此次失败发生在正文，不能再归因于 EPUB 前置页。原始模型响应没有保存到 Job 文件，故无法提供其真实脱敏正文。`tests/fixtures/qwen_people_too_long_reconstructed.json` 是严格标注来源的最小重建样本，绝非原始响应。
+
+完成内容：Qwen 首次结构有效时直接完成；结构失败时同一个任务最多一次原 schema 修复；仍失败时仅该任务使用 DeepSeek 一次，DeepSeek 结构失败则永久失败。鉴权错误不修复/回退；transport/server 错误继续沿用原 ProviderChain 策略。尝试均进入既有 Attempt journal，Qwen 原始响应仅保留在绑定 Provider 的内存中。相关文件：`src/bookcast/adapters/qwen_llm.py`、`src/bookcast/model_routing.py`、`src/bookcast/provider_chain.py` 和 `tests/test_structured_recovery.py`。完成任务的缓存/恢复机制保持原样。
+
+离线验证：专项 86 passed；完整 pytest 771 passed、1 skipped、7 deselected、10 subtests、0 failed；compileall、`scripts/validate_project.py` 与 `git diff --check` 通过。没有调用真实 API，没有 retry 原 Job，没有推送。下一步仅在用户明确授权时对现有 Job 发起恢复，并观察一次修复/回退的真实遥测；不要为取得原始响应而自动重试。
+
+---

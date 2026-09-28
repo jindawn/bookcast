@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-19",
-  "current_task": "Web 传习录 EPUB front matter schema_error root cause proven offline",
+  "current_task": "Web Qwen structured output bounded repair and per-task DeepSeek fallback",
   "task_status": "completed",
   "branch": "codex/phase19-clean-history",
-  "last_verified_commit": "d058d6aa5b306c8f7b7e3347d312d6e583f90a7a",
+  "last_verified_commit": "cc664f76c5249efdbab0abfb4260221c033127a3",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -160,10 +160,12 @@
     "Phase19.3D 唯一3分钟Live Canary已完成并验收：2段Two-Tier Qwen Tier1均PASS，Full audit均supported，potential FN=0；26物理请求全HTTP200、0重试/回退；一致性生产¥0.0024、Full反事实¥0.0817、节省97.06%，整Job¥0.2227；默认full保持。",
     "Phase19.3D Positive-Path Live Canary：冻结case_4只调用生产Two-Tier Qwen1/targeted DeepSeek1/Full audit1；第4轮REVIEW并被Tier2及Full判contradicted，production合并保留风险，potential FN=0；3次物理请求HTTP200、0重试，LLM成本¥0.0135无重复计费。",
     "Phase19 Final RC：新Job默认consistency_mode=two_tier；legacy manifest缺字段默认full；existing Job resume/retry继承已固化模式；--consistency-mode full一键回滚；canary audit默认false；Full DeepSeek实现永久保留；Two-Tier recovery幂等（merge artifact write-if-changed，不依赖mtime）；旧recovery/failure/routing测试显式固定full保留原测试语义；Full pytest 763 passed/1 skipped/7 deselected/0 failed；Targeted tests 243 passed；compileall/validate_project/diff check PASS；functional checkpoint d1220f78。",
-    "Web《传习录》schema_error离线根因：失败analysis:0001:0001确为22字导出标题页；Qwen HTTP200后EvidenceAnalysis.core_ideas too_short。通用EPUB结构过滤使原始上传只读重解析为3正文chapter，真实EPUB容器回归保留合法短正文；完整离线pytest764 passed/1 skipped/0 failed。"
+    "Web《传习录》schema_error离线根因：失败analysis:0001:0001确为22字导出标题页；Qwen HTTP200后EvidenceAnalysis.core_ideas too_short。通用EPUB结构过滤使原始上传只读重解析为3正文chapter，真实EPUB容器回归保留合法短正文；完整离线pytest764 passed/1 skipped/0 failed。",
+    "Web正文任务 analysis:0003:0005 的Qwen HTTP200响应触发EvidenceAnalysis.people too_long；原始响应未落盘。实现一次Qwen结构修复，仍失败时仅当前task一次DeepSeek回退；双失败永久停止，鉴权不进入策略。"
   ],
   "in_progress": [],
   "next_actions": [
+    "保留失败Web Job；仅在用户明确授权后考虑原Job retry，并核对原始响应脱敏采集需求。旧Job未存原始Qwen body，当前回归fixture为按日志签名重建，不能声称是原始响应。",
     "Web《传习录》旧失败Job未经retry；只读审查 docs/experiments/chuanxilu-epub-schema-error.md。原始Qwen响应未保存，修正后真实生成需用户另行授权，不能自动重跑当前Job。",
     "Phase19.3D Positive-Path Live Canary 已 POSITIVE_PATH_ACCEPTED；只读审查 docs/experiments/phase19-3d-canary.md 与本地遥测；后续阶段需另行授权，不自动真实调用或push。",
     "历史19.3C Shadow Tier1反事实精确成本缺cache-hit/逐请求时点；不要猜算或改写历史数据。",
@@ -182,6 +184,14 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "web-qwen-structured-recovery-offline",
+      "command": ".venv/bin/python -m pytest -q tests/test_structured_recovery.py tests/test_qwen_llm.py tests/test_model_routing.py; .venv/bin/python -m pytest -q; .venv/bin/python -m compileall -q src scripts; python3 scripts/validate_project.py; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "86 targeted passed；full offline 771 passed/1 skipped/7 deselected/0 failed/10 subtests；compileall/validator/diff passed。无真实API、Job retry或push。",
+      "checked_at": "2026-09-28T11:27:02Z"
+    },
     {
       "name": "chuanxilu-epub-front-matter-regression",
       "command": ".venv/bin/python -m pytest -p no:cacheprovider tests/test_phase1.py -q; python3 -m compileall -q src scripts; python3 scripts/validate_project.py; git diff --check; .venv/bin/python -m pytest -p no:cacheprovider -q --tb=line",
@@ -1637,5 +1647,5 @@
       "purpose": "传习录Web失败Job的spine证据、core_ideas too_short根因边界与EPUB过滤离线回归"
     }
   ],
-  "updated_at": "2026-09-28T11:08:40Z"
+  "updated_at": "2026-09-28T11:27:02Z"
 }
