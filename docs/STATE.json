@@ -2,10 +2,10 @@
   "schema_version": 1,
   "project": "BookCast",
   "current_phase": "phase-19",
-  "current_task": "Phase19.3D STEP 0 pricing telemetry接线完成；Canary implementation NOT STARTED",
-  "task_status": "completed",
+  "current_task": "Phase19.3D STEP 1–3 离线实现已提交；全量验收 Gate 因旧 Dialogue D 时段依赖测试失败而待完成",
+  "task_status": "blocked",
   "branch": "codex/phase19-clean-history",
-  "last_verified_commit": "0cc5a45435389376a0c49911ba12cc6c7b0b2bbc",
+  "last_verified_commit": "a4316ae2efa3e741447cbd184141ae78c723b6b4",
   "completed_tasks": [
     "检查空目录并初始化 main 分支 Git 仓库",
     "建立统一 Agent 入口、领域术语、产品范围、架构规划和分阶段路线图",
@@ -154,11 +154,12 @@
     "Phase 19.3B Consistency Live Validation Set 验证完成：执行 6 个受控测试用例（负样本 case_1 复用、case_10 PASS；正样本 case_3 幻觉、case_5 归因、case_6 限定词、case_7 矛盾全部 REVIEW 升轨），新增 9 次物理请求（Qwen 5 次，DeepSeek 4 次，0 重试，0 失败），TP=4, TN=2, FP=0, FN=0（检出召回率 100%，特异度 100%，错误轮次定位精确度 100%），DeepSeek 定向复核平均 Reasoning 降至 191 tokens（降幅 92.4%），新增耗时 17.888s、成本 ¥0.011522；6 项生产候选 Gate 全部通过，架构状态标记为 PRODUCTION_CANDIDATE，生产 Router/配置与 TTS 保持完全冻结不变，未 push。",
     "Phase 19.3C Two-Tier Consistency Shadow Mode 实现完成：新增 shadow_consistency.py（Tier1 Qwen 初筛 + Tier2 DeepSeek 定向复核 + 对比生产裁决 + 评估报告写盘）、ContentOptions/LLMRouting 配置扩展（默认 false，向后兼容）、ContentFlow._run_shadow_consistency 集成（静默容错）、pipeline/CLI shadow flag 传递、content_mock 新增 consistency_tier1 op、9 项专项测试全部通过；全量离线 742 passed/1 skipped/7 deselected/10 subtests；生产 Router 完全冻结，Live 验收待用户授权。提交 efe71bb2b82050187ddc07d81a948a179a596587。",
     "Phase 19.3C Shadow Mode Live 验收完成（SHADOW_ACCEPTED）：使用 examples/mind_and_judgment.txt、model-routing-cloud.toml、--mode two_host --minutes 3 --shadow-consistency 执行真实 3 分钟 Job；Job 完整成功（39/39 steps completed），生成 168.66 秒 MP3；production Full DeepSeek 一致性 2 次调用（in:3631 out:3350 reason:2893 tokens，15.167s）；Shadow Two-Tier Qwen Tier1 2 次调用均 PASS，DeepSeek escalation=0（avoided 100%），reasoning reduction 100%；verdict agreement 100%，FN=0，shadow-only warnings=0，telemetry 完整。acceptance_decision=SHADOW_ACCEPTED。生产 Router 保持完全冻结，未进入 Canary，未 push。详见 docs/experiments/phase19-3c-shadow.md。",
-    "Phase19.3D STEP0 pricing telemetry：Job保存的ProvidersConfig经现有calculate_cost_summary接入llm_usage；97项pricing/usage与44项routing/shadow专项通过，Canary未开始。"
+    "Phase19.3D STEP0 pricing telemetry：Job保存的ProvidersConfig经现有calculate_cost_summary接入llm_usage；97项pricing/usage与44项routing/shadow专项通过，Canary未开始。",
+    "Phase19.3D STEP1–3 Two-Tier production与Full audit sidecar代码完成并提交a4316ae；默认Full保持、Canary审计隔离、价格复用统一成本路径；Canary专项16 passed，相关回归221 passed；Live未运行，严格Ready Gate未通过。"
   ],
   "in_progress": [],
   "next_actions": [
-    "Phase19.3D Canary implementation NOT STARTED；仅在新授权下规划/实现consistency_mode、canary_consistency.py、ContentFlow与CLI集成，禁止本轮继续。",
+    "Phase19.3D: 先解决/复验旧 tests/test_llm_reasoning_dialogue.py::test_d_success_gate_requires_usage_and_one_receipt 的时段依赖；完整离线pytest全绿后才可标记CANARY_IMPLEMENTED/LIVE_READY，并由用户另行授权Live Canary。",
     "历史19.3C Shadow Tier1反事实精确成本缺cache-hit/逐请求时点；不要猜算或改写历史数据。",
     "保留未跟踪examples/mind_and_judgment.txt，不删除、移动或提交。",
     "维护者审阅 Phase 19.3B Consistency Live Validation 评测与 PRODUCTION_CANDIDATE 状态；当前保持严格停机，任何进一步真实测试或生产路由集成需重新授权。",
@@ -175,6 +176,22 @@
     "在正常公共DNS环境显式复验Gutenberg全新获取；发布前复核FFmpeg资产通知、最终包与Web产物的secret scan。"
   ],
   "tests": [
+    {
+      "name": "phase19-3d-canary-targeted",
+      "command": ".venv/bin/python -m pytest -p no:cacheprovider tests/test_canary_consistency.py tests/test_content.py tests/test_shadow_consistency.py tests/test_model_routing.py tests/test_generation.py tests/test_cost_calculator.py tests/test_cost_regression.py tests/test_cost_isolation.py tests/test_cost_integration.py tests/test_cost_telemetry.py tests/test_job_recovery.py tests/test_job_cli.py -q; python3 -m compileall -q src scripts; python3 scripts/validate_project.py; git diff --check",
+      "status": "passed",
+      "scope": "working_tree",
+      "summary": "16 Canary专项与相关回归共221 passed；compileall、validator、diff check通过。功能提交a4316ae上Canary专项16项复测通过。无真实API。",
+      "checked_at": "2026-09-28T01:35:01Z"
+    },
+    {
+      "name": "phase19-3d-full-offline-gate",
+      "command": ".venv/bin/python -m pytest -p no:cacheprovider -q",
+      "status": "failed",
+      "scope": "working_tree",
+      "summary": "757 passed, 1 failed, 1 skipped, 7 deselected, 10 subtests passed；唯一失败为旧Dialogue D success_gate依赖当前峰段价格，和Canary代码无直接关联。严格LIVE_READY Gate未通过。",
+      "checked_at": "2026-09-28T01:35:01Z"
+    },
     {
       "name": "phase-19-3b-consistency-live-validation",
       "command": ".venv/bin/python scripts/llm_reasoning_consistency.py --candidate twotier --live --fixtures case_1_completely_correct,case_10_hypothetical_boundary,case_3_obvious_hallucination,case_5_incorrect_attribution,case_6_missing_critical_qualifier,case_7_obvious_contradiction --output output/llm-reasoning-ab/consistency/live-validation-20260927 --max-calls 9 --max-qwen-calls 5 --max-deepseek-calls 4",
@@ -1049,9 +1066,12 @@
     "2026-09-27最小DeepSeek请求HTTP400但无code/message/request_id/content-type，无法确定是DeepSeek源站还是代理返回；本轮无Baseline A请求。",
     "Phase19.3B新B/C各一次HTTP200且schema有效，但两者长度门禁失败；B reasoning tokens未报告，C成本降幅受1024缓存命中影响，A/B/C延迟计时口径不同。",
     "Phase19.3B Candidate D虽然122字/5轮且schema/Claim coverage/重复率达标，但reasoning4630和估算成本¥0.020496超过A；预声明成功门禁失败，不自动调Prompt。",
-    "历史Phase19.3C Job有1条Qwen extraction用量缺失，Qwen/全LLM总估算仍未知；Shadow Tier1缺cache-hit/逐请求时点，反事实成本不可精确离线复原。"
+    "历史Phase19.3C Job有1条Qwen extraction用量缺失，Qwen/全LLM总估算仍未知；Shadow Tier1缺cache-hit/逐请求时点，反事实成本不可精确离线复原。",
+    "Phase19.3D完整离线pytest在2026-09-28北京时间峰段为757 passed/1 failed/1 skipped/7 deselected；唯一失败是旧Dialogue D测试把当前峰段成本与固定历史离峰基线比较，和Canary代码路径无直接关联。未改旧实验测试，严格Live Ready Gate未通过。"
   ],
-  "blockers": [],
+  "blockers": [
+    "Phase19.3D LIVE_READY Gate阻塞：完整离线pytest仍有旧Dialogue D时间依赖测试失败；不得执行Live Canary。"
+  ],
   "important_files": [
     {
       "path": "src/bookcast/onboarding.py",
@@ -1552,7 +1572,19 @@
     {
       "path": "tests/test_llm_reasoning_consistency.py",
       "purpose": "Consistency 离线契约、两级流控与指标计算专项测试"
+    },
+    {
+      "path": "src/bookcast/canary_consistency.py",
+      "purpose": "Phase19.3D Canary审计/生产对比和统一Attempt计费视图"
+    },
+    {
+      "path": "tests/test_canary_consistency.py",
+      "purpose": "Phase19.3D离线模式、审计隔离、合并、计费与CLI专项"
+    },
+    {
+      "path": "docs/experiments/phase19-3d-canary.md",
+      "purpose": "Phase19.3D Canary实现和离线Gate/Live未运行记录"
     }
   ],
-  "updated_at": "2026-09-28T00:12:51Z"
+  "updated_at": "2026-09-28T01:35:01Z"
 }

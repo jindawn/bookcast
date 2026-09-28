@@ -1,3 +1,13 @@
+# Phase 19.3D STEP 1–3 离线实现交接（2026-09-28）
+
+目标：Two-Tier 为显式选择的生产一致性，Full DeepSeek 为隔离的 Canary audit；默认 Full 不变。功能提交 `a4316ae2efa3e741447cbd184141ae78c723b6b4` 已完成源码与 targeted tests；详细边界、文件、价格视图、预计调用及下一轮命令见 [phase19-3d-canary.md](experiments/phase19-3d-canary.md)。STEP 0 pricing 仍为 COMPLETED；STEP 1–3 代码已落地，但严格离线 Gate 阻塞，因此 **CANARY_IMPLEMENTED / LIVE_READY 均未宣告，LIVE_NOT_RUN**。
+
+验收：Canary 专项16 passed、相关回归221 passed；compileall、validate_project、diff check通过。全量离线pytest最终757 passed / 1 failed / 1 skipped / 7 deselected / 10 subtests passed。唯一失败为旧 Dialogue D success gate 测试在当前北京时间峰段使用峰段价格，对比固定历史离峰成本；本阶段代码未触碰该实验，按授权未修改旧测试。没有真实 API、Live Canary 或 push；未跟踪 `examples/mind_and_judgment.txt` 保留且未提交。
+
+精确下一步：先排除/解决旧 Dialogue D 测试的时段依赖并跑完整离线pytest，随后复核 Gate；全绿后维护者另行授权文档中的唯一3分钟Live命令。不要在当前阻塞状态下运行 Canary。最近已验证功能提交为 `a4316ae2efa3e741447cbd184141ae78c723b6b4`（提交上专项与静态检查通过）；本文档提交按 D-006 不自引用。需要读取 `docs/experiments/phase19-3d-canary.md`、`src/bookcast/content.py`、`src/bookcast/shadow_consistency.py`、`src/bookcast/canary_consistency.py`、`tests/test_canary_consistency.py` 及 `docs/STATE.json`。
+
+---
+
 # Phase 19.3D STEP 1–3 设计交接（2026-09-28）
 
 - STEP 0 pricing = **COMPLETED**（功能提交 `0cc5a45`，文档交接 `d457726`）。
