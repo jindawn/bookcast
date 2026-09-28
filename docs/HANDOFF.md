@@ -1,5 +1,7 @@
 # Phase 19 Final RC：PHASE_19_COMPLETE / RC_READY（2026-09-28）
 
+最终可交接报告见 [phase19-final-rc.md](experiments/phase19-final-rc.md)；真正用户实测命令已列于该报告，尚未执行。
+
 ## 目标
 
 接管 Codex 因额度耗尽中断的 Phase 19 Final RC。Codex 已完成大部分工作，AGY 接管后验证并补全。

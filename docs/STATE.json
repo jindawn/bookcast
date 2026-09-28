@@ -1617,7 +1617,11 @@
     {
       "path": "docs/experiments/phase19-3d-canary.md",
       "purpose": "Phase19.3D Canary实现和离线Gate/Live未运行记录"
+    },
+    {
+      "path": "docs/experiments/phase19-final-rc.md",
+      "purpose": "Phase19 Final RC策略、兼容边界、离线Gate、真实成本证据与用户实测命令"
     }
   ],
-  "updated_at": "2026-09-28T06:49:40Z"
+  "updated_at": "2026-09-28T11:01:15Z"
 }
