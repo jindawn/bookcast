@@ -230,7 +230,7 @@ def test_deepseek_invalid_analysis_reports_field_and_retry_preserves_chapters(tm
         model='deepseek-flash', base_url='https://api.deepseek.com'))
     pipeline = Pipeline(provider, MockTTSProvider(), tmp_path/'out')
     with pytest.raises(Exception, match='schema_error'):
-        pipeline.generate(source)
+        pipeline.generate(source, consistency_mode='full')
     job = next((tmp_path/'out').iterdir())
     before = {p.name: sha256_file(p) for p in (job/'analysis').glob('000*.json')}
     failed = load_manifest(job/'manifest.json').ai_calls[-1]
@@ -677,7 +677,7 @@ def test_completed_calls_resume_and_only_effective_changes_invalidate(tmp_path, 
     calls = install_mock_wire(monkeypatch)
     source = Path(__file__).parents[1]/'examples/content-demo.txt'
     original = CompatibleLLMProvider(spec(reasoning_policy='bookcast-v1'))
-    job = Pipeline(original, MockTTSProvider(), tmp_path/'out').generate(source)
+    job = Pipeline(original, MockTTSProvider(), tmp_path/'out').generate(source, consistency_mode='full')
     before = {p:(p.stat().st_mtime_ns,sha256_file(p)) for p in job.rglob('*')
               if p.is_file() and p.name != '.lock' and 'usage' not in p.parts}
     count = len(calls)
@@ -698,7 +698,7 @@ def test_real_adapter_402_failover_does_not_repeat_completed_chapter(tmp_path, m
     first = CompatibleLLMProvider(spec(reasoning_policy='bookcast-v1'))
     second_spec = spec(reasoning_policy='bookcast-v1').model_copy(update={'name':'B','base_url':'https://backup.invalid'})
     chain = ProviderChain([first, CompatibleLLMProvider(second_spec)])
-    job = Pipeline(chain, MockTTSProvider(), tmp_path/'out').generate(Path(__file__).parents[1]/'examples/content-demo.txt')
+    job = Pipeline(chain, MockTTSProvider(), tmp_path/'out').generate(Path(__file__).parents[1]/'examples/content-demo.txt', consistency_mode='full')
     m = load_manifest(job/'manifest.json')
     assert any(c.error == 'quota_exhausted' and c.provider_reported_usage is None for c in m.ai_calls)
     extraction = [(url, d['chapter']['id']) for url,d,_ in calls if d['operation']=='analysis']
@@ -721,7 +721,7 @@ def test_interruption_after_durable_attempt_uses_task_configuration_on_resume(tm
     def pipe():
         return Pipeline(CompatibleLLMProvider(spec(reasoning_policy='bookcast-v1')), MockTTSProvider(), tmp_path/'out')
     with pytest.raises(KeyboardInterrupt):
-        pipe().generate(Path(__file__).parents[1]/'examples/content-demo.txt')
+        pipe().generate(Path(__file__).parents[1]/'examples/content-demo.txt', consistency_mode='full')
     job = next((tmp_path/'out').iterdir())
     checkpoint = job/'analysis/chunks/0001-0001.json'
     before = (checkpoint.stat().st_mtime_ns,sha256_file(checkpoint))
@@ -995,4 +995,3 @@ def test_deepseek_too_short_correction(monkeypatch):
     assert failed_attempt.error_type == 'ValidationError'
     assert failed_attempt.validation_field == 'core_ideas'
     assert failed_attempt.validation_reason == 'too_short'
-

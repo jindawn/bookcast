@@ -232,7 +232,7 @@ def test_pipeline_snapshot_cost_and_resume_without_new_calls(tmp_path, monkeypat
     config = settings()
     source = tmp_path / 'book.txt'
     source.write_text('第一章\n协作有收益。\n第二章\n分工也有成本。')
-    root = configured_pipeline(config, tmp_path / 'output').generate(source, minutes=1)
+    root = configured_pipeline(config, tmp_path / 'output').generate(source, minutes=1, consistency_mode='full')
     manifest = load_manifest(root / 'manifest.json')
     assert manifest.status == 'completed'
     calls = [a for a in manifest.ai_calls if a.kind == 'llm']

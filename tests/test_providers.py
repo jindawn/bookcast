@@ -67,7 +67,7 @@ def test_chapter_seven_failover_and_idempotence(book, failure):
     source, output = book
     a, b = RecordingLLM(failure=failure), RecordingLLM("B")
     pipeline = Pipeline(ProviderChain([a, b]), MockTTSProvider(), output)
-    job = pipeline.generate(source)
+    job = pipeline.generate(source, consistency_mode='full')
     manifest = load_manifest(job / "manifest.json")
     assert manifest.status == "completed" and manifest.schema_version == 3
     assert len(a.calls) == (13 if failure else 35)
@@ -102,7 +102,7 @@ def test_permanent_errors_never_switch_and_never_log_raw_exception(book, failure
     source, output = book
     a, b = RecordingLLM(failure=failure, target=("analysis", "0001")), RecordingLLM("B")
     with pytest.raises(BookCastError):
-        Pipeline(ProviderChain([a, b]), MockTTSProvider(), output).generate(source)
+        Pipeline(ProviderChain([a, b]), MockTTSProvider(), output).generate(source, consistency_mode='full')
     raw = next(output.glob("*/manifest.json")).read_text()
     call = json.loads(raw)["ai_calls"][-1]
     assert call["status"] == "failed_permanent" and call["error"] == kind and not b.calls
@@ -119,7 +119,7 @@ def test_invalid_model_output_is_not_hidden_by_failover(book, bad_result, kind):
     source, output = book
     backup = RecordingLLM("B")
     with pytest.raises(BookCastError):
-        Pipeline(ProviderChain([Invalid(), backup]), MockTTSProvider(), output).generate(source)
+        Pipeline(ProviderChain([Invalid(), backup]), MockTTSProvider(), output).generate(source, consistency_mode='full')
     assert not backup.calls
     assert load_manifest(next(output.glob("*/manifest.json"))).ai_calls[-1].error == kind
 
@@ -129,13 +129,13 @@ def test_exhausted_chain_resumes_smallest_task_with_new_configuration(book):
     a = RecordingLLM(failure=ProviderError(ErrorKind.QUOTA), target=("script", "0007"))
     b = RecordingLLM("B", ProviderError(ErrorKind.TIMEOUT), target=("script", "0007"))
     with pytest.raises(BookCastError):
-        Pipeline(ProviderChain([a, b]), MockTTSProvider(), output).generate(source)
+        Pipeline(ProviderChain([a, b]), MockTTSProvider(), output).generate(source, consistency_mode='full')
     job = next(output.iterdir())
     before = completed_files(job)
     seventh_analysis = (job / "analysis/0007.json").stat().st_mtime_ns
     replacement = RecordingLLM("replacement")
     with pytest.raises(BookCastError, match="--resume"):
-        Pipeline(replacement, MockTTSProvider(), output).generate(source)
+        Pipeline(replacement, MockTTSProvider(), output).generate(source, consistency_mode='full')
     Pipeline(replacement, MockTTSProvider(), output).generate(source, resume=True)
     assert replacement.calls == [('script', '0007'), ('script', '0008')] + [('consistency', f'{n:04}') for n in range(1, 9)]
     assert all((Path(p).stat().st_mtime_ns, sha256_file(Path(p))) == v for p, v in before.items())
@@ -164,7 +164,7 @@ def crash_observe(self, attempt):
     if after and attempt.task == "analysis:0007:0001" and attempt.status == "completed":
         os._exit(17)
 _Runner.observe = crash_observe
-Pipeline(Crash(), MockTTSProvider(), Path(sys.argv[2])).generate(Path(sys.argv[1]))
+Pipeline(Crash(), MockTTSProvider(), Path(sys.argv[2])).generate(Path(sys.argv[1]), consistency_mode='full')
 '''
     result = subprocess.run([sys.executable, "-c", script, str(source), str(output), str(crash_after_completed)],
                             capture_output=True, text=True, timeout=30)
@@ -196,7 +196,7 @@ def test_attempt_states_are_durable_before_invocation_and_completion(book):
             assert all(sha256_file(runner.root / p) == h for p, h in stored.artifacts.items())
         states.append(stored.status)
     with patch.object(_Runner, "observe", observe):
-        Pipeline(RecordingLLM(), MockTTSProvider(), output).generate(source)
+        Pipeline(RecordingLLM(), MockTTSProvider(), output).generate(source, consistency_mode='full')
     assert states == [state for _ in range(43) for state in ("pending", "running", "completed")]
 
 
@@ -211,7 +211,7 @@ def test_tts_failover_keeps_prior_audio(book):
             return super().synthesize(script, destination)
     source, output = book
     a, b = TTS("tts-a", True), TTS("tts-b")
-    job = Pipeline(RecordingLLM(), ProviderChain([a, b]), output).generate(source)
+    job = Pipeline(RecordingLLM(), ProviderChain([a, b]), output).generate(source, consistency_mode='full')
     assert a.calls == [f"{n:04}" for n in range(1, 8)] and b.calls == ["0007", "0008"]
     assert load_manifest(job / "manifest.json").provider_status["tts:tts-a"]["quota_exhausted"]
 
@@ -227,7 +227,7 @@ def test_phase1_manifest_migration_reuses_verified_legacy_artifacts(book):
         source_name=source.name, source_format='txt', status='completed',
         config={'llm': ProviderChain([MockLLMProvider()]).cache_key,
                 'tts': ProviderChain([MockTTSProvider()]).cache_key}).model_dump())
-    job = Pipeline(MockLLMProvider(), MockTTSProvider(), output).generate(source)
+    job = Pipeline(MockLLMProvider(), MockTTSProvider(), output).generate(source, consistency_mode='full')
     manifest = load_manifest(job / "manifest.json")
     manifest.schema_version = 1
     manifest.ai_calls, manifest.provider_status = [], {}
@@ -376,12 +376,12 @@ def test_tertiary_takes_over_and_policy_can_disable_switching(book):
     a = RecordingLLM("A", ProviderError(ErrorKind.QUOTA), ("analysis", "0001"))
     b = RecordingLLM("B", ProviderError(ErrorKind.TIMEOUT), ("analysis", "0001"))
     c = RecordingLLM("C")
-    Pipeline(ProviderChain([a, b, c]), MockTTSProvider(), output).generate(source)
+    Pipeline(ProviderChain([a, b, c]), MockTTSProvider(), output).generate(source, consistency_mode='full')
     assert len(a.calls) == len(b.calls) == 1 and len(c.calls) == 35
     a.calls.clear()
     c.calls.clear()
     with pytest.raises(BookCastError):
-        Pipeline(ProviderChain([a, c], failover_on=[]), MockTTSProvider(), output.parent / "policy").generate(source)
+        Pipeline(ProviderChain([a, c], failover_on=[]), MockTTSProvider(), output.parent / "policy").generate(source, consistency_mode='full')
     assert len(a.calls) == 1 and not c.calls
 
 
@@ -393,7 +393,7 @@ def test_invalid_tts_does_not_switch(book):
     source, output = book
     with patch.object(MockTTSProvider, "synthesize") as backup:
         with pytest.raises(BookCastError):
-            Pipeline(RecordingLLM(), ProviderChain([InvalidTTS(), MockTTSProvider()]), output).generate(source)
+            Pipeline(RecordingLLM(), ProviderChain([InvalidTTS(), MockTTSProvider()]), output).generate(source, consistency_mode='full')
         backup.assert_not_called()
     assert load_manifest(next(output.glob("*/manifest.json"))).ai_calls[-1].error == "schema_error"
 

@@ -278,6 +278,47 @@ def test_mode_is_immutable_on_resume_without_running_content(tmp_path, monkeypat
         pipeline.generate(source, resume=True, consistency_mode='full')
 
 
+def test_new_job_defaults_two_tier_but_legacy_and_existing_modes_are_stable(tmp_path, monkeypatch):
+    from bookcast.pipeline import load_manifest
+    monkeypatch.setattr('bookcast.pipeline._Runner.run', lambda self, *args, **kwargs: None)
+    source = tmp_path / 'input.txt'
+    source.write_text('测试内容。')
+    pipeline = Pipeline(MockLLMProvider(), MockTTSProvider(), tmp_path / 'out')
+
+    new = pipeline.generate(source)
+    created = load_manifest(new / 'manifest.json')
+    assert created.content_options['consistency_mode'] == 'two_tier'
+    assert created.content_options['consistency_canary_audit'] is False
+    assert pipeline.generate(source, resume=True) == new
+    assert load_manifest(new / 'manifest.json').content_options['consistency_mode'] == 'two_tier'
+
+    full = Pipeline(MockLLMProvider(), MockTTSProvider(), tmp_path / 'full').generate(
+        source, consistency_mode='full')
+    assert ContentOptions.model_validate(load_manifest(full / 'manifest.json').content_options).consistency_mode == 'full'
+    assert Pipeline(MockLLMProvider(), MockTTSProvider(), tmp_path / 'full').generate(source, resume=True) == full
+    assert ContentOptions.model_validate(load_manifest(full / 'manifest.json').content_options).consistency_mode == 'full'
+
+    legacy_manifest = load_manifest(full / 'manifest.json')
+    legacy_manifest.content_options.pop('consistency_mode', None)
+    from bookcast.storage import write_json
+    write_json(full / 'manifest.json', legacy_manifest.model_dump())
+    assert Pipeline(MockLLMProvider(), MockTTSProvider(), tmp_path / 'full').generate(source, resume=True) == full
+    assert ContentOptions.model_validate(load_manifest(full / 'manifest.json').content_options).consistency_mode == 'full'
+
+
+def test_new_job_full_override_and_shadow_flag_keep_full(tmp_path, monkeypatch):
+    from bookcast.pipeline import load_manifest
+    monkeypatch.setattr('bookcast.pipeline._Runner.run', lambda self, *args, **kwargs: None)
+    source = tmp_path / 'input.txt'
+    source.write_text('测试内容。')
+    for label, flags in [('rollback', {'consistency_mode': 'full'}),
+                         ('legacy_shadow', {'consistency_shadow_mode': True})]:
+        root = Pipeline(MockLLMProvider(), MockTTSProvider(), tmp_path / label).generate(source, **flags)
+        options = ContentOptions.model_validate(load_manifest(root / 'manifest.json').content_options)
+        assert options.consistency_mode == 'full'
+        assert options.consistency_canary_audit is False
+
+
 def test_cli_exposes_distinct_shadow_and_canary_options():
     from typer.testing import CliRunner
     from bookcast.cli import app
@@ -307,3 +348,25 @@ def test_cli_overrides_new_job_without_generating_audio(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert received[0]['consistency_mode'] == 'two_tier'
     assert received[0]['consistency_canary_audit'] is True
+
+
+@pytest.mark.parametrize(('flag', 'expected'), [('full', 'full'), ('two-tier', 'two_tier')])
+def test_cli_mode_override_without_audit(tmp_path, monkeypatch, flag, expected):
+    from typer.testing import CliRunner
+    from bookcast.cli import app
+    output = tmp_path / 'job'
+    (output / 'audio').mkdir(parents=True)
+    (output / 'audio/export.json').write_text('{}')
+    received = []
+    class StubPipeline:
+        def generate(self, *args, **kwargs):
+            received.append(kwargs)
+            return output
+    monkeypatch.setattr('bookcast.cli.generation_pipeline', lambda *args, **kwargs: StubPipeline())
+    monkeypatch.setattr('bookcast.cli.load_manifest', lambda *args: SimpleNamespace(
+        pipeline_version='1', warnings=[], job_id='offline'))
+    result = CliRunner().invoke(app, ['generate', str(tmp_path / 'source.txt'),
+                                      '--consistency-mode', flag])
+    assert result.exit_code == 0
+    assert received[0]['consistency_mode'] == expected
+    assert received[0]['consistency_canary_audit'] is None

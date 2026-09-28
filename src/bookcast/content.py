@@ -252,7 +252,13 @@ class ContentFlow:
         result = merge_tier_reviews(segment.id, script, tier1, tier2)
         validate_review(result)
         path = f'evaluation/segments/{segment.id}.json'
-        write_json(self.r.path(path), result.model_dump())
+        existing = self.r.path(path)
+        try:
+            unchanged = json.loads(existing.read_text(encoding='utf-8')) == result.model_dump()
+        except (OSError, ValueError):
+            unchanged = False
+        if not unchanged:
+            write_json(existing, result.model_dump())
         return result
 
     def _run_canary_audit(self, segment, script, evidence, revision, production):

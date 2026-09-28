@@ -115,7 +115,10 @@ def test_upload_core_history_audio_and_idempotency(client, mode):
     assert job['progress']['remaining'] == 0 and job['progress']['chapters_completed'] == 2
     path = Path(job['directory'])
     manifest = load_manifest(path / 'manifest.json')
-    assert manifest.content_options == {'mode': mode, 'minutes': 3}
+    assert manifest.content_options == {'mode': mode, 'minutes': 3,
+                                        'consistency_shadow_mode': False,
+                                        'consistency_mode': 'two_tier',
+                                        'consistency_canary_audit': False}
     before = snapshot(path)
     again = client.post('/api/jobs', headers={'Idempotency-Key': identifier},
                         json={'upload_id': upload_id, 'mode': mode, 'minutes': 3})

@@ -142,10 +142,11 @@ class Pipeline:
                     manifest.config = config
                     write_json(manifest_path, manifest.model_dump())
             else:
+                # The schema default remains full so old manifests without this field keep their original behavior.
                 options = ContentOptions(mode="two_host" if mode is None else mode,
                                          minutes=10 if minutes is None else minutes,
                                          consistency_shadow_mode=shadow_mode,
-                                         consistency_mode=consistency_mode or 'full',
+                                         consistency_mode=consistency_mode or ('full' if shadow_mode else 'two_tier'),
                                          consistency_canary_audit=bool(consistency_canary_audit))
                 cleanup_orphan_temporary_artifacts(root)
                 if any(path.name != ".lock" and not (path.name.startswith(".manifest.json.")

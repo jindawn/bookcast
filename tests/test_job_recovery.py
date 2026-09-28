@@ -121,7 +121,7 @@ def test_quota_exhaustion_and_explicit_replacement_retain_completed_chapters(tmp
     source=tmp_path/'book.txt';source.write_text('\n'.join(f'Chapter {n}\nPoint {n}.' for n in range(1,9)))
     def fail(d):
         if d['operation']=='analysis' and d['chapter']['id']=='0007': raise ProviderError(ErrorKind.QUOTA)
-    with pytest.raises(BookCastError): Pipeline(Recording(fail=fail),MockTTSProvider(),tmp_path/'out').generate(source)
+    with pytest.raises(BookCastError): Pipeline(Recording(fail=fail),MockTTSProvider(),tmp_path/'out').generate(source, consistency_mode='full')
     job=next((tmp_path/'out').iterdir());m=load_manifest(job/'manifest.json')
     assert m.state==TaskState.FAILED_RETRYABLE and m.steps['analysis:0007:0001'].state==TaskState.FAILED_RETRYABLE
     assert m.steps['analysis:0008:0001'].state==TaskState.PENDING
@@ -140,7 +140,7 @@ def test_permanent_error_requires_retry_and_history_survives(tmp_path):
     source=tmp_path/'b.txt';source.write_text('Chapter 1\nA point.')
     def fail(d):
         if d['operation']=='dialogue': raise ProviderError(ErrorKind.SCHEMA)
-    with pytest.raises(BookCastError): Pipeline(Recording(fail=fail),MockTTSProvider(),tmp_path/'out').generate(source)
+    with pytest.raises(BookCastError): Pipeline(Recording(fail=fail),MockTTSProvider(),tmp_path/'out').generate(source, consistency_mode='full')
     job=next((tmp_path/'out').iterdir());before=snapshot(job);b=Recording('B')
     with pytest.raises(BookCastError,match='retry'): Pipeline(b,MockTTSProvider(),tmp_path/'out').resume_job(job)
     unchanged(before);assert not b.calls
@@ -151,7 +151,7 @@ def test_permanent_error_requires_retry_and_history_survives(tmp_path):
 
 def test_cache_restart_same_name_config_and_prompt_version(tmp_path,monkeypatch):
     source=tmp_path/'b.txt';source.write_text('Chapter 1\nA point.')
-    a=Recording();pipe=Pipeline(a,MockTTSProvider(),tmp_path/'out');job=pipe.generate(source)
+    a=Recording();pipe=Pipeline(a,MockTTSProvider(),tmp_path/'out');job=pipe.generate(source, consistency_mode='full')
     before=snapshot(job);same=Recording();Pipeline(same,MockTTSProvider(),tmp_path/'out').resume_job(job)
     unchanged(before);assert not same.calls
     newer=Recording(config='v2')
@@ -169,7 +169,7 @@ def test_cache_restart_same_name_config_and_prompt_version(tmp_path,monkeypatch)
 
 def test_damage_only_regenerates_necessary_task_and_output_window(tmp_path):
     source=tmp_path/'b.txt';source.write_text('Chapter 1\nA point.')
-    job=Pipeline(Recording(),MockTTSProvider(),tmp_path/'out').generate(source)
+    job=Pipeline(Recording(),MockTTSProvider(),tmp_path/'out').generate(source, consistency_mode='full')
     (job/'scripts/0001.json').write_text('damaged')
     b=Recording();Pipeline(b,MockTTSProvider(),tmp_path/'out').resume_job(job)
     assert [d['operation'] for d in b.calls]==['dialogue']
@@ -192,7 +192,7 @@ def test_states_roundtrip_and_initial_atomic_temp_is_recoverable(tmp_path):
 def test_prompt_version_invalidates_and_is_recorded(tmp_path,monkeypatch):
     import bookcast.content as content
     source=tmp_path/'b.txt';source.write_text('Chapter 1\nA point.')
-    job=Pipeline(Recording(),MockTTSProvider(),tmp_path/'out').generate(source)
+    job=Pipeline(Recording(),MockTTSProvider(),tmp_path/'out').generate(source, consistency_mode='full')
     monkeypatch.setattr(content,'CONTENT_VERSION','content-test-v2')
     monkeypatch.setattr(content,'ANALYSIS_VERSION','content-test-v2')
     class Updated(Recording):

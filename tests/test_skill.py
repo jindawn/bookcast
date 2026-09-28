@@ -91,6 +91,9 @@ def test_local_examples_use_pipeline_and_restore_without_new_calls(command, loca
     assert manifest["content_options"] == {
         "mode": command[command.index("--mode") + 1],
         "minutes": int(command[command.index("--minutes") + 1]),
+        "consistency_shadow_mode": False,
+        "consistency_mode": "two_tier",
+        "consistency_canary_audit": False,
     }
     assert manifest["ai_calls"] and (job / "podcast.mp3").stat().st_size > 0
     assert all(call["provider"].startswith("mock") for call in manifest["ai_calls"])

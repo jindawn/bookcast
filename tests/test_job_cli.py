@@ -23,7 +23,7 @@ def generated(tmp_path,monkeypatch):
     monkeypatch.chdir(tmp_path)
     source=tmp_path/'example.txt';source.write_text('Chapter 1\nA point.')
     runner=CliRunner()
-    result=runner.invoke(app,['generate',str(source)])
+    result=runner.invoke(app,['generate',str(source),'--consistency-mode','full'])
     assert result.exit_code==0,result.output
     job=next((tmp_path/'output').iterdir())
     return runner,source,job
@@ -149,6 +149,6 @@ def test_broken_progress_sink_never_repeats_ai_calls(tmp_path):
     source=tmp_path/'book.txt';source.write_text('Chapter 1\nTopic.')
     def broken(event): raise BrokenPipeError('terminal closed')
     pipe=Pipeline(MockLLMProvider(),MockTTSProvider(),tmp_path/'out',progress=broken)
-    job=pipe.generate(source);before=files(job)
+    job=pipe.generate(source,consistency_mode='full');before=files(job)
     pipe.resume_job(job)
     assert files(job)==before
