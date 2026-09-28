@@ -446,6 +446,7 @@ class _Runner:
 
     def update_llm_usage(self) -> None:
         from .llm_usage import usage_snapshot, tts_usage_snapshot
+        from .cost import _snapshot_config
 
         path = self.path('usage/llm_usage.json')
         reuse = {}
@@ -460,7 +461,9 @@ class _Runner:
                 pass  # The attempt journal is authoritative; rebuild totals.
         for stage, count in self.pending_llm_reuse.items():
             reuse[stage] = reuse.get(stage, 0) + count
-        write_json(path, usage_snapshot(self.manifest.ai_calls, reuse))
+        pricing_config = _snapshot_config(self.manifest.cost_snapshot)
+        write_json(path, usage_snapshot(self.manifest.ai_calls, reuse, config=pricing_config,
+                                        pricing_policy=self.manifest.cost_snapshot if pricing_config else None))
         self.pending_llm_reuse.clear()
         write_json(self.path('usage/tts_usage.json'), tts_usage_snapshot(self.manifest.ai_calls, self.root))
 

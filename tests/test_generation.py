@@ -17,7 +17,7 @@ from bookcast.models import AIAttempt
 from bookcast.pipeline import Pipeline, load_manifest
 from bookcast.provider_api import ErrorKind, ProviderError
 from bookcast.provider_chain import ProviderChain, provider_config_hash
-from bookcast.provider_config import ProviderSpec, load_config
+from bookcast.provider_config import ProviderSpec, ProvidersConfig, load_config
 from bookcast.providers import MockLLMProvider, MockTTSProvider
 from bookcast.storage import fingerprint, sha256_file
 
@@ -108,6 +108,25 @@ def test_stage_usage_telemetry_counts_failures_reuse_and_optional_cost():
     assert usage['by_stage']['chapter_synthesis']['request_count'] == 1
     assert usage['total']['estimated_cost'] == round((110 + 20*.2 + 90*4)/1_000_000, 6)
     assert usage_snapshot(calls)['total']['estimated_cost'] is None
+
+
+def test_stage_usage_uses_saved_provider_pricing_for_peak_and_off_peak():
+    config = ProvidersConfig.model_validate({
+        'providers': [{'name': 'deepseek', 'kind': 'llm', 'type': 'mock', 'model': 'deepseek-flash'},
+                      {'name': 'tts', 'kind': 'tts', 'type': 'mock', 'model': 'mock-tones-v1'}],
+        'llm_priority': ['deepseek'], 'tts_priority': ['tts'],
+        'pricing': {'deepseek-flash': {'off_peak': {'uncached_input_per_million': 1.0},
+                                     'peak': {'uncached_input_per_million': 2.0}}},
+    })
+    common = dict(kind='llm', provider='deepseek', model='deepseek-flash', task='analysis:0001:0001',
+                  status='completed', prompt_version='v1', input_hash='hash',
+                  provider_reported_usage=ProviderUsage(input_tokens=1_000_000, cache_hit_tokens=0,
+                                                        output_tokens=0))
+    calls = [AIAttempt(id='off', timestamp='2026-09-27T02:00:00Z', **common),
+             AIAttempt(id='peak', timestamp='2026-09-28T02:00:00Z', **common)]
+    usage = usage_snapshot(calls, config=config)
+    assert usage['total']['estimated_cost'] == 3.0
+    assert usage['by_provider_model_stage'][0]['pricing']['off_peak']['uncached_input_per_million'] == 1.0
 
 
 def test_policy_stage_budgets_bound_broad_provider_override():

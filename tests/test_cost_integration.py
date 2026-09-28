@@ -69,6 +69,15 @@ def test_pipeline_attempt_to_usage_cost_status_and_web_dto(tmp_path):
     tts_usage = json.loads((root/'usage/tts_usage.json').read_text())
     stored = json.loads((root/'usage/cost_summary.json').read_text())
     assert llm_usage['total']['request_count'] > 0
+    assert llm_usage['total']['estimated_cost'] is not None
+    priced_rows = [row for row in llm_usage['by_provider_model_stage'] if row['model'] == 'deepseek-flash']
+    assert priced_rows and all(row['pricing']['default']['uncached_input_per_million'] == 2.0
+                               and row['estimated_cost'] is not None for row in priced_rows)
+    priced_summary = stored['llm']['providers']['priced::deepseek-flash']['by_stage']
+    assert all(row['estimated_cost'] == priced_summary[row['stage']]['estimated_cost'] for row in priced_rows)
+    assert llm_usage['total']['request_count'] == sum(
+        call.kind == 'llm' and call.status in {'completed', 'failed_retryable', 'failed_permanent'}
+        for call in manifest.ai_calls)
     assert tts_usage['tts_usage'][0]['request_count'] > 0
     assert manifest.cost_snapshot['config']['pricing']['deepseek-flash']['default']['uncached_input_per_million'] == 2.0
     assert stored['job_identity']['job_id'] == manifest.job_id

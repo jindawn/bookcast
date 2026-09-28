@@ -4,13 +4,17 @@ from collections import defaultdict
 from .generation import task_type
 
 
-def usage_snapshot(calls, reuse_counts=None, prices=None):
+def usage_snapshot(calls, reuse_counts=None, prices=None, *, config=None, pricing_policy=None):
     """Count terminal requests once, including billed failures and repairs.
 
-    ``prices`` optionally maps (provider, model) to per-million-token input,
-    cached-input and output prices. No price means cost is unknown, not zero.
+    ``config`` uses the saved ProvidersConfig and the existing cost calculator.
+    ``prices`` remains for legacy callers. No price means unknown, not zero.
     """
     reuse_counts, prices = reuse_counts or {}, prices or {}
+    cost_view = None
+    if config is not None:
+        from .cost import calculate_cost_summary
+        cost_view = calculate_cost_summary(calls, config, pricing_policy=pricing_policy)
     rows = defaultdict(lambda: {'request_count': 0, 'input_tokens': 0,
                                 'cached_input_tokens': 0, 'output_tokens': 0,
                                 'reasoning_tokens': 0, 'unknown_usage_count': 0})
@@ -35,12 +39,18 @@ def usage_snapshot(calls, reuse_counts=None, prices=None):
             by_stage[stage][key] += row[key]
         price = prices.get((provider, model))
         cost = None
-        if price is not None and row['unknown_usage_count'] == 0:
+        if cost_view is not None:
+            part = cost_view['llm']['providers'].get(f'{provider}::{model}', {}).get('by_stage', {}).get(stage)
+            if part is not None and part['cost']['status'] in {'actual', 'estimated'}:
+                cost = part['estimated_cost']
+        elif price is not None and row['unknown_usage_count'] == 0:
             uncached = max(0, row['input_tokens'] - row['cached_input_tokens'])
             cost = round((uncached * price['input'] + row['cached_input_tokens'] * price['cached_input']
                           + row['output_tokens'] * price['output']) / 1_000_000, 6)
         entries.append({'provider': provider, 'model': model, 'stage': stage,
-                        **row, 'estimated_cost': cost})
+                        **row, 'pricing': config.pricing[model].model_dump(mode='json', exclude_none=True)
+                        if config is not None and model in config.pricing else None,
+                        'estimated_cost': cost})
     totals = {key: sum(row[key] for row in rows.values()) for key in fields}
     totals['cache_reuse_count'] = sum(reuse_counts.values())
     totals['estimated_cost'] = (round(sum(entry['estimated_cost'] for entry in entries), 6)
