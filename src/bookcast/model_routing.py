@@ -40,13 +40,17 @@ class RoutedLLMChain(ProviderChain):
             raise ValueError('LLM routing cannot restore TTS calls')
         for profile, chain in self.routes.items():
             chain.restore([call for call in calls if call.kind == kind
-                           and self.routing.profile_for_task(call.task) == profile], kind)
+                           and self._profile_for_task(call.task) == profile], kind)
+
+    def _profile_for_task(self, task: str) -> str:
+        # Tier 1 is a consistency task billed as such, but routed to the cheap chain.
+        return 'cheap' if task.startswith('consistency:tier1:') else self.routing.profile_for_task(task)
 
     def execute(self, *, task: str, kind: str, prompt_version: str, input_hash: str,
                 invoke, persist, observe, context=None) -> dict[str, str]:
         if kind != 'llm':
             raise ValueError('LLM routing cannot execute TTS calls')
-        chain = self.routes[self.routing.profile_for_task(task)]
+        chain = self.routes[self._profile_for_task(task)]
         return chain.execute(task=task, kind=kind, prompt_version=prompt_version,
                              input_hash=input_hash, invoke=invoke, persist=persist, observe=observe,
                              context=context)

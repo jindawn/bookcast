@@ -17,6 +17,7 @@ from typing import Any, Literal
 from pydantic import ConfigDict, Field, field_validator
 
 from .content_models import ClaimReview, ConsistencyReview, Segment, SegmentScript
+from .errors import BookCastError
 from .generation import ProviderUsage
 from .models import Model
 from .provider_api import ErrorKind, Provider, ProviderError, ProviderRequestContext
@@ -163,6 +164,75 @@ def resolve_shadow_providers(runner: Any) -> tuple[Provider, Provider]:
         raise ProviderError(ErrorKind.INPUT, '无法为两级一致性审查解析可用 Provider')
 
     return tier1_provider, tier2_provider
+
+
+def validate_two_tier_providers(llm_chain: Any) -> None:
+    """Do not silently send a live Tier to an arbitrary default/fallback model."""
+    providers = getattr(llm_chain, 'providers', [])
+    if providers and all(provider.capabilities().mock for provider in providers):
+        return  # Explicit offline contract tests may use the Mock chain.
+    routes = getattr(llm_chain, 'routes', None)
+    if not isinstance(routes, dict):
+        raise BookCastError('Two-Tier requires explicit routed LLM providers')
+    for profile, model in (('cheap', 'qwen3.7-flash'), ('high_quality', 'deepseek-flash')):
+        chain = routes.get(profile)
+        if not chain or not chain.providers or any(p.model != model for p in chain.providers):
+            raise BookCastError(f'Two-Tier {profile} route requires {model}')
+
+
+def merge_tier_reviews(segment_id: str, script: SegmentScript, tier1: Tier1ScreeningResult,
+                       tier2: ConsistencyReview | None) -> ConsistencyReview:
+    """Fail closed on unresolved suspicious turns; preserve source-turn indices."""
+    source = {i for i, turn in enumerate(script.turns) if turn.attribution == 'source'}
+    suspicious = set(tier1.suspicious_turn_ids)
+    if not suspicious.issubset(source) or (tier1.status == 'PASS' and suspicious):
+        raise ProviderError(ErrorKind.SCHEMA)
+    if tier1.status == 'REVIEW' and not suspicious:
+        raise ProviderError(ErrorKind.SCHEMA)
+    checks = {}
+    if suspicious:
+        if tier2 is None or tier2.segment_id != segment_id:
+            raise ProviderError(ErrorKind.SCHEMA)
+        for check in tier2.checks:
+            if check.turn_index in checks or check.turn_index not in suspicious:
+                raise ProviderError(ErrorKind.SCHEMA)
+            checks[check.turn_index] = check
+        if set(checks) != suspicious:
+            raise ProviderError(ErrorKind.SCHEMA)
+    return ConsistencyReview(segment_id=segment_id, is_mock=bool(getattr(tier1, 'is_mock', False)) or bool(tier2 and tier2.is_mock),
+                             checks=[checks.get(i) or ClaimReview(turn_index=i, verdict='supported',
+                                        reason='Tier 1 screening PASS') for i in sorted(source)])
+
+
+def compare_canary_reviews(production: ConsistencyReview, audit: ConsistencyReview | None,
+                           source_turns: set[int]) -> dict:
+    """Only aligned, complete factual-risk checks can establish a false negative."""
+    prod = {c.turn_index: c.verdict for c in production.checks if c.turn_index in source_turns}
+    aud = ({c.turn_index: c.verdict for c in audit.checks if c.turn_index in source_turns}
+           if audit is not None and audit.segment_id == production.segment_id else {})
+    if len(prod) != len(source_turns) or len(aud) != len(source_turns):
+        return {'audit_status': 'indeterminate', 'potential_false_negative': None,
+                'production_verdict': _overall(prod), 'audit_verdict': None,
+                'production_flagged_turns': sorted(i for i, v in prod.items() if v != 'supported'),
+                'audit_flagged_turns': None, 'verdict_agreement': None, 'flagged_turn_agreement': None,
+                'audit_only_warning': None, 'two_tier_only_warning': None}
+    prod_flag = {i for i, v in prod.items() if v != 'supported'}
+    aud_flag = {i for i, v in aud.items() if v != 'supported'}
+    return {'audit_status': 'completed', 'potential_false_negative': bool(aud_flag - prod_flag),
+            'production_verdict': _overall(prod), 'audit_verdict': _overall(aud),
+            'production_flagged_turns': sorted(prod_flag), 'audit_flagged_turns': sorted(aud_flag),
+            'verdict_agreement': _overall(prod) == _overall(aud),
+            'flagged_turn_agreement': prod_flag == aud_flag,
+            'audit_only_warning': sorted(aud_flag - prod_flag),
+            'two_tier_only_warning': sorted(prod_flag - aud_flag)}
+
+
+def _overall(checks: dict[int, str]) -> str:
+    if 'contradicted' in checks.values():
+        return 'contradicted'
+    if 'unverifiable' in checks.values():
+        return 'unverifiable'
+    return 'supported'
 
 
 def estimate_cost_for_usage(model_name: str, usage: ProviderUsage | None,

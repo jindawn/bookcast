@@ -10,7 +10,7 @@ from .content_models import (CATEGORIES, ConsistencyReview, ContentOptions, Epis
 from .errors import BookCastError
 from .models import Chapter, DialogueTurn, PodcastScript
 from .provider_api import ProviderError, ErrorKind
-from .storage import atomic_target, sha256_file, write_json
+from .storage import atomic_target, fingerprint, sha256_file, write_json
 
 CHUNK_CHARS = 4000
 FAN_IN = 4
@@ -197,6 +197,110 @@ class ContentFlow:
         self.r.step(name, inputs, lambda: self.r.ai_operation(name, 'llm', version, inputs, invoke))
         return self.read(path, model)
 
+    def _raw_consistency_call(self, name, path, request, model, validate, *, audit=False):
+        inputs = {'prompt': request, 'schema': model.model_json_schema()}
+        def invoke(provider):
+            if not provider.capabilities().structured:
+                raise ProviderError(ErrorKind.INPUT)
+            raw = provider.generate_structured(request, model)
+            value = model.model_validate(raw.model_dump() if isinstance(raw, model) else raw)
+            validate(value)
+            write_json(self.r.path(path), value.model_dump())
+            return [path]
+        def operation():
+            if audit and hasattr(self.r, 'llm'):
+                from .provider_chain import ProviderChain
+                from .shadow_consistency import resolve_shadow_providers
+                _, deepseek = resolve_shadow_providers(self.r)
+                isolated = ProviderChain([deepseek], failover_on=self.r.llm.failover_on)
+                return self.r.ai_operation(name, 'llm', CONTENT_VERSION, inputs, invoke,
+                                           chain_override=isolated)
+            return self.r.ai_operation(name, 'llm', CONTENT_VERSION, inputs, invoke)
+        if audit:
+            operation()  # An audit failure must not leave a failed production Step.
+        else:
+            self.r.step(name, inputs, operation)
+        return self.read(path, model)
+
+    def _consistency_review(self, segment, script, evidence, revision, validate_review):
+        if self.options.consistency_mode == 'full':
+            return self.call(f'consistency:{segment.id}', f'evaluation/segments/{segment.id}.json',
+                             'consistency', {'script': script.model_dump(), 'claims': evidence,
+                                             'revision': revision}, ConsistencyReview, validate_review)
+        from .shadow_consistency import (Tier1ScreeningResult, merge_tier_reviews,
+                                         tier1_screening_prompt, tier2_review_prompt)
+        source = {i for i, turn in enumerate(script.turns) if turn.attribution == 'source'}
+        def validate_tier1(result):
+            suspicious = set(result.suspicious_turn_ids)
+            if (not suspicious.issubset(source) or (result.status == 'PASS' and suspicious)
+                    or (result.status == 'REVIEW' and not suspicious)):
+                raise ProviderError(ErrorKind.SCHEMA)
+        tier1 = self._raw_consistency_call(
+            f'consistency:tier1:{segment.id}', f'evaluation/two_tier/tier1/{segment.id}.json',
+            tier1_screening_prompt(segment.id, script, evidence), Tier1ScreeningResult, validate_tier1)
+        tier2 = None
+        if tier1.status == 'REVIEW':
+            suspicious = tier1.suspicious_turn_ids
+            def validate_tier2(result):
+                if result.segment_id != segment.id or len(result.checks) != len(suspicious) or \
+                        {c.turn_index for c in result.checks} != set(suspicious):
+                    raise ProviderError(ErrorKind.SCHEMA)
+            tier2 = self._raw_consistency_call(
+                f'consistency:tier2:{segment.id}', f'evaluation/two_tier/tier2/{segment.id}.json',
+                tier2_review_prompt(segment.id, script, evidence, suspicious, revision),
+                ConsistencyReview, validate_tier2)
+        result = merge_tier_reviews(segment.id, script, tier1, tier2)
+        validate_review(result)
+        path = f'evaluation/segments/{segment.id}.json'
+        write_json(self.r.path(path), result.model_dump())
+        return result
+
+    def _run_canary_audit(self, segment, script, evidence, revision, production):
+        if not self.options.consistency_canary_audit:
+            return
+        from .shadow_consistency import compare_canary_reviews
+        source = {i for i, turn in enumerate(script.turns) if turn.attribution == 'source'}
+        payload = {'script': script.model_dump(), 'claims': evidence, 'revision': revision}
+        request = prompt('consistency', **payload)
+        identity = fingerprint({'segment': segment.id, 'request': request, 'schema': ConsistencyReview.model_json_schema()})
+        audit = None
+        status = 'completed'
+        try:
+            def validate(value):
+                checks = [c.turn_index for c in value.checks]
+                if value.segment_id != segment.id or len(checks) != len(source) or set(checks) != source:
+                    raise ProviderError(ErrorKind.SCHEMA)
+            audit = self._raw_consistency_call(
+                f'consistency:audit:{segment.id}', f'evaluation/canary/audit/{segment.id}.json',
+                request, ConsistencyReview, validate, audit=True)
+        except Exception as exc:
+            status = 'failed'
+            self.r.event('telemetry_diagnostic', details={'diagnostic': 'canary_audit_failed',
+                          'segment_id': segment.id, 'failure_type': type(exc).__name__})
+        comparison = compare_canary_reviews(production, audit, source)
+        if status == 'failed':
+            comparison['audit_status'] = 'failed'
+        try:
+            write_json(self.r.path(f'evaluation/canary/{segment.id}.json'),
+                       {'segment_id': segment.id, 'revision': revision, 'input_hash': identity,
+                        **comparison})
+        except Exception as exc:
+            self.r.event('telemetry_diagnostic', details={'diagnostic': 'canary_comparison_unavailable',
+                          'segment_id': segment.id, 'failure_type': type(exc).__name__})
+
+    def _save_canary_summary(self, plan):
+        if not self.options.consistency_canary_audit:
+            return
+        from .canary_consistency import canary_summary
+        try:
+            records = [json.loads(self.r.path(f'evaluation/canary/{segment.id}.json').read_text(encoding='utf-8'))
+                       for segment in plan.segments]
+            write_json(self.r.path('evaluation/canary_comparison.json'), canary_summary(self.r.manifest, records,
+                       self.r.path('usage/physical_requests.jsonl')))
+        except Exception as exc:
+            self.r.event('telemetry_diagnostic', details={'diagnostic': 'canary_summary_unavailable',
+                          'failure_type': type(exc).__name__})
+
     def reduce(self, themes, prefix):
         # Even a single leaf is explicitly synthesized. All merge levels are cached.
         level = 0
@@ -355,13 +459,12 @@ class ContentFlow:
                     e.validation_reason = f"missing_turns:{sorted(list(expected - actual))}"
                     raise e
             rev = r.manifest.segment_revisions.get(segment.id, 0)
-            review = self.call(f'consistency:{segment.id}', f'evaluation/segments/{segment.id}.json',
-                               'consistency', {'script': script.model_dump(),
-                                               'claims': {cid: claims[cid] for cid in segment.claim_ids},
-                                               'revision': rev},
-                               ConsistencyReview, validate_review)
+            evidence = {cid: claims[cid] for cid in segment.claim_ids}
+            review = self._consistency_review(segment, script, evidence, rev, validate_review)
             reviews.append(review)
+            self._run_canary_audit(segment, script, evidence, rev, review)
         self._run_shadow_consistency(plan, scripts, reviews, claims)
+        self._save_canary_summary(plan)
         from .quality import evaluate
         chapters = [self.read(f'chapters/{cid}.json', Chapter) for cid in self.metadata.chapter_ids]
         selected_claims = {cid: claims[cid] for seg in plan.segments for cid in seg.claim_ids}
@@ -449,19 +552,10 @@ class ContentFlow:
                         e.validation_reason = f"missing_turns:{sorted(list(expected - actual))}"
                         raise e
 
-                repaired_review = self.call(
-                    f'consistency:{segment.id}',
-                    f'evaluation/segments/{segment.id}.json',
-                    'consistency',
-                    {
-                        'script': repaired_script.model_dump(),
-                        'claims': evidence,
-                        'revision': new_rev,
-                    },
-                    ConsistencyReview,
-                    validate_review,
-                )
+                repaired_review = self._consistency_review(segment, repaired_script, evidence, new_rev,
+                                                           validate_review)
                 reviews[idx] = repaired_review
+                self._run_canary_audit(segment, repaired_script, evidence, new_rev, repaired_review)
 
             self.local('quality', {'version': 'quality-v3', 'scripts': [s.model_dump() for s in scripts],
                               'plan': plan.model_dump(), 'reviews': [v.model_dump() for v in reviews],
@@ -470,6 +564,7 @@ class ContentFlow:
                    lambda: evaluate(plan, scripts, claims, chapters, reviews))
             report = json.loads(r.path('evaluation/quality.json').read_text(encoding='utf-8'))
             self._run_shadow_consistency(plan, scripts, reviews, claims)
+            self._save_canary_summary(plan)
 
         if report['blocking_issues']:
             raise BookCastError('内容质量检查未通过；请检查 evaluation/quality.json，未调用 TTS。')

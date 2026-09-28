@@ -56,6 +56,7 @@ class Pipeline:
                  mode: str | None = None, minutes: int | None = None, revise_segment: str | None = None,
                  extraction_options: DocumentExtractionOptions | None = None,
                  consistency_shadow_mode: bool | None = None,
+                 consistency_mode: str | None = None, consistency_canary_audit: bool | None = None,
                  _root: Path | None = None, _retry: bool = True, _by_id: bool = False) -> Path:
         if revise_segment and not resume:
             raise BookCastError("修订片段需要 --resume。")
@@ -66,8 +67,6 @@ class Pipeline:
                 shadow_mode = False
         else:
             shadow_mode = bool(consistency_shadow_mode)
-        options = ContentOptions(mode="two_host" if mode is None else mode, minutes=10 if minutes is None else minutes,
-                                 consistency_shadow_mode=shadow_mode)
         source = source.resolve()
         if not source.is_file():
             raise BookCastError(f"输入文件不存在：{source}")
@@ -101,11 +100,19 @@ class Pipeline:
                     raise BookCastError("文档提取/OCR 设置改变，请使用新的 --output-dir。")
                 if manifest.pipeline_version == "2":
                     stored = ContentOptions.model_validate(manifest.content_options)
+                    if (consistency_mode is not None and consistency_mode != stored.consistency_mode) or \
+                            (consistency_canary_audit is not None and consistency_canary_audit != stored.consistency_canary_audit):
+                        raise BookCastError('一致性模式或 Canary audit 设置改变，请使用新的 --output-dir。')
                     requested = ContentOptions(mode=stored.mode if mode is None else mode,
                                                minutes=stored.minutes if minutes is None else minutes,
-                                               consistency_shadow_mode=stored.consistency_shadow_mode if consistency_shadow_mode is None else shadow_mode)
+                                               consistency_shadow_mode=stored.consistency_shadow_mode if consistency_shadow_mode is None else shadow_mode,
+                                               consistency_mode=stored.consistency_mode if consistency_mode is None else consistency_mode,
+                                               consistency_canary_audit=stored.consistency_canary_audit if consistency_canary_audit is None else consistency_canary_audit)
                     if requested.mode != stored.mode or requested.minutes != stored.minutes:
                         raise BookCastError("内容模式或预算改变，请使用另一个 --output-dir，避免混用旧脚本。")
+                    if (requested.consistency_mode != stored.consistency_mode or
+                            requested.consistency_canary_audit != stored.consistency_canary_audit):
+                        raise BookCastError('一致性模式或 Canary audit 设置改变，请使用新的 --output-dir。')
                     if requested.consistency_shadow_mode != stored.consistency_shadow_mode:
                         manifest.content_options['consistency_shadow_mode'] = requested.consistency_shadow_mode
                         write_json(manifest_path, manifest.model_dump())
@@ -135,6 +142,11 @@ class Pipeline:
                     manifest.config = config
                     write_json(manifest_path, manifest.model_dump())
             else:
+                options = ContentOptions(mode="two_host" if mode is None else mode,
+                                         minutes=10 if minutes is None else minutes,
+                                         consistency_shadow_mode=shadow_mode,
+                                         consistency_mode=consistency_mode or 'full',
+                                         consistency_canary_audit=bool(consistency_canary_audit))
                 cleanup_orphan_temporary_artifacts(root)
                 if any(path.name != ".lock" and not (path.name.startswith(".manifest.json.")
                            and path.name.endswith(".tmp") and path.is_file() and not path.is_symlink())
@@ -146,7 +158,8 @@ class Pipeline:
                                     book_id=book_id, source_sha256=digest, source_name=source.name,
                                     source_path=str(source), metadata_seed=metadata_seed, provider_settings=self.provider_settings,
                                     source_format=source_format, config=config, pipeline_version="2",
-                                    content_options=options.model_dump() if options.consistency_shadow_mode else {'mode': options.mode, 'minutes': options.minutes},
+                                    content_options=options.model_dump() if (options.consistency_shadow_mode or options.consistency_mode != 'full'
+                                                                              or options.consistency_canary_audit) else {'mode': options.mode, 'minutes': options.minutes},
                                     extraction_options=extraction_options if extraction_options and extraction_options.mode == "auto" else None)
                 write_json(manifest_path, manifest.model_dump())
             changed = False
@@ -169,6 +182,9 @@ class Pipeline:
                     raise BookCastError('片段编号不在规划中。')
                 manifest.segment_revisions[revise_segment] = manifest.segment_revisions.get(revise_segment, 0) + 1
                 write_json(manifest_path, manifest.model_dump())
+            if manifest.pipeline_version == '2' and ContentOptions.model_validate(manifest.content_options).consistency_mode == 'two_tier':
+                from .shadow_consistency import validate_two_tier_providers
+                validate_two_tier_providers(self.llm)
             runner = _Runner(root, manifest, self.llm, self.tts, progress=self.progress, by_id=_by_id)
             try:
                 runner.run(source, metadata_seed=metadata_seed)
@@ -192,7 +208,8 @@ class Pipeline:
         return root
 
     def resume_job(self, root: Path, *, retry: bool = False, revise_segment: str | None = None,
-                   consistency_shadow_mode: bool | None = None) -> Path:
+                   consistency_shadow_mode: bool | None = None,
+                   consistency_mode: str | None = None, consistency_canary_audit: bool | None = None) -> Path:
         root = root.resolve()
         manifest = load_manifest(artifact_path(root, 'manifest.json'))
         source = artifact_path(root, f'source/input.{manifest.source_format}')
@@ -204,6 +221,7 @@ class Pipeline:
         return self.generate(source, resume=True, metadata_seed=manifest.metadata_seed,
                              revise_segment=revise_segment, extraction_options=manifest.extraction_options,
                              consistency_shadow_mode=consistency_shadow_mode,
+                             consistency_mode=consistency_mode, consistency_canary_audit=consistency_canary_audit,
                              _root=root, _retry=retry, _by_id=True)
 
 
@@ -470,14 +488,15 @@ class _Runner:
         from .cost import refresh_cost_summary
         refresh_cost_summary(self.root, self.manifest)
 
-    def ai_operation(self, name: str, kind: str, version: str, inputs: object, invoke: Callable) -> list[str]:
+    def ai_operation(self, name: str, kind: str, version: str, inputs: object, invoke: Callable,
+                     *, chain_override: ProviderChain | None = None) -> list[str]:
         digest = fingerprint(inputs)
         # Recover the small window between AI completion and step completion.
         for call in reversed(self.manifest.ai_calls):
             if (call.task == name and call.status == "completed" and call.prompt_version == version
                     and call.input_hash == digest and artifacts_valid(self.root, call) and self.config_valid(call)):
                 return list(call.artifacts)
-        chain = self.llm if kind == "llm" else self.tts
+        chain = chain_override or (self.llm if kind == "llm" else self.tts)
         schema = inputs.get('schema') if isinstance(inputs, dict) else None
         schema_name = schema.get('title') if isinstance(schema, dict) and isinstance(schema.get('title'), str) else None
         self._active_schema_name = schema_name

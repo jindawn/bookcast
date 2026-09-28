@@ -11,6 +11,16 @@ class ContentOptions(Model):
     mode: Mode = 'two_host'
     minutes: int = Field(default=10, ge=1, le=120)
     consistency_shadow_mode: bool = False
+    consistency_mode: Literal['full', 'two_tier'] = 'full'
+    consistency_canary_audit: bool = False
+
+    @model_validator(mode='after')
+    def validate_canary(self):
+        if self.consistency_canary_audit and self.consistency_mode != 'two_tier':
+            raise ValueError('Canary audit requires two_tier consistency mode')
+        if self.consistency_shadow_mode and self.consistency_mode != 'full':
+            raise ValueError('Legacy Two-Tier shadow requires full consistency mode')
+        return self
 
 
 class Finding(Model):
