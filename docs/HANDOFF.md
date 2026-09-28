@@ -1,4 +1,12 @@
-# Phase 19.3D STEP 1–3 离线实现交接（2026-09-28）
+# Phase 19.3D 最终离线 Gate：CANARY_IMPLEMENTED / LIVE_READY / LIVE_NOT_RUN（2026-09-28）
+
+旧 Dialogue D 测试依赖当前峰/离峰时钟，已仅在测试中固定到仓库 Phase 19.3B 历史请求时间，并核验该时间与冻结价格快照复算的 A 基线成本一致。未改生产代码、原始成功 Gate 或 D 的历史失败结论。独立测试提交 `c44bc0badc96e7557a5e46f752136534d10ba604` 上完整离线pytest **759 passed / 1 skipped / 7 deselected / 10 subtests，0 failed**；Dialogue 27 passed、pricing/cost/usage 105 passed、Canary 16 passed；compileall、validate_project、diff check通过。默认 `consistency_mode=full`，没有真实网络请求、TTS Live、Live Canary 或 push。
+
+**状态：CANARY_IMPLEMENTED、LIVE_READY、LIVE_NOT_RUN。** 维护者下一轮明确授权前不要运行真实 Canary。唯一预备命令、预计一致性层请求4–6次、产物路径及回退方式见 [phase19-3d-canary.md](experiments/phase19-3d-canary.md)。保留未跟踪 `examples/mind_and_judgment.txt`，未读取、移动或提交。最近已验证功能/测试提交为 `c44bc0badc96e7557a5e46f752136534d10ba604`；本文档提交按 D-006 不自引用。下一步读取该 Canary 报告、`docs/STATE.json` 和功能提交 `a4316ae`，获得授权后才执行文档中单条Live命令。
+
+---
+
+# Phase 19.3D STEP 1–3 离线实现交接（历史快照，阻塞已解除）
 
 目标：Two-Tier 为显式选择的生产一致性，Full DeepSeek 为隔离的 Canary audit；默认 Full 不变。功能提交 `a4316ae2efa3e741447cbd184141ae78c723b6b4` 已完成源码与 targeted tests；详细边界、文件、价格视图、预计调用及下一轮命令见 [phase19-3d-canary.md](experiments/phase19-3d-canary.md)。STEP 0 pricing 仍为 COMPLETED；STEP 1–3 代码已落地，但严格离线 Gate 阻塞，因此 **CANARY_IMPLEMENTED / LIVE_READY 均未宣告，LIVE_NOT_RUN**。
 

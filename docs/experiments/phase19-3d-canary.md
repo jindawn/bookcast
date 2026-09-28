@@ -1,6 +1,6 @@
-# Phase 19.3D STEP 1–3：Canary 离线实现与待验收 Gate
+# Phase 19.3D STEP 1–3：Canary 离线实现与最终 Gate
 
-功能 checkpoint：`a4316ae2efa3e741447cbd184141ae78c723b6b4`。本轮没有真实 API、Live Canary、真实 TTS 或 push。默认生产一致性仍为 `full`；旧 Job 未存模式字段时也读取为 `full`。**严格最终 Gate 尚未通过，因此状态不是 LIVE_READY；Live Canary 尚未运行。**
+功能 checkpoint：`a4316ae2efa3e741447cbd184141ae78c723b6b4`；最终离线 Gate 测试 checkpoint：`c44bc0badc96e7557a5e46f752136534d10ba604`。没有真实 API、Live Canary、真实 TTS 或 push。默认生产一致性仍为 `full`；旧 Job 未存模式字段时也读取为 `full`。**当前状态：CANARY_IMPLEMENTED / LIVE_READY / LIVE_NOT_RUN。**
 
 ## 已实现的离线接线
 
@@ -10,15 +10,17 @@
 - 比较同一 segment 当前 script、claims/evidence、revision 的结果。Full audit 的 `contradicted` 或 `unverifiable` 发言未被 Two-Tier 标记时，`potential_false_negative=true`。不完整 audit 为 `indeterminate`。`evaluation/canary_comparison.json` 分别列出 Qwen Tier1、targeted DeepSeek、Full audit 的 usage、reasoning、latency 与价格，并给出 production、audit 反事实、实际实验成本及节省额/比例。仅从 `AIAttempt` 通过 `calculate_cost_summary` 与 Job 保存的 `ProvidersConfig.pricing` 计费；physical telemetry 只供延迟，不重复计费。缺价格/usage 为未知。
 - `generate`、`acquire --generate` 增加 `--consistency-mode full|two-tier`、`--consistency-canary-audit`；`jobs resume/retry` 继承 Job 选项。非 Mock Two-Tier 前置校验 cheap 路由仅使用 `qwen3.7-flash`、high_quality 路由仅使用 `deepseek-flash`。
 
-## 离线验收与当前阻塞
+## 离线验收与已解决的旧测试时段依赖
 
-Canary 专项 16 passed；content、pipeline 恢复、routing、旧 Shadow、cost/usage、CLI 等相关回归总计 **221 passed**。`python3 -m compileall -q src scripts`、`python3 scripts/validate_project.py`、`git diff --check` 通过；功能提交上专项16项再次通过。完整离线 pytest 两次均只在旧 `tests/test_llm_reasoning_dialogue.py::test_d_success_gate_requires_usage_and_one_receipt` 失败：最终一次为 **757 passed、1 failed、1 skipped、7 deselected、10 subtests passed**。该测试用当前时间给模拟请求计价，并与冻结的历史离峰成本门槛比较；运行时是北京时间峰段。其代码未被本阶段修改。按本轮“失败只修本阶段相关问题”和严格 Gate，未修改旧 Dialogue 测试，也**不宣称 CANARY_IMPLEMENTED / LIVE_READY**。
+Canary 专项 **16 passed**；先前相关回归 **221 passed**。最后一项旧 Dialogue D 测试原本使用当下时钟，从冻结的 Phase 19.3B 价格快照选峰/离峰价，却与固定历史基线 ¥0.008122 比较；北京时间峰段时模拟成本 ¥0.0102，导致断言随时钟变化。仅在测试中读取已有 Phase 19.3B 请求时间，核验其按同一冻结价格快照复算 A 基线仍为 ¥0.008122，然后固定该测试的计价时钟；未改生产计价、测试的成功阈值或历史 D 结论。
+
+最终顺序验证：失败单测 **1 passed**；Dialogue reasoning/experiment **27 passed**；pricing/cost/usage **105 passed**；Canary **16 passed**；完整离线 pytest 在测试提交 `c44bc0b` 上 **759 passed、1 skipped、7 deselected、10 subtests passed，0 failed**。`python3 -m compileall -q src scripts`、`python3 scripts/validate_project.py`、`git diff --check` 均通过。默认 `full` 的契约由 Canary 专项及相关回归覆盖；离线测试禁止真实网络连接。
 
 ## Pre-Live 只读检查与待执行命令
 
 预计使用历史 19.3C 接受样本的两段规划：每段 Qwen Tier1 一次、Full DeepSeek audit 一次；若 Tier1 REVIEW，另有定向 DeepSeek Tier2 一次。因此无 repair/重试时，一致性层预计 **4–6 次**真实请求：Qwen 2、Full audit 2、targeted DeepSeek 0–2。新 Job 的实际规划段数或修复次数可能改变该数量；完整 Job 还会有正常 Dialogue 和 TTS 请求。本轮未执行下面的命令，也未读取/修改未跟踪书稿内容。
 
-严格 Gate 全绿并取得用户下一轮明确授权后，唯一 Live 命令为：
+严格离线 Gate 已通过；取得用户下一轮明确授权后，唯一 Live 命令为：
 
 ```sh
 .venv/bin/bookcast generate examples/mind_and_judgment.txt \
@@ -28,6 +30,6 @@ Canary 专项 16 passed；content、pipeline 恢复、routing、旧 Shadow、cos
   --consistency-mode two-tier --consistency-canary-audit
 ```
 
-**当前不要执行。**下一步先让旧 Dialogue D 测试与时段无关或在可验证的离峰时段重跑完整离线 pytest；只在全绿后更新 Gate 状态，再由维护者单独授权真实 Canary。
+**当前不要执行。** 下一步仅等待维护者明确授权真实 Canary；本阶段停止，不自动进入 Live。
 
 回退：新 Job 省略两个 Canary 选项即使用 `full`；现有 Two-Tier Job 不允许原地改模式，应使用新的输出目录。必要时本地审查并撤销功能提交 `a4316ae`，不要改写旧 Job 的 manifest，也不要 push。
