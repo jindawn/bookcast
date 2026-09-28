@@ -1,3 +1,89 @@
+# Phase 19 Final RC：PHASE_19_COMPLETE / RC_READY（2026-09-28）
+
+## 目标
+
+接管 Codex 因额度耗尽中断的 Phase 19 Final RC。Codex 已完成大部分工作，AGY 接管后验证并补全。
+
+## 完成内容
+
+### Codex 中断前已有效完成
+
+1. **新 Job 默认 `two_tier`**（`pipeline.py` 第 146-150 行）：
+   - `consistency_mode or ('full' if shadow_mode else 'two_tier')`
+   - 用户未指定时 → `two_tier`；shadow mode on 时 → `full`（保留 shadow + full 组合语义）
+2. **legacy manifest 缺字段 → `full`**：`ContentOptions.consistency_mode` 默认值 = `'full'`
+3. **existing Job resume/retry**：从 manifest 读取 `stored.consistency_mode`，改变则报错
+4. **CLI rollback**：`--consistency-mode full` 正常传入
+5. **canary audit 默认 false**：`ContentOptions.consistency_canary_audit: bool = False`
+6. **旧测试隐含"默认 full"假设修复**：recovery/failure/routing 测试显式加 `consistency_mode='full'`
+7. **Two-Tier recovery 幂等 fix**（`content.py` `_consistency_review` 第 254-261 行）：
+   - `json.loads(existing.read_text()) == result.model_dump()` 内容比较
+   - 相同 → 跳过写入；不同 → `write_json()`
+   - 不依赖 mtime，不绕过真实变化，Full 路径不受影响
+8. **Final RC targeted tests**（`test_canary_consistency.py`）：
+   - `test_new_job_defaults_two_tier_but_legacy_and_existing_modes_are_stable`
+   - `test_new_job_full_override_and_shadow_flag_keep_full`
+   - `test_mode_is_immutable_on_resume_without_running_content`
+   - `test_cli_overrides_new_job_without_generating_audio`
+   - `test_cli_mode_override_without_audit`
+
+### AGY 接管后验证
+
+- 接管时 working tree 完整，10 文件已修改（未提交）
+- 全量 pytest：**763 passed / 1 skipped / 7 deselected / 0 failed** ✅
+- Targeted tests：**243 passed** ✅
+- Pricing/cost：**25 passed** ✅
+- compileall / validate_project / git diff --check：**PASS** ✅
+- `examples/mind_and_judgment.txt` 保留未跟踪，未提交
+
+## Final RC 策略确认
+
+| 策略 | 状态 | 位置 |
+|------|------|------|
+| NEW_JOB_DEFAULT = two_tier | ✅ | `pipeline.py:149` |
+| LEGACY_MISSING_MODE = full | ✅ | `ContentOptions` default |
+| EXISTING_JOB_RESUME = persisted | ✅ | `pipeline.py:103-115` |
+| ROLLBACK = `--consistency-mode full` | ✅ | `cli.py`, `pipeline.py` |
+| CANARY_AUDIT_DEFAULT = false | ✅ | `ContentOptions.consistency_canary_audit` |
+| Full DeepSeek retained | ✅ | `_raw_consistency_call`, `canary_consistency.py` |
+
+## Recovery/Idempotency 语义
+
+| 场景 | 行为 |
+|------|------|
+| 首次生成 | 文件不存在 → OSError → unchanged=False → 写文件 |
+| resume，内容相同 | JSON 比较相等 → unchanged=True → 不重写 |
+| retry，内容相同 | 同上 |
+| 内容变化 | JSON 不等 → unchanged=False → 写文件 |
+| Full 模式 | 走 `self.call()` 路径，`_runner.step()` 管理幂等，不受影响 |
+| audit sidecar | `evaluation/canary/` 独立写入，不影响 production artifact |
+
+## Live Canary 验证数据（供文档记录）
+
+| 指标 | 值 |
+|------|-----|
+| Natural Canary Two-Tier production | ¥0.0024 |
+| Natural Canary Full 反事实 | ¥0.0817 |
+| Natural Canary 节省 | ~97.06%（此单一样本，不可外推） |
+| Positive-Path Two-Tier production | ¥0.0045 |
+| Positive-Path Full audit | ¥0.0090 |
+| potential_false_negative | 0（两次 canary 均） |
+| Full rollback | 保留，`--consistency-mode full` |
+
+## Git Checkpoints
+
+- **Functional checkpoint**：`d1220f78c7f4045dcb480618dff3c1b13dd55c81`
+  `feat(phase19): Final RC functional checkpoint — two_tier default, idempotent merge, 763 passed`
+- **Docs checkpoint**：（本次文档提交，按 D-006 不自引用）
+
+## 工作树状态
+
+提交后工作树干净（`examples/mind_and_judgment.txt` 保留未跟踪）。未 push。
+
+## PHASE_19_COMPLETE = true / RC_READY = true
+
+---
+
 # Phase 19.3D Positive-Path Live Canary：POSITIVE_PATH_ACCEPTED（2026-09-28）
 
 冻结 `case_4_numerical_error` 只运行一次生产一致性路径：Qwen Tier1 REVIEW 第4轮 → targeted DeepSeek 一次判 `contradicted` → 标准生产 `ConsistencyReview` 保留风险；独立 Full audit 同样判第4轮风险，potential FN=0。3/3 物理请求 HTTP200，0 重试/回退；生产 ¥0.0045、Full 反事实 ¥0.0090、双跑 ¥0.0135。详情及产物见 [phase19-3d-canary.md](experiments/phase19-3d-canary.md) 与 `output/acceptance-canary-phase19-3d-positive`。装配器已修正缺来源副本导致的本地 cost_summary 校验缺口；没有再次真实调用。Canary 专项16 passed、compileall/validator/diff通过。默认 `full` 不变。

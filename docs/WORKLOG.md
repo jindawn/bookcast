@@ -2,6 +2,29 @@
 
 本文件只追加重要、可验证的开发事实。已写入的历史条目不重写；纠错另加条目。时间使用 UTC，后续条目包含任务、结果、测试与关联提交（若当时已存在）。
 
+## 2026-09-28T07:32:00Z — Phase 19 Final RC 完成（PHASE_19_COMPLETE / RC_READY）
+
+- **操作**：接管 Codex 额度耗尽中断的 Final RC working tree（10 文件未提交差异）
+- **验证结果**：
+  - Full pytest: **763 passed / 1 skipped / 7 deselected / 0 failed**
+  - Targeted (canary/recovery/generation/cli/routing/providers/skill/web): **243 passed**
+  - Pricing/cost: **25 passed**
+  - compileall / validate_project / git diff --check: **PASS**
+- **Final RC 策略**：
+  - NEW_JOB_DEFAULT = `two_tier`（`pipeline.py:149`）
+  - LEGACY_MISSING = `full`（`ContentOptions` default）
+  - EXISTING_JOB_RESUME = persisted consistency_mode from manifest
+  - ROLLBACK = `--consistency-mode full`（CLI + pipeline）
+  - CANARY_AUDIT_DEFAULT = `false`
+  - Full DeepSeek retained
+- **Recovery idempotency root cause**：Two-Tier `_consistency_review` 在 merge 后调用 `write_json()` 而不经过 `_runner.step()` 的幂等层，resume 时可能重写内容相同的文件改变 mtime
+- **Fix**：`content.py:254-261`：`json.loads(existing.read_text()) == result.model_dump()` → unchanged → skip write；不依赖 mtime
+- **提交**：`d1220f78c7f4045dcb480618dff3c1b13dd55c81`
+- **Live Canary 证据**（已在 POSITIVE_PATH_ACCEPTED 中记录）：
+  - Natural Canary: Two-Tier ¥0.0024 vs Full ¥0.0817，节省约 97.06%（单样本，不可外推）
+  - Positive-Path: Two-Tier ¥0.0045 vs Full ¥0.0090；potential FN=0
+- **未跟踪**：`examples/mind_and_judgment.txt` 保留，未 push
+
 ## 2026-09-27T03:21:00Z — Phase 19.3C Shadow Mode Live 验收（SHADOW_ACCEPTED）
 
 - **命令**：`bookcast generate examples/mind_and_judgment.txt --config examples/model-routing-cloud.toml --output-dir output/acceptance-shadow-phase19-3c --mode two_host --minutes 3 --shadow-consistency`
